@@ -1,0 +1,22 @@
+# uv / python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# secrets & local config
+.env
+
+# generated artefacts
+.work/
+out/
+
+# your own episode library — hundreds of MB of video, and not ours to publish.
+# `README.md` in here documents the naming the local provider matches on.
+local-test/
+
+# os
+.DS_Store
