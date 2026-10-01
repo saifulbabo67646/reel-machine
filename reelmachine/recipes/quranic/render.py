@@ -12,25 +12,8 @@ from typing import Any
 from ... import ffmpeg
 from ...config import Settings
 from ...core.timeline import Caption
-from ...render.captions import CaptionStyle
-
-#: Audio mastering profiles: name → (ffmpeg filter or None).
-AUDIO_PROFILES: dict[str, str | None] = {
-    "none": None,
-    "studio": "loudnorm=I=-16:TP=-1.5:LRA=11",
-    "mobile": "highpass=f=80,loudnorm=I=-14:TP=-1.0:LRA=9",
-    "youtube": "loudnorm=I=-14:TP=-1.0:LRA=11",
-    "tiktok": "loudnorm=I=-12:TP=-1.0:LRA=8",
-}
-
-
-def ass_colour(hex_colour: str, alpha: str = "00") -> str:
-    """`#rrggbb` → ASS `&HAABBGGRR`."""
-    value = (hex_colour or "").strip().lstrip("#")
-    if len(value) != 6:
-        value = "ffffff"
-    red, green, blue = value[0:2], value[2:4], value[4:6]
-    return f"&H{alpha}{blue}{green}{red}".upper()
+from ...render.audio import audio_filter
+from ...render.captions import CaptionStyle, ass_colour
 
 
 def caption_styles(style: Any, *, aspect: str) -> dict[str, CaptionStyle]:
@@ -99,9 +82,9 @@ def render_quranic(
     ]
     filters = [f"ass='{_escape_ass_path(ass_path)}'"]
     cmd += ["-vf", ",".join(filters)]
-    audio_filter = AUDIO_PROFILES.get(profile, AUDIO_PROFILES["studio"])
-    if audio_filter:
-        cmd += ["-af", audio_filter]
+    mastering = audio_filter(profile)
+    if mastering:
+        cmd += ["-af", mastering]
     cmd += [
         "-map",
         "0:v:0",

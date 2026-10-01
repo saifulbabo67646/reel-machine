@@ -21,6 +21,7 @@ reel = "reelmachine.cli:main"
 [project.entry-points."reelmachine.recipes"]
 nadeshiko-cut = "reelmachine.recipes.nadeshiko_cut.recipe:NadeshikoCutRecipe"
 quranic = "reelmachine.recipes.quranic.recipe:QuranicRecipe"
+doodle = "reelmachine.recipes.doodle.recipe:DoodleRecipe"
 
 [project.entry-points."reelmachine.sources"]
 local = "reelmachine.sources.local:LocalLibraryProvider"
@@ -40,15 +41,34 @@ local = "reelmachine.storage.local:LocalStorage"
 memory = "reelmachine.storage:InMemoryStorage"
 s3 = "reelmachine.storage.s3:S3Storage"
 
+[project.entry-points."reelmachine.renderers"]
+stroke = "reelmachine.recipes.doodle.scenes.stroke:StrokeRenderer"
+program = "reelmachine.recipes.doodle.scenes.program:ProgramRenderer"
+
+[project.entry-points."reelmachine.narration"]
+fake = "reelmachine.recipes.doodle.narration.fake:FakeNarration"
+elevenlabs = "reelmachine.recipes.doodle.narration.cloud:ElevenLabsNarration"
+cartesia = "reelmachine.recipes.doodle.narration.cloud:CartesiaNarration"
+
 [project.entry-points."reelmachine.styles"]
 bundled = "reelmachine.core.style:bundled_style_map"
 
 [project.optional-dependencies]
-# The MCP server is an optional extra: `pip install reel-machine` works without it.
+# Every optional capability lives behind an extra; the default install is local-first
+# and needs no browser, no Node and no GPU.
 mcp = ["mcp>=2,<3"]
+stroke = ["opencv-python-headless>=4.9", "Pillow>=10", "av>=12"]
+program = ["Pillow>=10"]
+s3 = ["boto3>=1.34"]
 
 [dependency-groups]
-dev = ["pytest>=8.0", "mcp>=2,<3"]
+dev = [
+    "pytest>=8.0",
+    "mcp>=2,<3",
+    "opencv-python-headless>=4.9",
+    "Pillow>=10",
+    "av>=12",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -58,7 +78,14 @@ build-backend = "setuptools.build_meta"
 include = ["reelmachine*"]
 
 [tool.setuptools.package-data]
-reelmachine = ["data/*.json", "data/styles/*.json"]
+reelmachine = [
+    "data/*.json",
+    "data/styles/*.json",
+    "vendor/srt-whiteboard-animation/LICENSE",
+    "vendor/srt-whiteboard-animation/UPSTREAM.md",
+    "vendor/srt-whiteboard-animation/assets/*",
+    "vendor/srt-whiteboard-animation/scripts/*.py",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

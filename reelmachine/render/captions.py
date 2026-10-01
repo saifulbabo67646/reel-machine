@@ -50,6 +50,15 @@ class CaptionStyle:
     karaoke: bool = False
 
 
+def ass_colour(hex_colour: str, alpha: str = "00") -> str:
+    """`#rrggbb` → ASS `&HAABBGGRR`."""
+    value = (hex_colour or "").strip().lstrip("#")
+    if len(value) != 6:
+        value = "ffffff"
+    red, green, blue = value[0:2], value[2:4], value[4:6]
+    return f"&H{alpha}{blue}{green}{red}".upper()
+
+
 def ass_time(ms: int) -> str:
     ms = max(0, int(ms))
     hours, remainder = divmod(ms, 3_600_000)

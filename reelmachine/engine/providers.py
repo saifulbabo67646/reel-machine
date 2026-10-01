@@ -55,6 +55,9 @@ class ProviderSet:
 
 
 def _default_name(role: str, req: ProviderReq, settings: Any) -> str:
+    if req.group == "narration":
+        # the deployment decides which voice provider it serves (REEL_TTS)
+        return getattr(settings, "tts", "") or req.default or "fake"
     if req.default:
         return req.default
     if req.group == "sources":
