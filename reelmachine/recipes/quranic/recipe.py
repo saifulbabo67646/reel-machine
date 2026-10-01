@@ -96,10 +96,17 @@ class QuranicRecipe:
         example={
             "surah": 1,
             "ayah_start": 1,
-            "ayah_end": 3,
+            "ayah_end": 7,
             "reciter": "alafasy",
-            "translation": "en.sahih",
             "style": "quranic.parchment",
+            # one picture per ayah, chosen from the meanings probe hands back; clips are
+            # preferred, stills are the fallback, and the switch is crossfaded
+            "backgrounds": [
+                {"kind": "pexels", "query": "sunbeams through clouds", "ayah_start": 1, "ayah_end": 2},
+                {"kind": "pexels", "query": "straight road through the desert", "ayah_start": 3, "ayah_end": 5},
+                {"kind": "pexels", "query": "path through a green forest", "ayah_start": 6, "ayah_end": 7},
+            ],
+            "transition_ms": 600,
         },
     )
 

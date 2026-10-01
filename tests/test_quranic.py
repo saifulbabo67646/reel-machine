@@ -495,6 +495,172 @@ def test_pexels_picks_a_portrait_rendition_and_records_its_licence(tmp_path) -> 
     assert all(not path.endswith("portrait.mp4") for path in seen[2:])
 
 
+def test_pexels_keeps_people_out_of_a_verse_reel(tmp_path) -> None:
+    """The shot behind a verse must not be an unknown person in western dress."""
+    from reelmachine.recipes.quranic.backgrounds.pexels import people_word
+
+    assert people_word({"url": "https://www.pexels.com/video/a-body-of-water-9/"}) == ""
+    assert people_word({"alt": "Green field under a blue sky", "url": ""}) == ""
+    assert people_word({"url": "https://www.pexels.com/video/woman-in-red-dress-1/"}) == "woman"
+    assert people_word({"alt": "Woman with arms raised", "url": ""}) == "woman"
+
+    person = {
+        "id": 1, "width": 1080, "height": 1920, "duration": 8,
+        "url": "https://www.pexels.com/video/woman-in-a-red-dress-111/",
+        "user": {"name": "Someone"},
+        "video_files": [{"file_type": "video/mp4", "height": 1080, "width": 608, "link": "https://cdn.test/person.mp4"}],
+    }
+    clouds = {
+        "id": 2, "width": 1080, "height": 1920, "duration": 6,
+        "url": "https://www.pexels.com/video/dramatic-clouds-222/",
+        "user": {"name": "Someone Else"},
+        "video_files": [{"file_type": "video/mp4", "height": 1080, "width": 608, "link": "https://cdn.test/clouds.mp4"}],
+    }
+
+    def make_handler(videos, photos=None):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/videos/search":
+                return httpx.Response(200, json={"videos": videos})
+            if request.url.path == "/v1/search":
+                return httpx.Response(200, json={"photos": photos or []})
+            return httpx.Response(200, content=b"media-bytes")
+
+        return handler
+
+    def provider_for(videos, photos=None):
+        return PexelsBackgroundProvider(
+            client=httpx.Client(transport=httpx.MockTransport(make_handler(videos, photos))),
+            api_key="test-key",
+            base_url="https://api.test",
+            cache_dir=tmp_path / "cache",
+        )
+
+    clip = provider_for([person, clouds]).fetch(
+        BackgroundRequest(kind="pexels", query="sky", media="video"), dest_dir=tmp_path
+    )
+    assert clip.path.name == "pexels-2.mp4", "the person should have been skipped"
+
+    # nothing but people: say so, and name the word that caused it
+    with pytest.raises(InvalidInput) as blocked:
+        provider_for([person]).fetch(
+            BackgroundRequest(kind="pexels", query="arms raised", media="video"), dest_dir=tmp_path
+        )
+    assert "showed a person" in str(blocked.value)
+    assert "allow_people" in (blocked.value.hint or "")
+    assert blocked.value.details["skipped"][0]["reason"] == "woman"
+
+    # an explicit opt-in still gets it
+    opted_in = provider_for([person]).fetch(
+        BackgroundRequest(kind="pexels", query="sky", media="video", allow_people=True),
+        dest_dir=tmp_path,
+    )
+    assert opted_in.path.name == "pexels-1.mp4"
+
+    # media=auto: no usable clip, so the still is used instead
+    photo = {
+        "id": 5, "width": 1080, "height": 1920,
+        "url": "https://www.pexels.com/photo/clouds-5/", "photographer": "Someone",
+        "src": {"large2x": "https://cdn.test/clouds.jpg"},
+    }
+    still = provider_for([person], [photo]).fetch(
+        BackgroundRequest(kind="pexels", query="clouds", media="auto"), dest_dir=tmp_path
+    )
+    assert still.still is True and still.path.name == "pexels-photo-5.jpg"
+
+
+def test_pexels_tries_the_next_candidate_when_a_face_is_found(tmp_path) -> None:
+    """A slug can say "clouds" while the shot shows a person: the frame is the last gate."""
+    good_one = {
+        "id": 1, "width": 1080, "height": 1920, "duration": 7,
+        "url": "https://www.pexels.com/video/clouds-over-a-valley-1/", "user": {"name": "A"},
+        "video_files": [{"file_type": "video/mp4", "height": 1080, "width": 608, "link": "https://cdn.test/one.mp4"}],
+    }
+    good_two = {**good_one, "id": 2, "url": "https://www.pexels.com/video/misty-hills-2/",
+                "video_files": [{"file_type": "video/mp4", "height": 1080, "width": 608, "link": "https://cdn.test/two.mp4"}]}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/videos/search":
+            return httpx.Response(200, json={"videos": [good_one, good_two]})
+        return httpx.Response(200, content=b"media-bytes")
+
+    def detector(path):
+        return path.name == "pexels-1.mp4"  # the first clip has a face, the second does not
+
+    provider = PexelsBackgroundProvider(
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        api_key="test-key",
+        base_url="https://api.test",
+        cache_dir=tmp_path / "cache",
+        face_detector=detector,
+    )
+    clip = provider.fetch(
+        BackgroundRequest(kind="pexels", query="clouds", media="video"), dest_dir=tmp_path
+    )
+    assert clip.path.name == "pexels-2.mp4", "the clip with a face should have been refused"
+    assert clip.face_check == "passed"
+
+    # every candidate has a face: refuse the query rather than ship a person
+    provider._face_detector = lambda path: True
+    with pytest.raises(InvalidInput) as blocked:
+        provider.fetch(BackgroundRequest(kind="pexels", query="clouds", media="video"), dest_dir=tmp_path)
+    assert "showed a person" in str(blocked.value)
+    assert blocked.value.details["skipped"][0]["reason"] == "a face"
+
+
+def test_pexels_moves_on_when_a_download_drops(tmp_path) -> None:
+    """A stock CDN dropping a transfer is a reason to try the next match, not to fail."""
+    videos = [
+        {
+            "id": 1, "width": 1080, "height": 1920, "duration": 7,
+            "url": "https://www.pexels.com/video/clouds-1/", "user": {"name": "A"},
+            "video_files": [{"file_type": "video/mp4", "height": 1080, "width": 608, "link": "https://cdn.test/one.mp4"}],
+        },
+        {
+            "id": 2, "width": 1080, "height": 1920, "duration": 7,
+            "url": "https://www.pexels.com/video/clouds-2/", "user": {"name": "B"},
+            "video_files": [{"file_type": "video/mp4", "height": 1080, "width": 608, "link": "https://cdn.test/two.mp4"}],
+        },
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/videos/search":
+            return httpx.Response(200, json={"videos": videos})
+        if request.url.path == "/one.mp4":
+            raise httpx.RemoteProtocolError("connection dropped mid-transfer")
+        return httpx.Response(200, content=b"media-bytes")
+
+    provider = PexelsBackgroundProvider(
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        api_key="test-key",
+        base_url="https://api.test",
+        cache_dir=tmp_path / "cache",
+        face_detector=lambda path: False,
+    )
+    clip = provider.fetch(
+        BackgroundRequest(kind="pexels", query="clouds", media="video"), dest_dir=tmp_path
+    )
+    assert clip.path.name == "pexels-2.mp4"
+    assert not (tmp_path / "cache" / "pexels-1.mp4").exists(), "no half file may stay behind"
+
+    # everything drops: say that, rather than blaming the query
+    drops = PexelsBackgroundProvider(
+        client=httpx.Client(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, json={"videos": videos})
+                if request.url.path == "/videos/search"
+                else (_ for _ in ()).throw(httpx.RemoteProtocolError("dropped"))
+            )
+        ),
+        api_key="test-key",
+        base_url="https://api.test",
+        cache_dir=tmp_path / "cache2",
+        face_detector=lambda path: False,
+    )
+    with pytest.raises(ProviderUnavailable) as failed:
+        drops.fetch(BackgroundRequest(kind="pexels", query="clouds", media="video"), dest_dir=tmp_path)
+    assert "failed to download" in str(failed.value)
+
+
 def test_pexels_photos_and_a_rejected_key(tmp_path) -> None:
     seen: list[str] = []
 
@@ -556,7 +722,8 @@ def test_pexels_needs_a_key_and_a_match(tmp_path) -> None:
     )
     with pytest.raises(InvalidInput) as nomatch:
         keyed.fetch(BackgroundRequest(kind="pexels", query="a very specific thing"), dest_dir=tmp_path)
-    assert "no Pexels clip" in str(nomatch.value)
+    assert "a very specific thing" in str(nomatch.value)
+    assert "no Pexels" in str(nomatch.value)
 
 
 # ------------------------------------------------------------------ end to end
@@ -731,6 +898,54 @@ def test_quranic_scopes_backgrounds_to_ayah_boundaries(tmp_path) -> None:
 
 
 @pytest.mark.slow
+def test_quranic_crossfades_between_backgrounds(tmp_path) -> None:
+    """A transition is a fade, and it must not shorten the reel or move the windows."""
+    settings = dataclasses.replace(
+        get_settings(), workdir=tmp_path / "work", outdir=tmp_path / "out"
+    )
+    engine = Engine(
+        settings,
+        provider_overrides={"corpus": "quran-fake", "background_pexels": "fake"},
+    )
+    try:
+        job = engine.submit(
+            JobRequest(
+                recipe="quranic",
+                inputs={
+                    "surah": 1,
+                    "ayah_start": 1,
+                    "ayah_end": 3,
+                    "corpus": "quran-fake",
+                    "backgrounds": [
+                        {"kind": "pexels", "query": "light", "ayah_start": 1, "ayah_end": 1},
+                        {"kind": "pexels", "query": "path", "ayah_start": 2, "ayah_end": 3},
+                    ],
+                    "transition_ms": 600,
+                    "name": "quran-fade",
+                },
+            ),
+            caller="local",
+        )
+        finished = engine.wait(job.id, caller="local", timeout_s=300)
+    finally:
+        engine.close()
+
+    assert finished.state is JobState.SUCCEEDED, finished.error
+    manifest = json.loads(Path(finished.result.manifest).read_text(encoding="utf-8"))
+    sequence = next(
+        record["asset"]
+        for record in manifest["assets"]
+        if record["asset"]["kind"] == "background" and record["asset"]["meta"].get("origin") == "sequence"
+    )
+    assert sequence["meta"]["transitionMs"] == 600
+    assert [window["media"] for window in sequence["meta"]["windows"]] == ["video", "video"]
+    # the fade overlaps the clips; the reel must still be exactly as long as the recitation
+    assert manifest["verification"]["ok"] is True
+    checks = {check["name"]: check for check in manifest["verification"]["checks"]}
+    assert checks["duration"]["ok"] is True
+
+
+@pytest.mark.slow
 def test_quranic_gives_a_still_background_a_slow_push_in(tmp_path) -> None:
     """A photograph is not left static: it gets the zoom that keeps a hook shot alive."""
     from PIL import Image, ImageDraw
@@ -819,6 +1034,7 @@ def test_quranic_plays_a_sequence_of_backgrounds(tmp_path) -> None:
                         {"kind": "gradient", "colors": ["#203040", "#405060"]},
                         {"kind": "pexels", "query": "night sky"},
                     ],
+                    "transition_ms": 0,  # the hard-cut path, which joins by stream copy
                     "name": "quran-sequence",
                 },
             ),

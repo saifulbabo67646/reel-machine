@@ -56,11 +56,18 @@ class FileBackground(BackgroundScope):
 
 class PexelsBackground(BackgroundScope):
     """A stock clip or photo: the deployment needs `PEXELS_API_KEY`, and the manifest
-    records the licence and the photographer."""
+    records the licence and the photographer.
+
+    `media="auto"` prefers a clip and falls back to a still. Candidates whose own
+    description reads like a person are skipped unless `allow_people` says otherwise —
+    a verse should not have an unknown person, least of all a woman in western dress,
+    standing behind it.
+    """
 
     kind: Literal["pexels"] = "pexels"
     query: str
-    media: Literal["video", "photo"] = "video"
+    media: Literal["auto", "video", "photo"] = "auto"
+    allow_people: bool = False
     orientation: Literal["portrait", "landscape", "square"] = "portrait"
     min_height: int = 720
 
@@ -86,6 +93,7 @@ class QuranicInputs(BaseModel):
     background: BackgroundChoice = Field(default_factory=GradientBackground)
     # several clips for one reel: the recitation is split evenly across them, in order
     backgrounds: list[BackgroundChoice] = Field(default_factory=list)
+    transition_ms: int = Field(default=600, ge=0, le=5000)  # crossfade between backgrounds
     aspect: Aspect = "vertical"
     audio_profile: AudioProfile = "studio"
     word_highlight: bool = True

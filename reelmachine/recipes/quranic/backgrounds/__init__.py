@@ -23,7 +23,8 @@ class BackgroundRequest(BaseModel):
 
     kind: str
     query: str = ""
-    media: str = "video"
+    media: str = "auto"
+    allow_people: bool = False
     orientation: str = "portrait"
     min_height: int = 720
     colors: list[str] = Field(default_factory=list)
@@ -45,6 +46,7 @@ class BackgroundClip:
     height: int = 0
     duration_ms: int = 0
     still: bool = False  # a photograph: the stage gives it the slow push-in
+    face_check: str = ""  # "passed" | "blocked" | "skipped" | "unavailable"
 
 
 @runtime_checkable

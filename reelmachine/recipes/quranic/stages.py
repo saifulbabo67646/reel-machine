@@ -276,13 +276,22 @@ def _slice_clip(
         )
         source, provenance, licence = clip.path, clip.provenance, clip.licence
         still = clip.still
+        face_check = clip.face_check
         ctx.progress.detail(
-            f"  · background {origin}{' photo' if still else ''}: {clip.width}x{clip.height} "
+            f"  · background {origin}{' photo' if still else ' clip'}: {clip.width}x{clip.height} "
             f"{clip.duration_ms / 1000:.1f}s → {duration_s:.1f}s on screen"
         )
     out = ctx.workdir / f"background-{start_ms:07d}.mp4"
     if isinstance(choice, FileBackground):
         still = source.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".heic"}
+        provenance_extra: dict[str, Any] = {}
+    else:
+        provenance_extra = {"faceCheck": face_check}
+    if isinstance(choice, FileBackground):
+        media = "photo" if still else "video"
+    else:
+        media = str(getattr(choice, "media", "video") or "video")
+        media = "photo" if still else ("video" if media == "auto" else media)
     if still:
         # a still needs the slow push-in that keeps a hook shot alive
         vf = (
@@ -301,7 +310,7 @@ def _slice_clip(
             ],
             cancel=ctx.cancel,
         )
-        return out, provenance, licence, origin
+        return out, provenance, licence, origin, {"media": media, **provenance_extra}
     ffmpeg.run(
         [
             settings.ffmpeg, "-hide_banner", "-nostdin", "-y",
@@ -316,7 +325,7 @@ def _slice_clip(
         ],
         cancel=ctx.cancel,
     )
-    return out, provenance, licence, origin
+    return out, provenance, licence, origin, {"media": media, **provenance_extra}
 
 
 def _materialise_backgrounds(
@@ -347,11 +356,24 @@ def _materialise_backgrounds(
         windows = scoped_slices(choices, list(ayah_windows))
     else:
         windows = background_slices(duration_ms, len(choices))
-    parts: list[tuple[Any, str, int, int]] = []
+    # a crossfade needs each clip to run past its window into the next one's opening
+    fade = min(inputs.transition_ms, max(0, min(end - start for start, end in windows) - 200))
+    if fade != inputs.transition_ms:
+        ctx.progress.detail(
+            f"  · transition trimmed to {fade} ms (a window is only "
+            f"{min(end - start for start, end in windows)} ms long)"
+        )
+    parts: list[tuple[Any, str, int, int, str]] = []
     for index, (choice, (start, end)) in enumerate(zip(choices, windows), start=1):
         ctx.cancel.raise_if_cancelled()
-        path, provenance, licence, origin = _slice_clip(
-            ctx, choice, style, width=width, height=height, start_ms=start, end_ms=end
+        path, provenance, licence, origin, extra = _slice_clip(
+            ctx,
+            choice,
+            style,
+            width=width,
+            height=height,
+            start_ms=start,
+            end_ms=end + fade,
         )
         asset = ctx.assets.put(
             path,
@@ -359,36 +381,66 @@ def _materialise_backgrounds(
             provenance=provenance,
             licence=licence,
             ext=".mp4",
-            meta={"origin": origin, "index": index},  # when it plays is on the sequence
+            # when it plays is on the sequence; what it is, is here
+            meta={"origin": origin, "index": index, **extra},
         )
-        parts.append((asset, origin, start, end))
+        parts.append((asset, origin, start, end, extra))
 
     if len(parts) == 1:
-        asset, origin, start, end = parts[0]
+        asset, origin, start, end, _ = parts[0]
         return asset, origin, [(asset.id, start, end)]
 
-    # many clips: one continuous background, so the render stays a single input
-    concat_file = ctx.workdir / "background-concat.txt"
-    # absolute paths: the concat demuxer resolves list entries against the list's own
-    # directory, and a stage workdir is relative whenever the caller's is
-    concat_file.write_text(
-        "".join(
-            f"file '{(ctx.workdir / f'background-{start:07d}.mp4').resolve()}'\n"
-            for _, _, start, _ in parts
-        ),
-        encoding="utf-8",
-    )
     merged = ctx.workdir / "background-sequence.mp4"
-    ffmpeg.run(
-        [
-            settings.ffmpeg, "-hide_banner", "-nostdin", "-y",
-            "-f", "concat", "-safe", "0", "-i", str(concat_file),
-            "-c", "copy", str(merged),
-        ],
-        cancel=ctx.cancel,
-    )
-    providers = ", ".join(sorted({origin for _, origin, _, _ in parts}))
-    order = " → ".join(origin for _, origin, _, _ in parts)
+    if fade > 0:
+        # the crossfade sits at each boundary: the incoming shot is fully in exactly
+        # when its ayah's text appears
+        inputs_args: list[str] = []
+        for _, _, start, _, _ in parts:
+            inputs_args += ["-i", str(ctx.workdir / f"background-{start:07d}.mp4")]
+        chain: list[str] = []
+        previous = "0:v"
+        elapsed = 0
+        for index, (_, _, start, end, _) in enumerate(parts[:-1], start=1):
+            elapsed = end  # end of this window, in the final timeline
+            label = f"x{index}"
+            chain.append(
+                f"[{previous}][{index}:v]xfade=transition=fade:duration={fade / 1000:.3f}:"
+                f"offset={(elapsed - fade) / 1000:.3f}[{label}]"
+            )
+            previous = label
+        ffmpeg.run(
+            [
+                settings.ffmpeg, "-hide_banner", "-nostdin", "-y",
+                *inputs_args,
+                "-filter_complex", ";".join(chain) + f";[{previous}]format=yuv420p[vout]",
+                "-map", "[vout]", "-t", f"{duration_ms / 1000:.3f}",
+                "-c:v", "libx264", "-preset", settings.preset, "-crf", str(settings.crf),
+                "-pix_fmt", "yuv420p", str(merged),
+            ],
+            cancel=ctx.cancel,
+        )
+    else:
+        # hard cuts: a stream copy is enough, no re-encode
+        concat_file = ctx.workdir / "background-concat.txt"
+        # absolute paths: the concat demuxer resolves list entries against the list's own
+        # directory, and a stage workdir is relative whenever the caller's is
+        concat_file.write_text(
+            "".join(
+                f"file '{(ctx.workdir / f'background-{start:07d}.mp4').resolve()}'\n"
+                for _, _, start, _, _ in parts
+            ),
+            encoding="utf-8",
+        )
+        ffmpeg.run(
+            [
+                settings.ffmpeg, "-hide_banner", "-nostdin", "-y",
+                "-f", "concat", "-safe", "0", "-i", str(concat_file),
+                "-c", "copy", str(merged),
+            ],
+            cancel=ctx.cancel,
+        )
+    providers = ", ".join(sorted({origin for _, origin, _, _, _ in parts}))
+    order = " → ".join(f"{origin}/{extra.get('media', '')}" for _, origin, _, _, extra in parts)
     asset = ctx.assets.put(
         merged,
         kind=AssetKind.BACKGROUND,
@@ -401,9 +453,16 @@ def _materialise_backgrounds(
         ext=".mp4",
         meta={
             "origin": "sequence",
+            "transitionMs": fade,
             "parts": [part[0].id for part in parts],
             "windows": [
-                {"asset": part[0].id, "startMs": part[2], "endMs": part[3]} for part in parts
+                {
+                    "asset": part[0].id,
+                    "media": part[4].get("media", ""),
+                    "startMs": part[2],
+                    "endMs": part[3],
+                }
+                for part in parts
             ],
         },
     )
@@ -479,6 +538,7 @@ class ComposeStage:
                 "ayahs": [ayah.key for ayah in payload.ayahs],
                 "reciter": payload.ayahs[0].meta.get("reciter") if payload.ayahs else None,
                 "background": payload.background_origin,
+                "transitionMs": inputs.transition_ms,
                 "backgrounds": [
                     {"asset": asset, "startMs": start, "endMs": end}
                     for asset, start, end in payload.backgrounds
