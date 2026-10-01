@@ -228,12 +228,15 @@ def acquire_episodes(
     groups: Sequence[tuple[tuple[str, int], list[ItemRecord]]],
     *,
     on_detail: Detail | None = None,
+    cancel: Any = None,
 ) -> tuple[dict[str, EpisodeRecord], dict[str, str]]:
     """Resolve and probe each episode, and fetch its alignment reference clips."""
     detail = on_detail or _noop
     episodes: dict[str, EpisodeRecord] = {}
     failures: dict[str, str] = {}
     for (media_public_id, episode), group in groups:
+        if cancel is not None:
+            cancel.raise_if_cancelled()
         media = group[0].media
         label = (media.nameEn if media else media_public_id) or media_public_id
         key = f"{media_public_id}:{episode}"
@@ -287,6 +290,7 @@ def compose_items(
     min_anchors: int = 1,
     dry_run: bool = False,
     on_detail: Detail | None = None,
+    cancel: Any = None,
 ) -> list[ItemRecord]:
     """The alignment strategy: map each item's source window onto the local copy.
 
@@ -296,6 +300,8 @@ def compose_items(
     detail = on_detail or _noop
     composed: list[ItemRecord] = []
     for (media_public_id, episode), group in groups:
+        if cancel is not None:
+            cancel.raise_if_cancelled()
         key = f"{media_public_id}:{episode}"
         for item in group:
             if dry_run:
@@ -462,13 +468,20 @@ def cut_clips(
     fps: int = 30,
     total_items: int = 0,
     on_detail: Detail | None = None,
+    cancel: Any = None,
 ) -> dict[int, Path]:
-    """Cut every planned step; returns `{step index: clip path}`."""
+    """Cut every planned step; returns `{step index: clip path}`.
+
+    A cancel token stops the loop between clips and terminates an in-flight ffmpeg
+    process, so a cancelled job stops within one clip rather than finishing the reel.
+    """
     detail = on_detail or _noop
     paths: dict[int, Path] = {}
     for step in steps:
         if step.skipped:
             continue
+        if cancel is not None:
+            cancel.raise_if_cancelled()
         item = step.item
         assert item.asset is not None
         asset = item.asset
@@ -484,6 +497,7 @@ def cut_clips(
             preset=settings.preset,
             headers=asset.headers or None,
             audio_track=asset.audio_track,
+            cancel=cancel,
         )
         paths[step.index] = clip_path
         detail(
@@ -641,8 +655,11 @@ def render_reel(
     watermark: str,
     manifest: dict[str, Any],
     keep_clips: bool,
+    cancel: Any = None,
 ) -> "RenderResult":
     """One ASS, one SRT, one ffmpeg pass, one legacy manifest next to the video."""
+    if cancel is not None:
+        cancel.raise_if_cancelled()
     ass_path = subtitles.write_ass(
         workdir / f"{reel_name}.ass",
         list(cues),
@@ -671,6 +688,7 @@ def render_reel(
         # The sharp video lives between the card and the caption.
         band_y=layout.video_y if aspect == "vertical" else None,
         band_h=layout.video_h if aspect == "vertical" else None,
+        cancel=cancel,
     )
 
     manifest_path = outdir / f"{reel_name}.json"

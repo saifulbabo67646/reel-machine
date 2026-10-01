@@ -18,6 +18,7 @@ from ...align import TimelineMap
 from ...matching import describe as describe_match
 from ...models import Media, Segment, Token
 from ...sources import EpisodeAsset
+from ...core.stage import StageOutput
 from ...core.timeline import Timeline
 
 _CORPUS_ALIASES = {"anime": "ANIME", "jdrama": "JDRAMA", "drama": "JDRAMA", "youtube": "YOUTUBE"}
@@ -79,14 +80,6 @@ class NadeshikoCutInputs(BaseModel):
                 raise ValueError(f"bad --only entry {entry!r}; expected <mediaPublicId>:<episode>")
             pairs.append((media_id.strip(), int(episode)))
         return pairs
-
-
-class StageOutput(BaseModel):
-    """Base for stage payloads; `halt_pipeline` stops a plan-only run after compose."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    halt_pipeline: bool = False
 
 
 class AssetHandle(BaseModel):

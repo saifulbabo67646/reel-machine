@@ -11,12 +11,28 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+from pydantic import BaseModel, ConfigDict
+
 from .assets import AssetStore
+from .errors import JobCancelled
 from .job import Job
+
+
+class StageOutput(BaseModel):
+    """Base for stage payloads.
+
+    `halt_pipeline` stops a run after this stage — how a recipe expresses "plan mode
+    stops before media prep" without the engine knowing what a plan is.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    halt_pipeline: bool = False
 
 
 @runtime_checkable
@@ -27,6 +43,8 @@ class CancelToken(Protocol):
     def raise_if_cancelled(self) -> None: ...
 
     def register_process(self, process: Any) -> None: ...
+
+    def unregister_process(self, process: Any) -> None: ...
 
 
 @runtime_checkable
@@ -69,6 +87,49 @@ class NeverCancel:
 
     def register_process(self, process: Any) -> None:
         return None
+
+    def unregister_process(self, process: Any) -> None:
+        return None
+
+
+class CancellationToken:
+    """A cooperative cancel signal that also terminates registered subprocesses.
+
+    Cancellation takes effect between stages and between element renders, and kills any
+    ffmpeg process registered with the token — so a cancelled job stops promptly instead
+    of finishing the render it was asked to abandon.
+    """
+
+    def __init__(self) -> None:
+        self._event = threading.Event()
+        self._lock = threading.Lock()
+        self._processes: set[Any] = set()
+
+    @property
+    def cancelled(self) -> bool:
+        return self._event.is_set()
+
+    def cancel(self) -> None:
+        self._event.set()
+        with self._lock:
+            processes = list(self._processes)
+        for process in processes:
+            try:
+                process.terminate()
+            except Exception:  # noqa: BLE001 - a process that died on its own is fine
+                pass
+
+    def raise_if_cancelled(self) -> None:
+        if self._event.is_set():
+            raise JobCancelled()
+
+    def register_process(self, process: Any) -> None:
+        with self._lock:
+            self._processes.add(process)
+
+    def unregister_process(self, process: Any) -> None:
+        with self._lock:
+            self._processes.discard(process)
 
 
 class NullQuota:

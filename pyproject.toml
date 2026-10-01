@@ -39,8 +39,12 @@ s3 = "reelmachine.storage.s3:S3Storage"
 [project.entry-points."reelmachine.styles"]
 bundled = "reelmachine.core.style:bundled_style_map"
 
+[project.optional-dependencies]
+# The MCP server is an optional extra: `pip install reel-machine` works without it.
+mcp = ["mcp>=2,<3"]
+
 [dependency-groups]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "mcp>=2,<3"]
 
 [build-system]
 requires = ["setuptools>=68"]

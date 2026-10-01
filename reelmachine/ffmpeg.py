@@ -30,18 +30,46 @@ class FFmpegError(RuntimeError):
         super().__init__(f"command failed ({returncode}): {shlex.join(cmd)}\n{tail}")
 
 
-def run(cmd: list[str], *, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
-    proc = subprocess.run(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        timeout=timeout,
-        check=False,
+def run(
+    cmd: list[str],
+    *,
+    timeout: float | None = None,
+    cancel: Any = None,
+) -> subprocess.CompletedProcess[str]:
+    if cancel is None:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+        if proc.returncode != 0:
+            raise FFmpegError(cmd, proc.returncode, proc.stderr or "")
+        return proc
+
+    # Cancellable path: the token can terminate this process from another thread.
+    from .core.errors import JobCancelled
+
+    process = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
-    if proc.returncode != 0:
-        raise FFmpegError(cmd, proc.returncode, proc.stderr or "")
-    return proc
+    cancel.register_process(process)
+    try:
+        try:
+            out, err = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+            raise
+        if cancel.cancelled:
+            raise JobCancelled()
+        if process.returncode != 0:
+            raise FFmpegError(cmd, process.returncode, err or "")
+        return subprocess.CompletedProcess(cmd, process.returncode, out or "", err or "")
+    finally:
+        cancel.unregister_process(process)
 
 
 def is_remote(src: str | Path) -> bool:
@@ -359,6 +387,7 @@ def cut_clip(
     headers: dict[str, str] | None = None,
     audio_track: int = 0,
     video: bool = True,
+    cancel: Any = None,
 ) -> Path:
     """Cut `[start_s, start_s+duration_s]` from an episode into a normalised mp4.
 
@@ -407,7 +436,7 @@ def cut_clip(
         # clip is one extra frame of subtitle drift per clip.
         cmd += ["-frames:v", str(max(1, int(round(duration_s * fps))))]
     cmd += ["-avoid_negative_ts", "make_zero", "-movflags", "+faststart", "-y", str(dest)]
-    run(cmd)
+    run(cmd, cancel=cancel)
     return dest
 
 
@@ -426,6 +455,7 @@ def build_reel_video(
     band_y: int | None = None,
     band_h: int | None = None,
     fonts_dir: Path | None = None,
+    cancel: Any = None,
 ) -> Path:
     """Concatenate normalised clips in one filtergraph, burn subs, pad, loudnorm.
 
@@ -538,7 +568,7 @@ def build_reel_video(
         "-y",
         str(dest),
     ]
-    run(cmd)
+    run(cmd, cancel=cancel)
     return dest
 
 

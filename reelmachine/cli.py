@@ -26,13 +26,15 @@ from rich.table import Table
 from . import __version__, ffmpeg
 from .align import align_episode, save_timeline
 from .config import get_settings
-from .core.errors import ReelError
+from .core.errors import QuotaExceededError, ReelError
+from .core.job import Job, JobRequest, JobState
 from .core.registry import Registry
 from .core.text import slugify
-from .engine.providers import provider_health, resolve_recipe_providers
+from .engine import Engine
+from .engine.providers import provider_health
 from .nadeshiko import NadeshikoClient, NadeshikoError, QuotaExceeded
 from .recipes import nadeshiko_cut as reelmod
-from .recipes.nadeshiko_cut import NadeshikoCutInputs, run_nadeshiko_cut, summarise
+from .recipes.nadeshiko_cut import NadeshikoCutInputs, summarise
 from .sources import SourceError, UnresolvedEpisode, get_provider
 
 app = typer.Typer(
@@ -55,22 +57,62 @@ def _fmt_ms(ms: int) -> str:
     return f"{minutes:d}:{seconds:02d}.{millis // 100:1d}"
 
 
-class ConsoleProgress:
-    """Stage progress for a human at a terminal; the engine never prints by itself."""
+class ConsoleJobProgress:
+    """Prints a job's stage changes and detail lines once each, for a human."""
 
     def __init__(self, verbose: bool) -> None:
         self.verbose = verbose
+        self._stage: tuple[str, int, int] | None = None
+        self._detail = ""
 
-    def stage(self, stage_id: str, index: int, total: int) -> None:
-        if self.verbose:
-            console.print(f"[dim]stage {index}/{total}: {stage_id}[/dim]")
+    def __call__(self, job: Job) -> None:
+        if not self.verbose:
+            return
+        progress = job.progress
+        key = (progress.stage, progress.stage_index, progress.stages_total)
+        if key != self._stage and progress.stage:
+            self._stage = key
+            console.print(
+                f"[dim]stage {progress.stage_index}/{progress.stages_total}: {progress.stage}[/dim]"
+            )
+        if progress.detail and progress.detail != self._detail:
+            self._detail = progress.detail
+            console.print(progress.detail)
 
-    def percent(self, value: float) -> None:
-        return None
 
-    def detail(self, text: str) -> None:
-        if self.verbose:
-            console.print(text)
+def _job_failure(finished: Job) -> None:
+    """Print a failed job's structured error and exit with the right code."""
+    error = finished.error
+    if error is not None and error.code == "QUOTA_EXCEEDED":
+        err.print(f"[red]quota exhausted[/red] {error.message}")
+        sys.exit(2)
+    message = error.message if error is not None else "the job failed"
+    hint = f"\n{error.hint}" if error is not None and error.hint else ""
+    err.print(f"[red]{message}[/red]{hint}")
+    sys.exit(1)
+
+
+def _job_plan(finished: Job) -> dict | None:
+    """The plan artifact of a job, if it got as far as composing one."""
+    for artifact in (finished.result.artifacts if finished.result else []):
+        if artifact.name == "plan.json" and Path(artifact.path).is_file():
+            return json.loads(Path(artifact.path).read_text(encoding="utf-8"))
+    return None
+
+
+def _run_job(engine: Engine, inputs: NadeshikoCutInputs, *, verbose: bool) -> Job:
+    try:
+        job = engine.submit(
+            JobRequest(recipe="nadeshiko-cut", inputs=inputs.model_dump(mode="json")),
+            caller="local",
+        )
+    except QuotaExceededError as exc:
+        err.print(f"[red]quota exhausted[/red] {exc.message}")
+        sys.exit(2)
+    except ReelError as exc:
+        err.print(f"[red]{exc.message}[/red]" + (f"\n{exc.hint}" if exc.hint else ""))
+        sys.exit(1)
+    return engine.wait(job.id, caller="local", on_progress=ConsoleJobProgress(verbose))
 
 
 def _corpus_param(raw: str | None) -> str | None:
@@ -486,24 +528,18 @@ def plan(
         only=_only_list(only),
         dry_run=dry_run,
     )
-    recipe = reelmod.NadeshikoCutRecipe()
+    engine = Engine(settings)
     try:
-        with resolve_recipe_providers(recipe.spec, settings) as providers:
-            _, outputs = run_nadeshiko_cut(
-                inputs,
-                client=providers["corpus"],
-                provider=providers["source"],
-                settings=settings,
-                progress=ConsoleProgress(verbose),
-            )
-    except QuotaExceeded as exc:
-        err.print(f"[red]quota exhausted[/red] {exc}")
-        sys.exit(2)
-    except ReelError as exc:
-        err.print(f"[red]{exc.message}[/red]" + (f"\n{exc.hint}" if exc.hint else ""))
-        sys.exit(1)
+        finished = _run_job(engine, inputs, verbose=verbose)
+        plan = _job_plan(finished)
+    finally:
+        engine.close()
+    if finished.state is not JobState.SUCCEEDED:
+        if plan is not None:
+            console.print(summarise(plan))
+        _job_failure(finished)
 
-    plan = outputs["compose"].plan
+    assert plan is not None
     target = out or (settings.workdir / f"plan-{slugify(word)}.json")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(plan, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -556,39 +592,59 @@ def build(
         name=name,
     )
 
-    def nothing_aligned(run, _outputs) -> bool:
-        return run.id == "compose" and not (run.output.plan.get("stats") or {}).get("ok")
-
-    recipe = reelmod.NadeshikoCutRecipe()
+    engine = Engine(settings)
     try:
-        with resolve_recipe_providers(recipe.spec, settings) as providers:
-            _, outputs = run_nadeshiko_cut(
-                inputs,
-                client=providers["corpus"],
-                provider=providers["source"],
-                settings=settings,
-                progress=ConsoleProgress(verbose),
-                stop_when=nothing_aligned,
-            )
-    except QuotaExceeded as exc:
-        err.print(f"[red]quota exhausted[/red] {exc}")
-        sys.exit(2)
-    except ReelError as exc:
-        err.print(f"[red]{exc.message}[/red]" + (f"\n{exc.hint}" if exc.hint else ""))
-        sys.exit(1)
+        finished = _run_job(engine, inputs, verbose=verbose)
+        plan = _job_plan(finished)
+    finally:
+        engine.close()
 
-    plan = outputs["compose"].plan
+    if finished.state is not JobState.SUCCEEDED:
+        if plan is not None:
+            console.print(summarise(plan))
+            if not (plan.get("stats") or {}).get("ok"):
+                err.print("[red]nothing aligned; not rendering[/red]")
+                sys.exit(1)
+        _job_failure(finished)
+
+    assert plan is not None
     console.print(summarise(plan))
-    if "render" not in outputs:
-        err.print("[red]nothing aligned; not rendering[/red]")
-        sys.exit(1)
-
-    rendered = outputs["render"]
+    artifacts = {artifact.name: artifact for artifact in (finished.result.artifacts if finished.result else [])}
+    manifest = json.loads(Path(finished.result.manifest).read_text(encoding="utf-8")) if finished.result else {}
+    duration_ms = int((manifest.get("timeline") or {}).get("duration_ms") or 0)
     console.print()
-    console.print(f"[green]reel[/green]  {rendered.video}  ({rendered.duration_ms / 1000:.1f}s)")
-    console.print(f"[green]subs[/green]  {rendered.ass}")
-    console.print(f"[green]srt [/green]  {rendered.srt}")
-    console.print(f"[green]meta[/green]  {rendered.manifest}")
+    console.print(f"[green]reel[/green]  {artifacts['reel.mp4'].path}  ({duration_ms / 1000:.1f}s)")
+    console.print(f"[green]subs[/green]  {artifacts['captions.ass'].path}")
+    console.print(f"[green]srt [/green]  {artifacts['captions.srt'].path}")
+    console.print(f"[green]meta[/green]  {artifacts['reel.json'].path}")
+
+
+@app.command()
+def recipes(
+    json_out: bool = typer.Option(False, "--json", help="Emit raw JSON."),
+) -> None:
+    """List what this installation can make."""
+    engine = Engine(get_settings())
+    try:
+        rows = engine.list_recipes()
+    finally:
+        engine.close()
+    if json_out:
+        console.print_json(json.dumps(rows, ensure_ascii=False))
+        return
+    table = Table(header_style="bold")
+    table.add_column("recipe")
+    table.add_column("title")
+    table.add_column("render modes")
+    table.add_column("cost / unit")
+    for row in rows:
+        table.add_row(
+            row["id"],
+            row["title"],
+            ", ".join(row["renderModes"]) or "-",
+            row["cost"]["unit"] or "-",
+        )
+    console.print(table)
 
 
 # ------------------------------------------------------------------------- debug
@@ -841,6 +897,9 @@ def cache(
 
 
 def main() -> None:
+    from .observability import configure_logging
+
+    configure_logging()
     try:
         app()
     except KeyboardInterrupt:

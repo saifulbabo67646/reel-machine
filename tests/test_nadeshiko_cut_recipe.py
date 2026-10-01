@@ -166,6 +166,64 @@ def test_full_recipe_renders_a_reel_with_no_network(tmp_path) -> None:
     assert len([s for s in manifest["segments"] if s["status"] == "rendered"]) == 2
 
 
+def test_recipe_runs_through_the_engine_api(tmp_path, monkeypatch) -> None:
+    """The CLI's path: submit + wait, with the shipped fake corpus and the mock source."""
+    from reelmachine.core.job import JobRequest, JobState
+    from reelmachine.engine import Engine
+    from reelmachine.jobs.local import LocalJobStore
+
+    monkeypatch.setenv("REEL_MOCK_DURATION", "40")
+    settings = replace(
+        get_settings(),
+        workdir=tmp_path / "work",
+        outdir=tmp_path / "out",
+        mock_dir=tmp_path / "mock",
+    )
+    engine = Engine(
+        settings,
+        provider_overrides={"corpus": "nadeshiko-fake", "source": "mock"},
+        store=LocalJobStore(tmp_path / "jobs"),
+    )
+    try:
+        job = engine.submit(
+            JobRequest(
+                recipe="nadeshiko-cut",
+                inputs={
+                    "word": WORD,
+                    "mode": "build",
+                    "name": "engine-reel",
+                    "count": 2,
+                    "per_media": 2,
+                },
+            ),
+            caller="alice",
+        )
+        finished = engine.wait(job.id, caller="alice", timeout_s=300)
+    finally:
+        engine.close()
+
+    assert finished.state is JobState.SUCCEEDED, finished.error
+    names = {artifact.name for artifact in finished.result.artifacts}
+    assert {
+        "reel.mp4",
+        "captions.ass",
+        "captions.srt",
+        "reel.json",
+        "plan.json",
+        "timeline.json",
+        "manifest.json",
+    } <= names
+
+    manifest = json.loads(Path(finished.result.manifest).read_text(encoding="utf-8"))
+    assert manifest["recipe"] == "nadeshiko-cut"
+    assert manifest["caller"] == "alice"
+    assert manifest["render_mode"] == "cut"
+    assert manifest["timeline"]["digest"]
+    assert manifest["stages"] and any(stage["id"] == "render" for stage in manifest["stages"])
+    assert manifest["assets"], "the reel's clips must be recorded as assets"
+    assert all(record["asset"]["provenance"]["provider"] for record in manifest["assets"])
+
+
 def test_repeated_select_is_served_from_the_stage_cache(tmp_path) -> None:
     """Quota is spent once: the same selection is not searched again."""
     settings, provider, segments, media = _mock_setup(tmp_path)

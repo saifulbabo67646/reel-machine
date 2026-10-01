@@ -99,6 +99,21 @@ class Job(BaseModel):
         return end - self.started_ms
 
 
+class CallerPolicy(BaseModel):
+    """What a deployment allows one caller to do.
+
+    The defaults suit a local, single-user install; a hosted deployment narrows them
+    per tenant (allowed recipes, concurrency, disk and monthly provider caps).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    allowed_recipes: list[str] | None = None
+    max_concurrent_jobs: int = 2
+    max_disk_mb: int = 8192
+    quotas: dict[str, int] = Field(default_factory=dict)  # provider -> monthly units
+
+
 class JobSummary(BaseModel):
     """Trimmed view for list endpoints."""
 

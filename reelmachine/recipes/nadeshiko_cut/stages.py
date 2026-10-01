@@ -95,6 +95,7 @@ class SelectStage:
 
     def run(self, ctx: StageContext, payload: Any) -> SelectOutput:
         inputs = NadeshikoCutInputs.model_validate(payload)
+        ctx.cancel.raise_if_cancelled()
         settings: Settings = ctx.config
         client = ctx.providers.get("corpus")
         provider = ctx.providers.get("source")
@@ -139,7 +140,7 @@ class AcquireStage:
         client = ctx.providers.get("corpus")
         groups = P.group_items(payload.items)
         episodes, failures = P.acquire_episodes(
-            client, provider, groups, on_detail=ctx.progress.detail
+            client, provider, groups, on_detail=ctx.progress.detail, cancel=ctx.cancel
         )
         for item in payload.items:
             record = episodes.get(f"{item.segment.mediaPublicId}:{item.segment.episode}")
@@ -175,6 +176,7 @@ class ComposeStage:
             settings=settings,
             dry_run=inputs.dry_run,
             on_detail=ctx.progress.detail,
+            cancel=ctx.cancel,
         )
         plan = P.plan_from_items(inputs.word, payload.source, items, payload.stats)
         aspect = normalise_aspect(inputs.aspect or settings.aspect)
@@ -246,6 +248,7 @@ class PrepStage:
             settings=settings,
             total_items=len(items),
             on_detail=ctx.progress.detail,
+            cancel=ctx.cancel,
         )
         if not clip_paths:
             raise RenderFailed(
@@ -396,6 +399,7 @@ class RenderStage:
             watermark=options.get("watermark", ""),
             manifest=manifest,
             keep_clips=False,
+            cancel=ctx.cancel,
         )
         return RenderOutput(
             video=str(result.video),
