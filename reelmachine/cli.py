@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 import shutil
@@ -47,8 +48,10 @@ err = Console(stderr=True)
 
 
 def _client(cache: bool = True) -> NadeshikoClient:
+    """The corpus client for the local caller — including its per-caller quota ledger."""
     settings = get_settings()
-    return NadeshikoClient(settings=settings, cache=cache)
+    caller_ledger = settings.workdir / "jobs" / "local" / "quota" / "nadeshiko.json"
+    return NadeshikoClient(settings=dataclasses.replace(settings, ledger_file=caller_ledger), cache=cache)
 
 
 def _fmt_ms(ms: int) -> str:
