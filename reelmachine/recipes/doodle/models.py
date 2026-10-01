@@ -86,6 +86,7 @@ class NarrationOutput(StageOutput):
     beats: list[Beat] = Field(default_factory=list)
     audio_asset: str = ""
     duration_ms: int = 0
+    timings_source: str = ""  # "provider" | "proportional" (line-level voices)
     segments: list[NarrationSegment] = Field(default_factory=list)
     voice: str = ""
     provider: str = ""

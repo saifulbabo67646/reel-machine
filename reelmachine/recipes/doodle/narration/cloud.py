@@ -12,9 +12,11 @@ shapes with no network.
 from __future__ import annotations
 
 import base64
+import io
 import json
 import os
 import tempfile
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -73,17 +75,50 @@ def _timestamp_ms(entry: dict[str, Any], primary: str, fallback: str) -> int:
     return int(round(float(entry.get(fallback, 0)) * 1000))
 
 
-def parse_cartesia(payload: dict[str, Any]) -> tuple[bytes, list[WordSpan]]:
-    audio = base64.b64decode(payload.get("audio") or payload.get("audio_base64") or "")
-    spans = [
-        WordSpan(
-            text=str(entry.get("word") or ""),
-            start_ms=_timestamp_ms(entry, "start_ms", "start"),
-            end_ms=_timestamp_ms(entry, "end_ms", "end"),
-        )
-        for entry in payload.get("word_timestamps") or []
-    ]
-    return audio, spans
+def parse_cartesia_sse(text: str) -> tuple[bytes, list[WordSpan]]:
+    """Raw PCM and any word timings from Cartesia's event stream.
+
+    Each `chunk` event carries base64 PCM under `data`; word timings, when the model
+    and route provide them, arrive as `word_timestamps` in their own events.
+    """
+    audio = bytearray()
+    spans: list[WordSpan] = []
+    for block in text.split("\n\n"):
+        event = ""
+        payload_text = ""
+        for line in block.splitlines():
+            if line.startswith("event:"):
+                event = line.split(":", 1)[1].strip()
+            elif line.startswith("data:"):
+                payload_text = line.split(":", 1)[1].strip()
+        if not payload_text:
+            continue
+        try:
+            payload = json.loads(payload_text)
+        except json.JSONDecodeError:
+            continue
+        if event == "chunk" and isinstance(payload.get("data"), str):
+            audio.extend(base64.b64decode(payload["data"]))
+        for entry in payload.get("word_timestamps") or []:
+            spans.append(
+                WordSpan(
+                    text=str(entry.get("word") or ""),
+                    start_ms=_timestamp_ms(entry, "start_ms", "start"),
+                    end_ms=_timestamp_ms(entry, "end_ms", "end"),
+                )
+            )
+    return bytes(audio), spans
+
+
+def pcm_to_wav_bytes(pcm: bytes, *, sample_rate: int, channels: int = 1) -> bytes:
+    """Wrap raw signed-16 PCM in a WAV container."""
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as handle:
+        handle.setnchannels(channels)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate)
+        handle.writeframes(pcm)
+    return buffer.getvalue()
 
 
 class CloudNarration:
@@ -133,7 +168,10 @@ class CloudNarration:
     def _headers(self) -> dict[str, str]:
         raise NotImplementedError
 
-    def _synthesize(self, text: str, voice: str, language: str) -> tuple[bytes, list[WordSpan], str]:
+    def _synthesize(
+        self, text: str, voice: str, language: str
+    ) -> tuple[bytes, list[WordSpan], str, str]:
+        """`(audio, word spans, resolved voice, file suffix)`."""
         raise NotImplementedError
 
     # -- the protocol -----------------------------------------------------------
@@ -146,22 +184,25 @@ class CloudNarration:
             )
         requested = voice_id(voice)
         known = self.voices()
+        resolved = requested
         if known:
             ids = {entry.id for entry in known}
             names = {entry.name.lower(): entry.id for entry in known if entry.name}
-            if requested not in ids and requested.lower() not in names:
-                raise VoiceUnavailable(
-                    f"voice {requested!r} does not exist for the {self.vendor} provider",
-                    hint=f"choose one of: {', '.join(sorted(ids)[:8])}",
-                    details={"vendor": self.vendor, "voice": requested},
-                )
-        audio, spans, resolved = self._synthesize(text, requested, language)
+            if requested not in ids:
+                if requested.lower() not in names:
+                    raise VoiceUnavailable(
+                        f"voice {requested!r} does not exist for the {self.vendor} provider",
+                        hint=f"choose one of: {', '.join(sorted(ids)[:8])}",
+                        details={"vendor": self.vendor, "voice": requested},
+                    )
+                resolved = names[requested.lower()]  # the API wants the id, not the name
+        audio, spans, resolved, suffix = self._synthesize(text, resolved, language)
         if not audio:
             raise ProviderUnavailable(
                 f"the {self.vendor} provider returned no audio",
                 hint="retry; if it persists, check the account's quota",
             )
-        suffix = ".mp3"
+        suffix = suffix or ".mp3"
         path = (self.workdir or Path.cwd()) / f"narration-{self.vendor}-{abs(hash(text)) % 10_000_000:07d}{suffix}"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(audio)
@@ -211,7 +252,9 @@ class ElevenLabsNarration(CloudNarration):
         ]
         return self._voices
 
-    def _synthesize(self, text: str, voice: str, language: str) -> tuple[bytes, list[WordSpan], str]:
+    def _synthesize(
+        self, text: str, voice: str, language: str
+    ) -> tuple[bytes, list[WordSpan], str, str]:
         response = self._http().post(
             f"{self.base_url}/v1/text-to-speech/{voice}/with-timestamps",
             headers=self._headers(),
@@ -219,19 +262,28 @@ class ElevenLabsNarration(CloudNarration):
         )
         response.raise_for_status()
         audio, spans = parse_elevenlabs(response.json())
-        return audio, spans, voice
+        return audio, spans, voice, ".mp3"
 
 
 class CartesiaNarration(CloudNarration):
+    """Cartesia's Sonic voices.
+
+    The streaming route (`/tts/sse`, raw PCM) is preferred; it is the one that carries
+    word timings when a model provides them. When it fails, the plain bytes route still
+    gives audio, and the recipe falls back to line-level timings from the narration's own
+    audio duration — recorded in the manifest, never silently.
+    """
+
     name = "cartesia"
     vendor = "cartesia"
     env_key = "CARTESIA_API_KEY"
     base_url = CARTESIA_BASE
+    sample_rate = 44100
 
     def _headers(self) -> dict[str, str]:
         return {
-            "X-API-Key": self.api_key,
-            "Cartesia-Version": os.environ.get("REEL_CARTESIA_VERSION", "2024-06-10"),
+            "Authorization": f"Bearer {self.api_key}",
+            "Cartesia-Version": os.environ.get("REEL_CARTESIA_VERSION", "2026-08-14"),
             "content-type": "application/json",
         }
 
@@ -239,34 +291,58 @@ class CartesiaNarration(CloudNarration):
         if self._voices is not None:
             return self._voices
         try:
-            response = self._http().get(f"{self.base_url}/voices", headers=self._headers())
+            response = self._http().get(
+                f"{self.base_url}/voices", headers=self._headers(), params={"limit": 100}
+            )
             response.raise_for_status()
             payload = response.json()
         except (httpx.HTTPError, json.JSONDecodeError):
             return None
         entries = payload if isinstance(payload, list) else payload.get("data") or []
         self._voices = [
-            Voice(id=str(entry.get("id") or ""), name=str(entry.get("name") or ""))
+            Voice(
+                id=str(entry.get("id") or ""),
+                name=str(entry.get("name") or ""),
+                notes=str(entry.get("language") or ""),
+            )
             for entry in entries
             if entry.get("id")
         ]
         return self._voices
 
-    def _synthesize(self, text: str, voice: str, language: str) -> tuple[bytes, list[WordSpan], str]:
+    def _body(self, text: str, voice: str, language: str, container: str) -> dict[str, Any]:
+        output: dict[str, Any] = {"container": container, "sample_rate": self.sample_rate}
+        if container == "raw":
+            output["encoding"] = "pcm_s16le"
+        body: dict[str, Any] = {
+            "model_id": os.environ.get("REEL_CARTESIA_MODEL", "sonic-3.6"),
+            "transcript": text,
+            "voice": voice,
+            "output_format": output,
+        }
+        if language:
+            body["language"] = language
+        return body
+
+    def _synthesize(
+        self, text: str, voice: str, language: str
+    ) -> tuple[bytes, list[WordSpan], str, str]:
+        try:
+            response = self._http().post(
+                f"{self.base_url}/tts/sse",
+                headers=self._headers(),
+                json=self._body(text, voice, language, "raw"),
+            )
+            response.raise_for_status()
+            pcm, spans = parse_cartesia_sse(response.text)
+            if pcm:
+                return pcm_to_wav_bytes(pcm, sample_rate=self.sample_rate), spans, voice, ".wav"
+        except httpx.HTTPError:
+            pass  # fall through to the non-streaming route
         response = self._http().post(
             f"{self.base_url}/tts/bytes",
             headers=self._headers(),
-            json={
-                "model_id": os.environ.get("REEL_CARTESIA_MODEL", "sonic-2"),
-                "transcript": text,
-                "voice": {"mode": "id", "id": voice},
-                "language": language,
-                "add_timestamps": True,
-                "output_format": {"container": "mp3", "sample_rate": 44100, "bit_rate": 128000},
-            },
+            json=self._body(text, voice, language, "wav"),
         )
         response.raise_for_status()
-        if response.headers.get("content-type", "").startswith("application/json"):
-            audio, spans = parse_cartesia(response.json())
-            return audio, spans, voice
-        return response.content, [], voice
+        return response.content, [], voice, ".wav"

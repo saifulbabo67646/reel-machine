@@ -36,7 +36,21 @@ class FileBackground(BaseModel):
     fit: Literal["cover", "contain"] = "cover"
 
 
-BackgroundChoice = Annotated[Union[GradientBackground, FileBackground], Field(discriminator="kind")]
+class PexelsBackground(BaseModel):
+    """A stock clip: the deployment needs `PEXELS_API_KEY`, and the manifest records it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["pexels"] = "pexels"
+    query: str
+    orientation: Literal["portrait", "landscape", "square"] = "portrait"
+    min_height: int = 720
+
+
+BackgroundChoice = Annotated[
+    Union[GradientBackground, FileBackground, PexelsBackground],
+    Field(discriminator="kind"),
+]
 
 
 class QuranicInputs(BaseModel):

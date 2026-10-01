@@ -14,12 +14,13 @@ from typing import Any
 
 from ... import ffmpeg
 from ...config import Settings, normalise_aspect
-from ...core.assets import AssetKind, Licence, Provenance
-from ...core.errors import InvalidInput
+from ...core.assets import AssetKind, Provenance
+from ...core.errors import InvalidInput, ProviderUnavailable
 from ...core.stage import StageContext
 from ...core.style import StylePack, get_style
 from ...core.timeline import Caption, Clip, Timeline, TimedAudioRef
 from ...render.captions import write_ass, write_srt
+from .backgrounds import BackgroundRequest
 from .models import (
     AyahAudio,
     FileBackground,
@@ -40,11 +41,6 @@ GEOMETRY = {
 
 #: Provider timings further past the probed audio than this are not trusted.
 TIMING_TOLERANCE_MS = 500
-
-
-def _hex(value: str) -> str:
-    text = (value or "").strip().lstrip("#")
-    return f"0x{text}" if len(text) == 6 else "0x101820"
 
 
 def _suffix(url: str) -> str:
@@ -171,71 +167,83 @@ def _materialise_background(
     *,
     duration_ms: int,
 ) -> tuple[Any, str]:
+    """One background clip, from a provider or from the caller's own file.
+
+    The provider owns where a clip comes from (and its licence); this stage owns the
+    reel's geometry and exact duration, so the render has no surprises.
+    """
     settings: Settings = ctx.config
     width, height = GEOMETRY[inputs.aspect]
     out = ctx.workdir / "background.mp4"
     duration_s = max(0.5, duration_ms / 1000.0)
+    choice = inputs.background
 
-    if isinstance(inputs.background, FileBackground):
-        source = Path(inputs.background.path).expanduser()
+    if isinstance(choice, FileBackground):
+        source = Path(choice.path).expanduser()
         if not source.is_file():
             raise InvalidInput(
                 f"background file not found: {source}",
                 hint="points at a video or image the caller supplies",
             )
-        cmd = [
-            settings.ffmpeg, "-hide_banner", "-nostdin", "-y",
-            "-stream_loop", "-1", "-i", str(source),
-            "-t", f"{duration_s:.3f}", "-an",
-            "-vf", (
-                f"scale={width}:{height}:force_original_aspect_ratio=increase,"
-                f"crop={width}:{height},fps=30"
-            ),
-            "-c:v", "libx264", "-preset", settings.preset, "-crf", str(settings.crf),
-            "-pix_fmt", "yuv420p", str(out),
-        ]
-        ffmpeg.run(cmd, cancel=ctx.cancel)
         origin = "file"
+        provenance = Provenance(provider="tenant", source="upload")
+        licence = None
     else:
-        colors = inputs.background.colors or [
-            str((style.palette or {}).get("background", "#0e1621")),
-            str((style.palette or {}).get("highlight", "#1f3b4d")),
-        ]
-        first = colors[0] if colors else "#0e1621"
-        second = colors[1] if len(colors) > 1 else first
-        cmd = [
-            settings.ffmpeg, "-hide_banner", "-nostdin", "-y",
-            "-f", "lavfi",
-            "-i", (
-                f"gradients=s={width}x{height}:c0={_hex(first)}:c1={_hex(second)}:"
-                f"speed={inputs.background.speed}"
-            ),
-            "-t", f"{duration_s:.3f}", "-r", "30",
-            "-c:v", "libx264", "-preset", settings.preset, "-crf", str(settings.crf),
-            "-pix_fmt", "yuv420p", str(out),
-        ]
-        try:
-            ffmpeg.run(cmd, cancel=ctx.cancel)
-        except ffmpeg.FFmpegError as exc:
-            raise InvalidInput(
-                "this ffmpeg cannot generate the procedural gradient background",
-                hint="use background kind=file, or upgrade ffmpeg (the gradients source needs 4.4+)",
-                details={"stderr": str(exc)[-300:]},
-            ) from exc
-        origin = "gradient"
+        origin = choice.kind
+        provider = ctx.providers.get(f"background_{origin}")
+        problems = provider.missing()
+        if problems:
+            raise ProviderUnavailable(
+                f"the {origin} background provider is not usable on this deployment",
+                hint="; ".join(problems),
+                details={"kind": origin},
+            )
+        colors = list(getattr(choice, "colors", []) or [])
+        if origin == "gradient" and not colors:
+            colors = [
+                str((style.palette or {}).get("background", "#0e1621")),
+                str((style.palette or {}).get("highlight", "#1f3b4d")),
+            ]
+        request = BackgroundRequest(
+            kind=origin,
+            query=str(getattr(choice, "query", "") or ""),
+            orientation=str(getattr(choice, "orientation", "portrait") or "portrait"),
+            min_height=int(getattr(choice, "min_height", 720) or 720),
+            colors=colors,
+            speed=float(getattr(choice, "speed", 0.02) or 0.02),
+            duration_ms=duration_ms,
+            width=width,
+            height=height,
+        )
+        clip = provider.fetch(request, dest_dir=ctx.workdir)
+        source = clip.path
+        provenance = clip.provenance
+        licence = clip.licence
+        ctx.progress.detail(
+            f"  · background: {origin} ({clip.width}x{clip.height}, "
+            f"{clip.duration_ms / 1000:.1f}s)"
+        )
+
+    cmd = [
+        settings.ffmpeg, "-hide_banner", "-nostdin", "-y",
+        "-stream_loop", "-1", "-i", str(source),
+        "-t", f"{duration_s:.3f}", "-an",
+        "-vf", (
+            f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"crop={width}:{height},fps=30"
+        ),
+        "-c:v", "libx264", "-preset", settings.preset, "-crf", str(settings.crf),
+        "-pix_fmt", "yuv420p", str(out),
+    ]
+    ffmpeg.run(cmd, cancel=ctx.cancel)
 
     asset = ctx.assets.put(
         out,
         kind=AssetKind.BACKGROUND,
-        provenance=Provenance(provider="reelmachine", source=origin),
-        licence=Licence(
-            name="CC0-1.0",
-            url="https://creativecommons.org/publicdomain/zero/1.0/",
-            attribution="generated by reel-machine",
-        )
-        if origin == "gradient"
-        else None,
+        provenance=provenance,
+        licence=licence,
         ext=".mp4",
+        meta={"origin": origin},
     )
     return asset, origin
 

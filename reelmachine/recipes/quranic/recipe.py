@@ -16,7 +16,7 @@ from ...core.manifest import CheckResult, VerificationReport
 from ...core.recipe import CostNote, ProbeContext, ProbeReport, ProviderReq, RecipeSpec, StageSpec
 from ...core.stage import StageContext
 from ...core.style import StyleNotFound, get_style
-from .models import FileBackground, QuranicInputs
+from .models import FileBackground, PexelsBackground, QuranicInputs
 from .stages import ComposeStage, PrepStage, RenderStage, SelectStage
 
 
@@ -64,7 +64,19 @@ class QuranicRecipe:
                 group="corpora",
                 default="quran_com",
                 description="Verse text, translation, recitation audio and word timings",
-            )
+            ),
+            "background_gradient": ProviderReq(
+                group="backgrounds",
+                default="gradient",
+                required=False,
+                description="Procedural gradient backgrounds (no key, no network)",
+            ),
+            "background_pexels": ProviderReq(
+                group="backgrounds",
+                default="pexels",
+                required=False,
+                description="Stock clips from Pexels (needs PEXELS_API_KEY)",
+            ),
         },
         cost=CostNote(
             unit="corpus_requests",
@@ -109,12 +121,22 @@ class QuranicRecipe:
         except StyleNotFound as exc:
             checks.append(CheckResult(name="style", ok=False, detail=str(exc)))
 
-        background_detail = "procedural gradient"
-        background_ok = True
-        if isinstance(inputs.background, FileBackground):
-            path = Path(inputs.background.path).expanduser()
+        choice = inputs.background
+        if isinstance(choice, FileBackground):
+            path = Path(choice.path).expanduser()
             background_ok = path.is_file()
             background_detail = str(path) if background_ok else f"missing: {path}"
+        else:
+            role = f"background_{choice.kind}"
+            try:
+                background_provider = ctx.providers.get(role) if ctx.providers else None
+            except KeyError:  # a probe context need not bind optional roles
+                background_provider = None
+            problems = background_provider.missing() if background_provider is not None else [f"no provider bound to {role}"]
+            background_ok = not problems
+            background_detail = "; ".join(problems) or getattr(background_provider, "name", role)
+            if isinstance(choice, PexelsBackground) and not choice.query.strip():
+                background_ok, background_detail = False, "a Pexels background needs a query"
         checks.append(CheckResult(name="background", ok=background_ok, detail=background_detail))
 
         corpus = ctx.providers.get("corpus") if ctx.providers else None

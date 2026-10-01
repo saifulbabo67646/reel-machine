@@ -50,6 +50,11 @@ fake = "reelmachine.recipes.doodle.narration.fake:FakeNarration"
 elevenlabs = "reelmachine.recipes.doodle.narration.cloud:ElevenLabsNarration"
 cartesia = "reelmachine.recipes.doodle.narration.cloud:CartesiaNarration"
 
+[project.entry-points."reelmachine.backgrounds"]
+gradient = "reelmachine.recipes.quranic.backgrounds.gradient:GradientBackgroundProvider"
+fake = "reelmachine.recipes.quranic.backgrounds.gradient:SolidBackgroundProvider"
+pexels = "reelmachine.recipes.quranic.backgrounds.pexels:PexelsBackgroundProvider"
+
 [project.entry-points."reelmachine.styles"]
 bundled = "reelmachine.core.style:bundled_style_map"
 

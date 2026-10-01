@@ -26,6 +26,7 @@ GROUPS = (
     "corpora",
     "narration",
     "renderers",
+    "backgrounds",
     "styles",
     "storage",
 )

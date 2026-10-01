@@ -19,6 +19,7 @@ from ...core.assets import AssetKind, Licence, Provenance
 from ...core.errors import InvalidInput, PreflightFailed, ProviderUnavailable, VoiceUnavailable
 from ...core.stage import StageContext
 from ...core.style import get_style
+from ...core.timing import proportional_word_spans
 from ...core.timeline import Caption, Clip, Timeline, TimedAudioRef, WordSpan
 from ...render.captions import write_ass, write_srt
 from .models import (
@@ -137,6 +138,7 @@ class NarrationStage:
         provenance = Provenance(provider=provider_name, source=inputs.voice)
         licence = None
         cursor = 0
+        provider_timed = 0
         for beat in payload.beats:
             ctx.cancel.raise_if_cancelled()
             try:
@@ -165,6 +167,14 @@ class NarrationStage:
                 )
                 for word in (speech.segments[0].words if speech.segments else [])
             ]
+            if words:
+                provider_timed += 1
+            else:
+                # line-level voice (Cartesia's HTTP route reports none): spread the
+                # beat's words across its own audio, deterministically
+                words = proportional_word_spans(
+                    beat.narration.split(), cursor, cursor + duration
+                )
             segments.append(
                 NarrationSegment(
                     beat_id=beat.id,
@@ -198,11 +208,16 @@ class NarrationStage:
             ext=".wav",
             meta={"voice": inputs.voice},
         )
+        timings_source = (
+            "provider" if provider_timed == len(segments) else ("mixed" if provider_timed else "proportional")
+        )
+        ctx.progress.detail(f"  · word timings: {timings_source}")
         return NarrationOutput(
             inputs=inputs,
             beats=payload.beats,
             audio_asset=asset.id,
             duration_ms=total_ms,
+            timings_source=timings_source,
             segments=segments,
             voice=inputs.voice,
             provider=provider_name,
@@ -514,6 +529,7 @@ class ComposeStage:
             meta={
                 "structure": choose_structure(inputs, payload.beats),
                 "narrationProvider": payload.narration.provider if payload.narration else "",
+                "timingsSource": payload.narration.timings_source if payload.narration else "",
                 "degraded": bool(payload.narration.degraded) if payload.narration else False,
             },
         )

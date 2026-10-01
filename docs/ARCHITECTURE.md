@@ -200,6 +200,7 @@ Entry-point groups:
 | `reelmachine.corpora` | per-recipe corpus protocols | nadeshiko, quran_com, alquran_cloud (+ fakes) |
 | `reelmachine.narration` | doodle's `NarrationProvider` (TTS → TimedSpeech) | fake, ElevenLabs, Cartesia |
 | `reelmachine.renderers` | a scene renderer (`render(scene, ...) -> Path`) | stroke (whiteboard runtime), program (Pillow) |
+| `reelmachine.backgrounds` | `quranic.backgrounds.BackgroundProvider` (a clip + its provenance and licence) | gradient, pexels, fake |
 | `reelmachine.styles` | `core.style.StylePack` | quranic/*, doodle/* |
 | `reelmachine.storage` | `storage.Storage` | local, s3 ([s3]), memory |
 
@@ -318,8 +319,12 @@ differing.
 ### 8.2 `quranic`
 
 No source media, no Nadeshiko, no alignment. Inputs: Surah/Ayah range, reciter,
-translation language, style preset, background choice (procedural gradient or a local
-clip), audio mastering profile. Two pluggable corpora: Quran Foundation v4 (text,
+translation language, style preset, background choice, audio mastering profile. A
+background is `gradient` (procedural, the default, no key), `file` (the caller's own
+clip) or `pexels` (stock; needs `PEXELS_API_KEY` — the deployment may simply not have
+one, in which case the probe says so and nothing silently substitutes). Either way the
+chosen clip's provenance and licence land in the manifest, Pexels attributions
+included. Two pluggable corpora: Quran Foundation v4 (text,
 translations, audio, word-level millisecond timings) and alquran.cloud text + mp3quran
 audio with deterministic proportional timings. The timeline is recitation audio +
 word-level highlight captions + translation overlays + background; rendering is
@@ -342,7 +347,9 @@ Hand-drawn explainer reels, one recipe parameterised by `mode`:
   entry point, never required.
 
 Quality rules encoded as tests: the manifest declares the render mode; the reveal schedule
-is driven by narration timings, not even division; a missing/unlicensed voice fails
+is driven by narration timings, not even division (a cloud voice that reports only
+line-level timings — Cartesia's HTTP route — gets each beat's real audio duration, with
+words spread proportionally inside it and `timingsSource` recorded); a missing/unlicensed voice fails
 loudly or degrades only via an explicit `allow_visible_fallback` (recorded in the
 manifest); preflight renders one representative scene before the full job; the finished
 job is verified by inspecting the real file (streams, caption sync, scene boundaries,
@@ -354,7 +361,7 @@ final frame).
 
 - **Recipe**: implement the protocol, declare a `RecipeSpec`, register a
   `reelmachine.recipes` entry point. See `docs/RECIPES.md`.
-- **Provider**: sources, corpora, narration, renderers, styles, storage — same pattern.
+- **Provider**: sources, corpora, narration, renderers, backgrounds, styles, storage — same pattern.
 - **Style pack**: a JSON pack with licence and provenance, shipped as data or via the
   styles entry point.
 - **Publishing/upload**: deliberately not built. A future publishing stage is an extension

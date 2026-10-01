@@ -19,6 +19,9 @@ from reelmachine.config import get_settings
 from reelmachine.core.job import JobRequest, JobState
 from reelmachine.core.registry import Registry
 from reelmachine.engine import Engine
+from reelmachine.core.errors import InvalidInput, ProviderUnavailable
+from reelmachine.recipes.quranic.backgrounds import BackgroundRequest
+from reelmachine.recipes.quranic.backgrounds.pexels import PexelsBackgroundProvider
 from reelmachine.recipes.quranic.corpora.alquran_cloud import AlQuranCloudCorpus, merge_translation, parse_surah
 from reelmachine.recipes.quranic.corpora.fake import FakeQuranCorpus
 from reelmachine.recipes.quranic.corpora.quran_com import (
@@ -264,7 +267,14 @@ def test_quranic_probe_catches_an_unresolvable_reciter() -> None:
     corpus = QuranComCorpus(client=httpx.Client(transport=httpx.MockTransport(handler)),
                             base_url="https://api.example.test/api/v4")
     settings = get_settings()
-    ctx = ProbeContext(config=settings, providers=StaticProviders({"corpus": corpus}))
+    from reelmachine.recipes.quranic.backgrounds.gradient import GradientBackgroundProvider
+
+    ctx = ProbeContext(
+        config=settings,
+        providers=StaticProviders(
+            {"corpus": corpus, "background_gradient": GradientBackgroundProvider(settings)}
+        ),
+    )
 
     report = QuranicRecipe().probe(QuranicInputs(surah=1, ayah_start=1, ayah_end=1), ctx)
     assert report.ok is True
@@ -333,7 +343,7 @@ def test_parse_surah_filters_the_range() -> None:
 # ------------------------------------------------------------------ recipe
 
 
-def test_recipe_is_discovered_and_probe_is_actionable() -> None:
+def test_recipe_is_discovered_and_probe_is_actionable(tmp_path) -> None:
     from reelmachine.recipes.quranic.recipe import QuranicRecipe
 
     registry = Registry()
@@ -347,13 +357,35 @@ def test_recipe_is_discovered_and_probe_is_actionable() -> None:
     settings = get_settings()
     from reelmachine.core.recipe import ProbeContext
     from reelmachine.core.stage import StaticProviders
+    from reelmachine.recipes.quranic.backgrounds.gradient import GradientBackgroundProvider
+    from reelmachine.recipes.quranic.backgrounds.pexels import PexelsBackgroundProvider
 
+    providers = StaticProviders(
+        {
+            "corpus": FakeQuranCorpus(settings),
+            "background_gradient": GradientBackgroundProvider(settings),
+            "background_pexels": PexelsBackgroundProvider(settings, api_key="", cache_dir=tmp_path),
+        }
+    )
     report = recipe.probe(
         QuranicInputs(surah=1, ayah_start=1, ayah_end=3),
-        ProbeContext(config=settings, providers=StaticProviders({"corpus": FakeQuranCorpus(settings)})),
+        ProbeContext(config=settings, providers=providers),
     )
     assert report.ok and report.quota_free
     assert report.details["ayahs"] == [1, 3]
+
+    # a stock background without the deployment's key fails the probe, with the reason
+    pexels = recipe.probe(
+        QuranicInputs(
+            surah=1,
+            ayah_start=1,
+            ayah_end=1,
+            background={"kind": "pexels", "query": "clouds"},
+        ),
+        ProbeContext(config=settings, providers=providers),
+    )
+    assert pexels.ok is False
+    assert any(check.name == "background" and "PEXELS_API_KEY" in check.detail for check in pexels.checks)
 
     normalised = recipe.probe(
         QuranicInputs(surah=1, ayah_start=5, ayah_end=2),
@@ -377,6 +409,83 @@ def test_fake_corpus_audio_matches_its_timings(tmp_path) -> None:
     duration_ms = int(ffmpeg.probe(path).duration_s * 1000)
     last_word_end = ayah.word_timings[-1].end_ms
     assert abs(duration_ms - (last_word_end + 80)) <= 120  # one trailing gap, ± one block
+
+
+def test_pexels_picks_a_portrait_rendition_and_records_its_licence(tmp_path) -> None:
+    payload = {
+        "videos": [
+            {
+                "id": 1, "width": 1920, "height": 1080, "duration": 9,
+                "url": "https://www.pexels.com/video/1", "user": {"name": "Landscape Person"},
+                "video_files": [
+                    {"file_type": "video/mp4", "height": 1080, "width": 1920, "link": "https://cdn.test/wide.mp4"}
+                ],
+            },
+            {
+                "id": 2, "width": 1080, "height": 1920, "duration": 6,
+                "url": "https://www.pexels.com/video/2", "user": {"name": "Portrait Person"},
+                "video_files": [
+                    {"file_type": "video/mp4", "height": 360, "width": 202, "link": "https://cdn.test/tiny.mp4"},
+                    {"file_type": "video/webm", "height": 1920, "width": 1080, "link": "https://cdn.test/big.webm"},
+                    {"file_type": "video/mp4", "height": 1080, "width": 608, "link": "https://cdn.test/portrait.mp4"},
+                ],
+            },
+        ]
+    }
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        if request.url.path.endswith("/videos/search"):
+            assert request.headers["Authorization"] == "test-key"
+            assert request.url.params["orientation"] == "portrait"
+            return httpx.Response(200, json=payload)
+        return httpx.Response(200, content=b"video-bytes")
+
+    provider = PexelsBackgroundProvider(
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        api_key="test-key",
+        base_url="https://api.test",
+        cache_dir=tmp_path / "cache",
+    )
+    clip = provider.fetch(
+        BackgroundRequest(kind="pexels", query="clouds", orientation="portrait", min_height=720),
+        dest_dir=tmp_path,
+    )
+    assert clip.path.read_bytes() == b"video-bytes"
+    assert clip.path.name == "pexels-2.mp4"  # cached by Pexels' own id
+    assert clip.width == 608 and clip.duration_ms == 6000
+    assert clip.licence is not None and clip.licence.name == "Pexels licence"
+    assert "Portrait Person" in clip.licence.attribution
+    assert clip.provenance.source_id == "2" and clip.provenance.provider == "pexels"
+
+    # a second fetch of the same clip must not re-download it
+    provider.fetch(BackgroundRequest(kind="pexels", query="clouds"), dest_dir=tmp_path)
+    assert seen.count("/videos/search") == 2
+    assert all(not path.endswith("portrait.mp4") for path in seen[2:])
+
+
+def test_pexels_needs_a_key_and_a_match(tmp_path) -> None:
+    provider = PexelsBackgroundProvider(
+        client=httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"videos": []}))),
+        api_key="",
+        base_url="https://api.test",
+        cache_dir=tmp_path / "cache",
+    )
+    assert provider.missing() == ["PEXELS_API_KEY is not set"]
+    with pytest.raises(ProviderUnavailable) as missing:
+        provider.fetch(BackgroundRequest(kind="pexels", query="clouds"), dest_dir=tmp_path)
+    assert "PEXELS_API_KEY" in (missing.value.hint or "")
+
+    keyed = PexelsBackgroundProvider(
+        client=httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"videos": []}))),
+        api_key="test-key",
+        base_url="https://api.test",
+        cache_dir=tmp_path / "cache",
+    )
+    with pytest.raises(InvalidInput) as nomatch:
+        keyed.fetch(BackgroundRequest(kind="pexels", query="a very specific thing"), dest_dir=tmp_path)
+    assert "no Pexels clip" in str(nomatch.value)
 
 
 # ------------------------------------------------------------------ end to end
@@ -458,3 +567,45 @@ def test_quranic_renders_with_no_nadeshiko_key_and_no_source_media(tmp_path, mon
     text = ass.read_text(encoding="utf-8")
     assert "\\k" in text, "word-level highlighting must reach the ASS"
     assert "Translation" in text
+
+
+@pytest.mark.slow
+def test_quranic_takes_its_background_from_the_named_provider(tmp_path) -> None:
+    """A provider background flows through prep with its own provenance and licence."""
+    settings = dataclasses.replace(
+        get_settings(), workdir=tmp_path / "work", outdir=tmp_path / "out"
+    )
+    registry = RecordingRegistry()
+    engine = Engine(
+        settings,
+        registry=registry,
+        provider_overrides={"corpus": "quran-fake", "background_pexels": "fake"},
+    )
+    try:
+        job = engine.submit(
+            JobRequest(
+                recipe="quranic",
+                inputs={
+                    "surah": 1,
+                    "ayah_start": 1,
+                    "ayah_end": 1,
+                    "corpus": "quran-fake",
+                    "background": {"kind": "pexels", "query": "clouds over mountains"},
+                    "name": "quran-stock",
+                },
+            ),
+            caller="local",
+        )
+        finished = engine.wait(job.id, caller="local", timeout_s=300)
+    finally:
+        engine.close()
+
+    assert finished.state is JobState.SUCCEEDED, finished.error
+    assert ("backgrounds", "fake") in registry.loads, registry.loads
+    manifest = json.loads(Path(finished.result.manifest).read_text(encoding="utf-8"))
+    background = next(
+        record for record in manifest["assets"] if record["asset"]["kind"] == "background"
+    )["asset"]
+    assert background["provenance"]["provider"] == "fake"  # the provider that made it, in writing
+    assert background["licence"]["url"].startswith("https://creativecommons.org/publicdomain/zero")
+    assert manifest["verification"]["ok"] is True

@@ -7,40 +7,9 @@ manifest records which source was used.
 
 from __future__ import annotations
 
-import re
-from collections.abc import Sequence
-
 from ...core.timeline import WordSpan
+from ...core.timing import proportional_word_spans, visible_length  # noqa: F401
 from .models import AyahMaterial
-
-_DIACRITICS = re.compile(r"[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed\u0640]")
-
-
-def visible_length(word: str) -> int:
-    return max(1, len(_DIACRITICS.sub("", word).strip()))
-
-
-def proportional_word_spans(
-    words: Sequence[str],
-    start_ms: int,
-    end_ms: int,
-) -> list[WordSpan]:
-    """Split `[start_ms, end_ms]` across `words` by visible length, deterministically."""
-    if not words:
-        return []
-    weights = [visible_length(word) for word in words]
-    total = float(sum(weights))
-    spans: list[WordSpan] = []
-    cursor = float(start_ms)
-    window = max(0, end_ms - start_ms)
-    for word, weight in zip(words, weights):
-        share = window * weight / total
-        word_start = int(round(cursor))
-        word_end = int(round(cursor + share))
-        spans.append(WordSpan(text=word, start_ms=word_start, end_ms=max(word_start + 1, word_end)))
-        cursor += share
-    spans[-1] = spans[-1].model_copy(update={"end_ms": max(spans[-1].start_ms + 1, end_ms)})
-    return spans
 
 
 def timings_for_ayah(

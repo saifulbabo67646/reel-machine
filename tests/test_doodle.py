@@ -30,8 +30,9 @@ from reelmachine.recipes.doodle.models import Beat, DoodleInputs
 from reelmachine.recipes.doodle.narration.cloud import (
     CartesiaNarration,
     ElevenLabsNarration,
-    parse_cartesia,
+    parse_cartesia_sse,
     parse_elevenlabs,
+    pcm_to_wav_bytes,
     words_from_characters,
 )
 from reelmachine.recipes.doodle.scenes.spec import (
@@ -57,11 +58,14 @@ def _beat() -> Beat:
 
 
 def _settings(tmp_path: Path):
+    # pin the voice provider: a real deployment may serve a cloud voice (REEL_TTS),
+    # and these tests must stay offline and deterministic
     return dataclasses.replace(
         get_settings(),
         workdir=tmp_path / "work",
         outdir=tmp_path / "out",
         mock_dir=tmp_path / "mock",
+        tts="fake",
     )
 
 
@@ -174,14 +178,19 @@ def test_cloud_payload_parsers() -> None:
     assert audio == b"mp3-bytes"
     assert [span.text for span in spans] == ["ok", "go"]
 
-    audio, spans = parse_cartesia(
-        {
-            "audio": base64.b64encode(b"wav").decode(),
-            "word_timestamps": [{"word": "hello", "start": 0.0, "end": 0.4}],
-        }
+    # Cartesia's stream: base64 PCM under `data`, timings in their own events
+    stream = (
+        "event: chunk\ndata: "
+        + json.dumps({"type": "chunk", "data": base64.b64encode(b"\x01\x02").decode()})
+        + "\n\nevent: timestamps\ndata: "
+        + json.dumps({"word_timestamps": [{"word": "hello", "start": 0.0, "end": 0.4}]})
+        + "\n\nevent: done\ndata: {}\n\n"
     )
-    assert audio == b"wav"
+    pcm, spans = parse_cartesia_sse(stream)
+    assert pcm == b"\x01\x02"
     assert spans[0].text == "hello" and spans[0].end_ms == 400
+    wav = pcm_to_wav_bytes(b"\x00\x00" * 10, sample_rate=44100)
+    assert wav[:4] == b"RIFF" and wav[8:12] == b"WAVE"
 
 
 def test_cloud_narration_requires_a_key(monkeypatch) -> None:
@@ -230,6 +239,52 @@ def test_cartesia_missing_key_is_reported(monkeypatch) -> None:
     provider = CartesiaNarration()
     assert "CARTESIA_API_KEY" in provider.missing()[0]
     assert provider.describe()["group"] == "narration"
+
+
+def test_cartesia_streams_pcm_and_falls_back_to_bytes(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("CARTESIA_API_KEY", "test-key")
+    import base64
+
+    def stream_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/voices":
+            return httpx.Response(200, json=[{"id": "voice-1", "name": "Skylar", "language": "en"}])
+        assert request.headers["Authorization"] == "Bearer test-key"
+        assert request.url.path == "/tts/sse"
+        body = json.loads(request.content)
+        assert body["output_format"]["container"] == "raw" and body["voice"] == "voice-1"
+        chunk = base64.b64encode(b"\x00\x00" * 440).decode()
+        return httpx.Response(
+            200,
+            text=f"event: chunk\ndata: {json.dumps({'data': chunk})}\n\nevent: done\ndata: {{}}\n\n",
+            headers={"content-type": "text/event-stream"},
+        )
+
+    provider = CartesiaNarration(
+        client=httpx.Client(transport=httpx.MockTransport(stream_handler)),
+        base_url="https://api.example.test",
+        workdir=tmp_path,
+    )
+    speech = provider.synthesize("hello", voice="cartesia:Skylar")  # a name, not an id
+    assert speech.path.suffix == ".wav" and speech.path.read_bytes()[:4] == b"RIFF"
+    assert speech.duration_ms == 0, "line-level route: the stage times the beat from its audio"
+    assert speech.voice == "cartesia:voice-1"
+
+    def failing_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/voices":
+            return httpx.Response(200, json=[{"id": "voice-1", "name": "Skylar"}])
+        if request.url.path == "/tts/sse":
+            return httpx.Response(400, json={"message": "only 'raw' container is supported"})
+        assert request.url.path == "/tts/bytes"
+        return httpx.Response(200, content=b"RIFF....WAVE")
+
+    fallback = CartesiaNarration(
+        client=httpx.Client(transport=httpx.MockTransport(failing_handler)),
+        base_url="https://api.example.test",
+        workdir=tmp_path,
+    )
+    speech = fallback.synthesize("hello", voice="cartesia:voice-1")
+    assert speech.path.read_bytes() == b"RIFF....WAVE"
+    assert speech.segments[0].words == [], "a line-level voice reports no word spans"
 
 
 def test_narration_timings_are_global_and_drive_a_real_reveal(tmp_path) -> None:
