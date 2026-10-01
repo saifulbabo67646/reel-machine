@@ -626,6 +626,7 @@ def build(
         post_roll_ms=post,
         watermark=watermark,
         name=name,
+        outdir=str(settings.outdir),
     )
 
     engine = Engine(settings)
