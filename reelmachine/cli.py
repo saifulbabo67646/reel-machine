@@ -619,6 +619,44 @@ def build(
     console.print(f"[green]meta[/green]  {artifacts['reel.json'].path}")
 
 
+mcp_app = typer.Typer(add_completion=False, help="Expose the engine to agents over MCP.")
+app.add_typer(mcp_app, name="mcp")
+
+
+@mcp_app.command("serve")
+def mcp_serve(
+    transport: str = typer.Option("stdio", "--transport", help="stdio | streamable-http"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(8765, "--port"),
+    tenants: Optional[Path] = typer.Option(
+        None, "--tenants", help="JSON file of caller tokens and policies."
+    ),
+) -> None:
+    """Serve the engine over MCP — stdio for a local agent, HTTP for a hosted one."""
+    from .mcp.server import serve as serve_mcp
+
+    serve_mcp(
+        transport=transport,
+        host=host,
+        port=port,
+        tenants_path=str(tenants) if tenants else None,
+    )
+
+
+@mcp_app.command("token-hash")
+def mcp_token_hash(
+    token: str = typer.Argument(..., help="Token to hash; use '-' to read it from stdin."),
+) -> None:
+    """Hash a caller token for a tenants file — servers never store the raw token."""
+    from .mcp.tenants import TenantRegistry
+
+    value = sys.stdin.read().strip() if token == "-" else token
+    if not value:
+        err.print("[red]empty token[/red]")
+        raise typer.Exit(2)
+    console.print(TenantRegistry.hash_token(value))
+
+
 @app.command()
 def recipes(
     json_out: bool = typer.Option(False, "--json", help="Emit raw JSON."),

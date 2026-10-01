@@ -58,6 +58,18 @@ class RedactFilter(logging.Filter):
         return True
 
 
+class RedactingFormatter(logging.Formatter):
+    """Wraps another formatter and redacts the final line — including tracebacks."""
+
+    def __init__(self, inner: logging.Formatter, secrets: list[str] | None = None) -> None:
+        super().__init__()
+        self.inner = inner
+        self.secrets = list(secrets if secrets is not None else secret_values())
+
+    def format(self, record: logging.LogRecord) -> str:
+        return redact(self.inner.format(record), self.secrets)
+
+
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
@@ -75,17 +87,28 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False)
 
 
-def configure_logging(*, level: str | None = None, fmt: str | None = None) -> logging.Logger:
-    """Configure the engine's logger once; text by default, JSON on request."""
+def configure_logging(
+    *,
+    level: str | None = None,
+    fmt: str | None = None,
+    stream: Any = None,
+) -> logging.Logger:
+    """Configure the engine's logger once; text by default, JSON on request.
+
+    Redaction is attached to both the logger (so every handler sees redacted records)
+    and the formatter (so a traceback is redacted too).
+    """
     level = (level or os.environ.get("REEL_LOG_LEVEL", "INFO")).upper()
     fmt = (fmt or os.environ.get("REEL_LOG_FORMAT", "text")).lower()
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(
+    secrets = secret_values()
+    inner: logging.Formatter = (
         JsonFormatter() if fmt == "json" else logging.Formatter("%(levelname)s %(name)s: %(message)s")
     )
-    handler.addFilter(RedactFilter())
+    handler = logging.StreamHandler(stream if stream is not None else sys.stderr)
+    handler.setFormatter(RedactingFormatter(inner, secrets))
     logger = logging.getLogger("reelmachine")
     logger.handlers[:] = [handler]
+    logger.filters[:] = [RedactFilter(secrets)]
     logger.setLevel(level)
     logger.propagate = False
     return logger

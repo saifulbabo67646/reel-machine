@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 class ErrorCode(StrEnum):
     INVALID_INPUT = "INVALID_INPUT"
     NOT_FOUND = "NOT_FOUND"
+    UNAUTHORIZED = "UNAUTHORIZED"
     PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
     QUOTA_EXCEEDED = "QUOTA_EXCEEDED"
     CONCURRENCY_LIMIT = "CONCURRENCY_LIMIT"
@@ -75,6 +76,10 @@ class InvalidInput(ReelError):
 
 class NotFound(ReelError):
     code = ErrorCode.NOT_FOUND
+
+
+class Unauthorized(ReelError):
+    code = ErrorCode.UNAUTHORIZED
 
 
 class ProviderUnavailable(ReelError):
