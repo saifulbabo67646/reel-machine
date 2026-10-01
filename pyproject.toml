@@ -20,6 +20,7 @@ reel = "reelmachine.cli:main"
 # packages; nothing in the core knows their names.
 [project.entry-points."reelmachine.recipes"]
 nadeshiko-cut = "reelmachine.recipes.nadeshiko_cut.recipe:NadeshikoCutRecipe"
+quranic = "reelmachine.recipes.quranic.recipe:QuranicRecipe"
 
 [project.entry-points."reelmachine.sources"]
 local = "reelmachine.sources.local:LocalLibraryProvider"
@@ -30,6 +31,9 @@ mock = "reelmachine.sources.mock:MockProvider"
 [project.entry-points."reelmachine.corpora"]
 nadeshiko = "reelmachine.corpora.nadeshiko:NadeshikoCorpus"
 nadeshiko-fake = "reelmachine.recipes.nadeshiko_cut.fake:FakeNadeshikoCorpus"
+quran_com = "reelmachine.recipes.quranic.corpora.quran_com:QuranComCorpus"
+alquran_cloud = "reelmachine.recipes.quranic.corpora.alquran_cloud:AlQuranCloudCorpus"
+quran-fake = "reelmachine.recipes.quranic.corpora.fake:FakeQuranCorpus"
 
 [project.entry-points."reelmachine.storage"]
 local = "reelmachine.storage.local:LocalStorage"

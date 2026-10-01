@@ -278,13 +278,7 @@ def _build_manifest(
         environment=environment_pins(settings),
     )
 
-    timeline: Timeline | None = None
-    prep = outputs.get("prep")
-    compose = outputs.get("compose")
-    if prep is not None and getattr(prep, "timeline", None) is not None:
-        timeline = prep.timeline
-    elif compose is not None and getattr(compose, "timeline", None) is not None:
-        timeline = compose.timeline
+    timeline = _timeline_of(outputs)
     render = outputs.get("render")
     manifest.render_mode = getattr(render, "render_mode", "") or (
         timeline.render_mode if timeline is not None else ""
@@ -361,6 +355,16 @@ def _redacted(error: Any) -> Any:
     return error
 
 
+def _timeline_of(outputs: dict[str, Any]) -> Timeline | None:
+    """The most-materialised timeline a run produced, if any (recipes name stages freely)."""
+    for stage_id in ("prep", "compose"):
+        candidate = outputs.get(stage_id)
+        timeline = getattr(candidate, "timeline", None) if candidate is not None else None
+        if isinstance(timeline, Timeline):
+            return timeline
+    return None
+
+
 def _partial_result(outputs: dict[str, Any], workdir: Path) -> JobResult | None:
     """What a failed or cancelled job still produced — the plan and timeline so far."""
     if not outputs:
@@ -369,13 +373,7 @@ def _partial_result(outputs: dict[str, Any], workdir: Path) -> JobResult | None:
         artifacts = _collect_artifacts(outputs, workdir)
     except Exception:  # noqa: BLE001 - partial results are best-effort
         return None
-    prep = outputs.get("prep")
-    compose = outputs.get("compose")
-    timeline = None
-    if prep is not None and getattr(prep, "timeline", None) is not None:
-        timeline = prep.timeline
-    elif compose is not None and getattr(compose, "timeline", None) is not None:
-        timeline = compose.timeline
+    timeline = _timeline_of(outputs)
     render = outputs.get("render")
     return JobResult(
         artifacts=artifacts,
@@ -413,10 +411,10 @@ def _collect_artifacts(outputs: dict[str, Any], workdir: Path) -> list[ArtifactR
         path.write_text(json.dumps(compose.plan, indent=2, ensure_ascii=False), encoding="utf-8")
         artifacts.append(_artifact("plan.json", path, AssetKind.PLAN))
 
-    prep = outputs.get("prep")
-    if prep is not None and getattr(prep, "timeline", None) is not None:
+    timeline = _timeline_of(outputs)
+    if timeline is not None:
         path = artifact_dir / "timeline.json"
-        path.write_text(prep.timeline.model_dump_json(indent=2), encoding="utf-8")
+        path.write_text(timeline.model_dump_json(indent=2), encoding="utf-8")
         artifacts.append(_artifact("timeline.json", path, AssetKind.TIMELINE))
 
     manifest_path = workdir / "manifest.json"

@@ -572,6 +572,30 @@ def build_reel_video(
     return dest
 
 
+def concat_audio(clips: list[Path], dest: Path, *, cancel: Any = None) -> Path:
+    """Join audio files into one normalised track (48 kHz stereo AAC-ready PCM).
+
+    The filtergraph route is used rather than the concat demuxer because the inputs can
+    differ in codec and sample rate, and a re-encode is cheap for narration-length audio.
+    """
+    if not clips:
+        raise ValueError("no audio to concatenate")
+    settings = get_settings()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [settings.ffmpeg, "-hide_banner", "-nostdin", "-y"]
+    for clip in clips:
+        cmd += ["-i", str(clip)]
+    normalise = "".join(
+        f"[{index}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo[a{index}];"
+        for index in range(len(clips))
+    )
+    chain = "".join(f"[a{index}]" for index in range(len(clips)))
+    filtergraph = f"{normalise}{chain}concat=n={len(clips)}:v=0:a=1[out]"
+    cmd += ["-filter_complex", filtergraph, "-map", "[out]", "-c:a", "pcm_s16le", "-y", str(dest)]
+    run(cmd, cancel=cancel)
+    return dest
+
+
 def make_thumbnail(src: str | Path, dest: Path, *, at_s: float = 0.0, width: int = 640) -> Path:
     settings = get_settings()
     dest.parent.mkdir(parents=True, exist_ok=True)

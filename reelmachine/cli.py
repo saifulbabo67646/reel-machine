@@ -283,6 +283,42 @@ def _run_selftest(*, verbose: bool) -> None:
 
     console.print("[green]selftest passed[/green] — alignment, cut, subtitle and mux all verified")
 
+    _run_selftest_non_media(settings)
+
+
+def _run_selftest_non_media(settings) -> None:
+    """One recipe that touches no source media, end to end: quranic with the fake corpus."""
+    console.print()
+    console.print("[bold]selftest[/bold] — a non-media recipe: quranic, fake corpus, no source file")
+    engine = Engine(settings, provider_overrides={"corpus": "quran-fake"})
+    try:
+        job = engine.submit(
+            JobRequest(
+                recipe="quranic",
+                inputs={
+                    "surah": 1,
+                    "ayah_start": 1,
+                    "ayah_end": 2,
+                    "corpus": "quran-fake",
+                    "name": "selftest-quranic",
+                },
+            ),
+            caller="local",
+        )
+        finished = engine.wait(job.id, caller="local", timeout_s=300)
+    finally:
+        engine.close()
+    if finished.state is not JobState.SUCCEEDED:
+        err.print(f"[red]selftest FAILED[/red] — quranic: {finished.error}")
+        sys.exit(1)
+    reel = next(a for a in finished.result.artifacts if a.name == "reel.mp4")
+    info = ffmpeg.probe(reel.path)
+    if not (info.has_video and info.has_audio):
+        err.print("[red]selftest FAILED[/red] — the quranic reel has no video or audio stream")
+        sys.exit(1)
+    console.print(f"  quranic: {reel.path} ({info.duration_s:.1f}s · video+audio)")
+    console.print("[green]selftest passed[/green] — one non-media recipe rendered end to end")
+
 
 # ------------------------------------------------------------------------ search
 
