@@ -108,6 +108,18 @@ class Settings:
     vidvault_max_link_age_s: float = 0.0
     vidvault_download: bool = True
     vidvault_connections: int = 8
+    #: Hosts to try first, matched as substrings of the CDN hostname.  The
+    #: Japanese-tagged renditions come from one worker (mk2) that has been
+    #: measured stalling at a few KiB/s for minutes, while untagged renditions
+    #: come from another (tdm) that reaches MB/s.  Ordering is only a
+    #: *preference*: an untagged rendition is still checked for a Japanese
+    #: audio track before it is downloaded, so this can never hand the aligner
+    #: a dub.
+    vidvault_prefer_hosts: list[str] = field(default_factory=lambda: ["tdm"])
+    #: Seconds without a single byte before a transfer is treated as stalled.
+    #: The socket timeout alone does not catch this: a link trickling 3 KiB/s
+    #: never trips it, it just never finishes.
+    vidvault_stall_timeout_s: float = 45.0
     vidvault_referer: str = "https://vidvault.to/"
     vidvault_user_agent: str = (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -241,6 +253,8 @@ def get_settings() -> Settings:
         vidvault_max_link_age_s=float(_env("REEL_VIDVAULT_MAX_LINK_AGE_S", "0") or 0),
         vidvault_download=_env("REEL_VIDVAULT_DOWNLOAD", "true").lower() in {"1", "true", "yes"},
         vidvault_connections=max(1, int(_env("REEL_VIDVAULT_CONNECTIONS", "8") or 8)),
+        vidvault_prefer_hosts=_csv("REEL_VIDVAULT_PREFER_HOSTS", "tdm"),
+        vidvault_stall_timeout_s=float(_env("REEL_VIDVAULT_STALL_TIMEOUT_S", "45") or 45),
         vidvault_referer=_env("REEL_VIDVAULT_REFERER", "https://vidvault.to/"),
         vidvault_user_agent=_env("REEL_VIDVAULT_USER_AGENT", "") or
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "

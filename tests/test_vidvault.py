@@ -398,6 +398,38 @@ class _CdnHandler(http.server.BaseHTTPRequestHandler):
                 self.close_connection = True
                 return
             payload = body[start:end + 1]
+            # Send a little, then hang — the way a throttled link behaves.  The
+            # socket timeout never fires because bytes did arrive.
+            trickle = server.trickle  # type: ignore[attr-defined]
+            if trickle:
+                # Never silent, just hopeless: ~10 bytes/s.  No socket timeout
+                # can catch this, only the throughput floor can.
+                self.send_response(206)
+                self.send_header("Content-Range", f"bytes {start}-{end}/{len(body)}")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload[:1024])
+                self.wfile.flush()
+                for step in range(100):
+                    time.sleep(0.1)
+                    try:
+                        self.wfile.write(payload[1024 + step:1025 + step])
+                        self.wfile.flush()
+                    except Exception:
+                        break
+                self.close_connection = True
+                return
+            stall = server.stall_after  # type: ignore[attr-defined]
+            if stall:
+                self.send_response(206)
+                self.send_header("Content-Range", f"bytes {start}-{end}/{len(body)}")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload[:stall])
+                self.wfile.flush()
+                time.sleep(server.stall_for)  # type: ignore[attr-defined]
+                self.close_connection = True
+                return
             if server.delay:  # type: ignore[attr-defined]
                 time.sleep(server.delay)  # type: ignore[attr-defined]
             self.send_response(206)
@@ -423,7 +455,9 @@ class _Cdn(http.server.ThreadingHTTPServer):
 
 
 @contextlib.contextmanager
-def _cdn(body: bytes, *, support_range: bool = True, drop_once=(), drop_always=(), delay: float = 0.0):
+def _cdn(body: bytes, *, support_range: bool = True, drop_once=(), drop_always=(),
+         delay: float = 0.0, stall_after: int = 0, stall_for: float = 0.0,
+         trickle: bool = False):
     server = _Cdn(("127.0.0.1", 0), _CdnHandler)
     server.body = body                      # type: ignore[attr-defined]
     server.support_range = support_range    # type: ignore[attr-defined]
@@ -435,6 +469,9 @@ def _cdn(body: bytes, *, support_range: bool = True, drop_once=(), drop_always=(
     server.drop_once = set(drop_once)       # type: ignore[attr-defined]
     server.drop_always = set(drop_always)   # type: ignore[attr-defined]
     server.delay = delay                    # type: ignore[attr-defined]
+    server.stall_after = stall_after        # type: ignore[attr-defined]
+    server.stall_for = stall_for            # type: ignore[attr-defined]
+    server.trickle = trickle                # type: ignore[attr-defined]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -741,3 +778,111 @@ def test_local_path_naming_is_stable() -> None:
     # same episode always maps to the same file, so a re-run never re-downloads
     assert provider.local_path(match, 7, 720) == path
     assert provider.local_path(match, 8, 720) != path
+
+
+# ------------------------------------------------------- host preference
+
+
+def test_rank_streams_prefers_the_fast_host_within_a_rung() -> None:
+    """The Japanese-tagged worker stalls for minutes; the other reaches MB/s."""
+    from reelmachine.sources.vidvault import host_of, rank_streams
+
+    slow_jp = Stream(720, "MKV", 1, 0, "https://mk2.example/d/a", language="Japanese")
+    fast = Stream(720, "MP4", 1, 0, "https://tdm.example/dl/b")
+    order = rank_streams([slow_jp, fast], quality="1080,720,480,360", prefer_hosts=["tdm"])
+    assert [host_of(s) for s in order] == ["tdm.example", "mk2.example"]
+
+
+def test_rank_streams_keeps_the_quality_ladder_in_charge() -> None:
+    """Host preference must not outrank resolution: 1080p still beats 720p."""
+    from reelmachine.sources.vidvault import rank_streams
+
+    fast720 = Stream(720, "MP4", 1, 0, "https://tdm.example/a")
+    slow1080 = Stream(1080, "MKV", 1, 0, "https://mk2.example/b", language="Japanese")
+    order = rank_streams([fast720, slow1080], quality="1080,720,480,360", prefer_hosts=["tdm"])
+    assert [s.resolution for s in order] == [1080, 720]
+
+
+def test_rank_streams_offers_every_usable_rendition() -> None:
+    """The caller falls back, so the list must not be truncated to one pick."""
+    from reelmachine.sources.vidvault import rank_streams
+
+    streams = [Stream(r, "MP4", 1, 0, f"https://tdm.example/{r}") for r in (1080, 720, 480)]
+    streams.append(Stream(1080, "MKV", 1, 0, "", language="Japanese"))   # no url
+    streams.append(Stream(360, "MP4", 1, 0, "https://x/y", vip_locked=True))
+    order = rank_streams(streams, quality="1080,720,480,360")
+    assert len(order) == 3, "empty and vip-locked renditions are not candidates"
+
+
+def test_rank_streams_empty_when_nothing_is_usable() -> None:
+    from reelmachine.sources.vidvault import rank_streams
+
+    assert rank_streams([], quality="720") == []
+    assert rank_streams([Stream(720, "MP4", 1, 0, "")], quality="720") == []
+
+
+# ------------------------------------------------------------ stall handling
+
+
+def test_fetch_range_gives_up_on_a_stalled_transfer(tmp_path: Path, no_backoff) -> None:
+    """A trickle never trips the socket timeout; the stall check must.
+
+    This is the failure that wedged two drama downloads: a few KiB/s is not an
+    error, so without a no-progress timeout the range simply never returns.
+    """
+    import dataclasses
+
+    from reelmachine.sources.base import SourceError
+
+    body = _body(1 << 20)
+    provider = _provider()
+    provider.settings = dataclasses.replace(provider.settings, vidvault_stall_timeout_s=0.5)
+    part = tmp_path / "x.part"
+    part.write_bytes(b"")
+
+    with _cdn(body, stall_after=1024, stall_for=10.0) as (_server, url):
+        started = time.time()
+        # Either the silence bound or the socket timeout gets there first;
+        # what matters is that it gives up rather than hanging.
+        with pytest.raises(SourceError, match="stalled|timed out|too slow"):
+            provider.fetch_range(url, part, 0, len(body) - 1, attempts=1)
+        assert time.time() - started < 8, "must give up promptly, not wait out the stall"
+
+
+def test_fetch_range_gives_up_on_a_trickle(tmp_path: Path, no_backoff) -> None:
+    """A link that is never silent but never finishes is the actual failure.
+
+    Measured on the slow worker: ~3 KiB/s sustained.  Every socket read
+    succeeds, so no timeout fires and the download simply never ends — which is
+    what wedged two drama downloads until the process was killed by hand.
+    """
+    import dataclasses
+
+    from reelmachine.sources.base import SourceError
+
+    body = _body(1 << 20)
+    provider = _provider()
+    # Generous silence bound, so only the rate floor can end this.
+    provider.settings = dataclasses.replace(provider.settings, vidvault_stall_timeout_s=2.0)
+    part = tmp_path / "y.part"
+    part.write_bytes(b"")
+
+    with _cdn(body, trickle=True) as (_server, url):
+        started = time.time()
+        with pytest.raises(SourceError, match="too slow|stalled|timed out"):
+            provider.fetch_range(url, part, 0, len(body) - 1, attempts=1)
+        assert time.time() - started < 10, "the rate floor must end it"
+
+
+def test_segmented_download_recovers_when_one_range_stalls(tmp_path: Path, no_backoff) -> None:
+    """A stalled range is retried like any other failure, so the reel still builds."""
+    import dataclasses
+
+    body = _body(16 << 20)
+    provider = _provider()
+    provider.settings = dataclasses.replace(provider.settings, vidvault_stall_timeout_s=0.4)
+    dest = tmp_path / "ep.mp4"
+    with _cdn(body) as (_server, url):
+        provider.download(Stream(720, "MKV", len(body), 0, url), dest,
+                          refresh=True, connections=4)
+    assert dest.read_bytes() == body

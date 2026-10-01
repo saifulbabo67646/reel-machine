@@ -59,9 +59,10 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from .. import ffmpeg
+from ..ffmpeg import JAPANESE_TAGS
 from ..config import Settings, get_settings
 from ..models import Media
 from ..tmdb import TmdbClient, TmdbError, TmdbMatch
@@ -101,6 +102,12 @@ class Stream:
 
 _SIZE_RE = re.compile(r"^([\d.]+)\s*([KMGTP]?)i?B?$", re.I)
 _SIZE_SCALE = {"": 1, "K": 1024, "M": 1024**2, "G": 1024**3, "T": 1024**4, "P": 1024**5}
+
+#: A range slower than this is treated as stalled rather than merely slow.  The
+#: healthy worker has been measured at 0.4-1.6 MB/s per connection and the fast
+#: one reaches 17 MB/s in aggregate, while the sick one sits at ~3 KiB/s — so
+#: anything under 48 KiB/s is not going to finish a useful amount of an episode.
+MIN_RATE_BYTES_S = 48 * 1024
 
 #: Base delay between range retries; the real CDN drops connections often enough
 #: that backing off matters, but tests set this to 0 so they do not crawl.
@@ -303,6 +310,81 @@ def pick_stream(
     # point of the ladder is to bound the download.
     smallest = min(s.resolution for s in usable)
     return best_of([s for s in usable if s.resolution == smallest])
+
+
+def host_of(stream: Stream) -> str:
+    """The CDN hostname a rendition is served from."""
+    match = re.match(r"https?://([^/]+)", stream.url or "")
+    return match.group(1) if match else ""
+
+
+def host_rank(stream: Stream, prefer_hosts: Sequence[str]) -> int:
+    """0 for a preferred host, 1 for anything else."""
+    host = host_of(stream)
+    if not prefer_hosts or not host:
+        return 1
+    return 0 if any(token and token in host for token in prefer_hosts) else 1
+
+
+def rank_streams(
+    streams: list[Stream],
+    *,
+    quality: str = "1080,720,480,360",
+    max_age_s: float = 0.0,
+    prefer_hosts: Sequence[str] = (),
+    now: float | None = None,
+) -> list[Stream]:
+    """Every usable rendition, in the order they should be *tried*.
+
+    The quality ladder stays in charge — a 1080p rendition is still offered
+    before a 720p one — but within a rung the preferred host wins, and a
+    Japanese tag after that.  Returning the whole order rather than one pick is
+    what lets the caller fall back: `pick_stream` answers "which is best", this
+    answers "and then what".
+
+    Nothing here guarantees a rendition's audio.  An untagged stream from the
+    preferred host is tried first precisely because it is fast, and the caller
+    checks its audio before committing to the download.
+    """
+    usable = [s for s in streams if s.url and not s.vip_locked]
+    if not usable:
+        return []
+
+    def age(stream: Stream) -> float:
+        value = stream.age_s(now=now)
+        return value if value is not None else 0.0
+
+    def sort_key(stream: Stream) -> tuple:
+        return (
+            host_rank(stream, prefer_hosts),
+            0 if is_japanese(stream) else 1,
+            age(stream),
+            -stream.size_bytes,
+        )
+
+    ordered: list[Stream] = []
+    seen: set[str] = set()
+    # Fresh-first inside each rung, when a freshness bound was asked for.
+    for rung in parse_ladder(quality):
+        pool = [s for s in usable if s.resolution <= rung]
+        if not pool:
+            continue
+        highest = max(s.resolution for s in pool)
+        rung_pool = [s for s in pool if s.resolution == highest]
+        if max_age_s and max_age_s > 0:
+            fresh = [s for s in rung_pool if age(s) <= max_age_s]
+            rung_pool = fresh or rung_pool
+        for stream in sorted(rung_pool, key=sort_key):
+            if stream.url not in seen:
+                seen.add(stream.url)
+                ordered.append(stream)
+    # Anything above every rung, so a "720" cap still has something to fall
+    # back to rather than failing outright.
+    for stream in sorted(usable, key=sort_key):
+        if stream.url not in seen:
+            seen.add(stream.url)
+            ordered.append(stream)
+    return ordered
 
 
 class VidVaultProvider(SourceProvider):
@@ -591,39 +673,83 @@ class VidVaultProvider(SourceProvider):
             asset.local_path = dest
             return asset
 
-        # The signed link is short-lived, and a large episode on the slow worker
-        # takes far longer to fetch than the signature lives.  When it dies
-        # mid-transfer every remaining range fails and no amount of retrying that
-        # *same* URL helps — the only recovery is a fresh link, which is exactly
-        # what the checkpointed .part file is for: a re-mint resumes instead of
-        # restarting.  (This is what `pick_stream`'s "the caller re-mints on
-        # failure" note always claimed, and until now nothing actually did.)
-        stream = chosen
+        # Walk the renditions in preference order rather than committing to one.
+        # Two independent things go wrong here and each costs a *candidate*, not
+        # the episode: the preferred host is fast but its renditions may be
+        # dubs, and the Japanese-tagged ones come from a worker that has been
+        # measured stalling at a few KiB/s for minutes at a time.
+        candidates = rank_streams(
+            streams,
+            quality=quality,
+            max_age_s=max_age,
+            prefer_hosts=list(getattr(settings, "vidvault_prefer_hosts", []) or []),
+        )
+        if not candidates:
+            raise UnresolvedEpisode(f"{match} ep{episode}: nothing usable to download")
+
         path: Path | None = None
         last_error: SourceError | None = None
-        for attempt in range(3):
-            dest = self.local_path(match, episode, stream.resolution)
-            try:
-                path = self.download(stream, dest, refresh=refresh, verbose=verbose)
-                break
-            except SourceError as exc:
-                last_error = exc
-                if attempt == 2:
-                    raise
+        for candidate in candidates:
+            # A rendition the CDN itself labels as a dub is never worth trying:
+            # the alignment needs the original audio and would refuse it.
+            if candidate.language and not is_japanese(candidate):
                 if verbose:
-                    print(f"    vidvault: {exc} — minting a fresh link and resuming")
-                self.request_token(force=True)
-                payload = self.lookup(
-                    match.tmdb_id, media_type=match.media_type,
-                    season=target_season, episode=episode,
-                )
-                streams = self.parse_streams(payload)
-                refreshed = pick_stream(streams, quality=quality, max_age_s=max_age)
-                if refreshed is None:
-                    raise
-                stream = refreshed
+                    print(f"    vidvault: skipping {candidate.language} rendition")
+                continue
+            # Untagged means unknown, not safe.  A few MB settles it for the
+            # price of a few MB — versus the whole episode if the aligner is
+            # left to discover the dub at the end.
+            if not candidate.language:
+                languages = self.audio_languages(candidate.url, verbose=verbose)
+                if languages and not any(lang in JAPANESE_TAGS for lang in languages):
+                    if verbose:
+                        print(
+                            f"    vidvault: {candidate.resolution}p on "
+                            f"{host_of(candidate)} carries {', '.join(languages)} audio, "
+                            f"not Japanese — trying the next rendition"
+                        )
+                    continue
+
+            # The signed link is short-lived, and a large episode on the slow
+            # worker takes far longer to fetch than the signature lives.  When
+            # it dies mid-transfer every remaining range fails and retrying that
+            # same URL cannot help — the only recovery is a fresh link, which is
+            # what the checkpointed .part file is for: a re-mint resumes instead
+            # of restarting.
+            stream = candidate
+            for attempt in range(3):
+                dest = self.local_path(match, episode, stream.resolution)
+                try:
+                    path = self.download(stream, dest, refresh=refresh, verbose=verbose)
+                    break
+                except SourceError as exc:
+                    last_error = exc
+                    if attempt == 2:
+                        break
+                    if verbose:
+                        print(f"    vidvault: {exc} — minting a fresh link and resuming")
+                    self.request_token(force=True)
+                    payload = self.lookup(
+                        match.tmdb_id, media_type=match.media_type,
+                        season=target_season, episode=episode,
+                    )
+                    streams = self.parse_streams(payload)
+                    refreshed = pick_stream(streams, quality=quality, max_age_s=max_age)
+                    if refreshed is None:
+                        break
+                    stream = refreshed
+            if path is not None:
+                break
+            if verbose:
+                print(f"    vidvault: {candidate.resolution}p on {host_of(candidate)} "
+                      f"gave up; trying another rendition")
+
         if path is None:
-            raise last_error or SourceError("download failed")
+            raise last_error or SourceError(
+                "every rendition failed — either the CDN is blocking this IP or "
+                "no rendition carried Japanese audio"
+            )
+        chosen = stream
 
         asset.local_path = path
         asset.url = str(path)
@@ -676,6 +802,48 @@ class VidVaultProvider(SourceProvider):
         return meta.lengthSeconds
 
     # ---------------------------------------------------------------- download
+    def audio_languages(
+        self, url: str, *, probe_bytes: int = 6 << 20, verbose: bool = False
+    ) -> list[str]:
+        """Audio language tags from the head of a rendition.
+
+        Matroska and MP4 both keep their track table near the start, so a few
+        MB of ranged fetch is enough to see which languages a rendition really
+        carries.  This is the only way to tell a dub from the original *before*
+        spending a few hundred MB on it, and the provider's own `language`
+        field is absent on exactly the fast-host renditions that need checking.
+
+        Returns [] when the answer cannot be determined, which the caller
+        treats as "unknown, probably fine" rather than "definitely a dub".
+        """
+        headers = self.headers()
+        headers["Accept"] = "*/*"
+        headers["Range"] = f"bytes=0-{probe_bytes - 1}"
+        try:
+            request = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(request, timeout=45) as response:
+                blob = response.read(probe_bytes)
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
+            if verbose:
+                print(f"    vidvault: could not probe audio ({str(exc)[:60]})")
+            return []
+        if not blob:
+            return []
+
+        import tempfile
+
+        from .. import ffmpeg as ffmpeg_mod
+
+        handle = Path(tempfile.mkdtemp(prefix="reel-probe-")) / "head.bin"
+        try:
+            handle.write_bytes(blob)
+            info = ffmpeg_mod.probe(handle)
+        except Exception:  # noqa: BLE001 - a truncated head may not parse
+            return []
+        finally:
+            handle.unlink(missing_ok=True)
+        return [lang.lower() for lang in info.audio_langs]
+
     def probe_url(self, url: str) -> tuple[int, bool]:
         """(total bytes, honours Range) — one cheap request, no body.
 
@@ -780,12 +948,17 @@ class VidVaultProvider(SourceProvider):
         headers = self.headers()
         headers["Accept"] = "*/*"
         headers["Range"] = f"bytes={start}-{end}"
+        stall_after = float(getattr(self.settings, "vidvault_stall_timeout_s", 45.0) or 0.0)
         last: Exception | None = None
         for attempt in range(attempts):
             got = 0
+            started_at = progress_at = time.time()
             try:
                 request = urllib.request.Request(url, headers=headers)
-                with urllib.request.urlopen(request, timeout=60) as response:
+                # The socket timeout is the *silence* bound; the throughput
+                # floor below catches the other half of the problem.
+                socket_timeout = max(5.0, min(60.0, stall_after)) if stall_after else 60.0
+                with urllib.request.urlopen(request, timeout=socket_timeout) as response:
                     if response.status != 206:
                         raise SourceError(
                             f"CDN ignored the Range request (HTTP {response.status}); "
@@ -794,11 +967,37 @@ class VidVaultProvider(SourceProvider):
                     with part.open("r+b") as handle:
                         handle.seek(start)
                         while got < length:
-                            chunk = response.read(min(1 << 20, length - got))
+                            now = time.time()
+                            if stall_after and now - progress_at > stall_after:
+                                raise SourceError(
+                                    f"segment {start}-{end}: stalled — no data for "
+                                    f"{stall_after:.0f}s after {got} bytes"
+                                )
+                            # A link trickling a few KiB/s is not *silent*, so no
+                            # socket timeout ever fires — it simply never
+                            # finishes.  Measured on the slow worker: 3 KiB/s,
+                            # which is what wedged two downloads until the
+                            # process was killed by hand.
+                            elapsed = now - started_at
+                            if (
+                                stall_after
+                                and elapsed > stall_after
+                                and got / elapsed < MIN_RATE_BYTES_S
+                            ):
+                                raise SourceError(
+                                    f"segment {start}-{end}: too slow — "
+                                    f"{got / elapsed / 1024:.1f} KiB/s over {elapsed:.0f}s"
+                                )
+                            # `read1` returns as soon as *any* data arrives.
+                            # `read(n)` would block until it had all n bytes, so
+                            # the checks above would never get a turn.
+                            reader = getattr(response, "read1", None) or response.read
+                            chunk = reader(min(1 << 16, length - got))
                             if not chunk:
                                 break
                             handle.write(chunk)
                             got += len(chunk)
+                            progress_at = time.time()
                             if on_bytes is not None:
                                 on_bytes(len(chunk))
                 if got == length:
@@ -811,6 +1010,8 @@ class VidVaultProvider(SourceProvider):
                         f"short-lived — re-run to mint a fresh link."
                     ) from exc
                 last = SourceError(f"segment {start}-{end}: HTTP {exc.code} {exc.reason}")
+            except SourceError as exc:
+                last = exc
             except (urllib.error.URLError, TimeoutError, OSError) as exc:
                 last = SourceError(f"segment {start}-{end}: {exc}")
             if got and on_bytes is not None:
