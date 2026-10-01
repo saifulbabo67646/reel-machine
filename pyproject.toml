@@ -1,6 +1,6 @@
 [project]
 name = "reel-machine"
-version = "0.1.0"
+version = "0.2.0"
 description = "Search Japanese dialogue with the Nadeshiko API, cut the matching scenes from your own streaming library with ffmpeg, and render subtitled vertical reels."
 readme = "README.md"
 requires-python = ">=3.11"

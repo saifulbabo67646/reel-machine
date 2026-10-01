@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -105,7 +106,8 @@ class CloudNarration:
         self.base_url = (base_url or self.base_url).rstrip("/")
         self.api_key = os.environ.get(self.env_key, "") if self.env_key else ""
         self._client = client
-        self.workdir = Path(workdir) if workdir else None
+        # never write into the process's working directory: a provider is a guest
+        self.workdir = Path(workdir) if workdir else Path(tempfile.mkdtemp(prefix="reel-narration-"))
         self._voices: list[Voice] | None = None
 
     # -- plumbing ---------------------------------------------------------------

@@ -18,11 +18,14 @@ from importlib.metadata import EntryPoint, entry_points as real_entry_points
 from pathlib import Path
 from types import SimpleNamespace
 
-import httpx2
 import pytest
-import uvicorn
-from mcp import Client, StdioServerParameters
-from mcp.client.streamable_http import streamable_http_client
+
+pytest.importorskip("mcp")  # the MCP extra is optional; without it these tests skip
+
+import httpx2  # noqa: E402
+import uvicorn  # noqa: E402
+from mcp import Client, StdioServerParameters  # noqa: E402
+from mcp.client.streamable_http import streamable_http_client  # noqa: E402
 
 from reelmachine.config import get_settings
 from reelmachine.core.errors import ProviderUnavailable

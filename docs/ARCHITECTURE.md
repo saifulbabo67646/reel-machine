@@ -66,10 +66,11 @@ reelmachine/
   core/                     models and protocols (no I/O policy)
     errors.py  assets.py  timeline.py  style.py  recipe.py  stage.py
     job.py  manifest.py  registry.py
-  engine/                   Engine facade + JobRunner (threads, cancel, progress)
+  engine/                   Engine facade · stage runner · executor (jobs, limits, manifest)
   jobs/                     JobStore protocol · LocalJobStore · InMemoryJobStore
   storage/                  Storage protocol · LocalStorage · S3Storage ([s3]) · InMemoryStorage
-  render/                   Renderer protocol · FfmpegComposer · caption writer
+  render/                   the plain/karaoke caption writer · shared audio profiles
+  observability.py          structured logs + secret redaction
   sources/                  local / hls / vidvault / mock (ABC unchanged)
   recipes/
     nadeshiko_cut/          select · acquire · compose (alignment strategy) · prep · render
@@ -106,9 +107,13 @@ Video elements are a discriminated union on `kind`:
 | `source_cut` | asset, src_in_ms, src_out_ms, start_ms | compose (recipes that cut footage) | **prep** (→ `clip`) |
 | `background` | spec (gradient/file/asset), start_ms, duration_ms | compose (quranic, doodle) | prep (→ `clip`) |
 | `image_sequence` | frames_dir, fps, start_ms, duration_ms | compose | prep or render |
-| `stroke_scene` | line_art, regions, reveal schedule, canvas | doodle compose | prep (→ `clip`) via stroke renderer |
-| `program_scene` | scene spec (typed elements) | doodle compose | prep (→ `clip`) via program renderer |
+| `generated_scene` | renderer name + spec + source assets | any recipe that wants the engine's renderer dispatch | prep (→ `clip`) via the named renderer |
 | `clip` | asset, start_ms, duration_ms, origin | **prep** | render |
+
+doodle's scenes are recipe-local `SceneSpec`s (regions + reveal schedule for stroke,
+typed elements for program) that prep materialises into `clip`s through its renderer
+providers; `GeneratedScene` is the core form for a recipe that would rather declare a
+scene and let the engine dispatch it.
 
 Composition emits *declarative* elements; **media prep materialises every non-`clip`
 video element into a `clip`** (a content-addressed asset). The render stage refuses a
@@ -193,8 +198,8 @@ Entry-point groups:
 | `reelmachine.recipes` | `core.recipe.Recipe` | nadeshiko-cut, quranic, doodle |
 | `reelmachine.sources` | `sources.base.SourceProvider` | local, hls, vidvault, mock |
 | `reelmachine.corpora` | per-recipe corpus protocols | nadeshiko, quran_com, alquran_cloud (+ fakes) |
-| `reelmachine.narration` | doodle's `NarrationProvider` (TTS → TimedSpeech) | cloud (ElevenLabs/Cartesia), fake |
-| `reelmachine.renderers` | `render.Renderer` | ffmpeg composer, stroke, program |
+| `reelmachine.narration` | doodle's `NarrationProvider` (TTS → TimedSpeech) | fake, ElevenLabs, Cartesia |
+| `reelmachine.renderers` | a scene renderer (`render(scene, ...) -> Path`) | stroke (whiteboard runtime), program (Pillow) |
 | `reelmachine.styles` | `core.style.StylePack` | quranic/*, doodle/* |
 | `reelmachine.storage` | `storage.Storage` | local, s3 ([s3]), memory |
 

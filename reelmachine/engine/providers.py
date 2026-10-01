@@ -96,9 +96,11 @@ def resolve_recipe_providers(
 def provider_health(registry: Registry | None = None, settings: Any = None) -> list[dict[str, Any]]:
     """A row per discoverable provider: ok / missing / error / disabled.
 
-    Providers in the source and corpus groups are instantiated so their declared
-    requirements can be reported; everything else reports load status only.
+    Providers whose requirements depend on the deployment (sources, corpora, narration,
+    renderers) are instantiated so `missing()` can be reported; storage and styles report
+    load status only.
     """
+    INSPECTED = {"sources", "corpora", "narration", "renderers"}
     registry = registry or Registry()
     rows: list[dict[str, Any]] = []
     for group in GROUPS:
@@ -110,7 +112,7 @@ def provider_health(registry: Registry | None = None, settings: Any = None) -> l
                 rows.append(row)
                 continue
             value = result.value
-            if settings is not None and isinstance(value, type) and group in {"sources", "corpora"}:
+            if settings is not None and isinstance(value, type) and group in INSPECTED:
                 try:
                     instance = value(settings)
                 except Exception as exc:  # noqa: BLE001 - a provider that cannot start is a row

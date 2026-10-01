@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import tempfile
 import wave
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,8 @@ class FakeNarration:
 
     def __init__(self, settings: Settings | None = None, *, workdir: Path | None = None) -> None:
         self.settings = settings
-        self.workdir = Path(workdir) if workdir else None
+        # never write into the process's working directory: a provider is a guest
+        self.workdir = Path(workdir) if workdir else Path(tempfile.mkdtemp(prefix="reel-narration-"))
 
     def missing(self) -> list[str]:
         return []
