@@ -27,7 +27,9 @@ from . import __version__, ffmpeg
 from .align import align_episode, save_timeline
 from .config import get_settings
 from .core.errors import ReelError
+from .core.registry import Registry
 from .core.text import slugify
+from .engine.providers import provider_health, resolve_recipe_providers
 from .nadeshiko import NadeshikoClient, NadeshikoError, QuotaExceeded
 from .recipes import nadeshiko_cut as reelmod
 from .recipes.nadeshiko_cut import NadeshikoCutInputs, run_nadeshiko_cut, summarise
@@ -129,6 +131,22 @@ def doctor(
             )
     else:
         console.print("[yellow]no API key: search/plan/build will not run (selftest still will)[/yellow]")
+
+    console.print()
+    health = Table(header_style="bold", title="providers")
+    health.add_column("group")
+    health.add_column("provider")
+    health.add_column("state")
+    health.add_column("detail")
+    for row in provider_health(Registry(), settings):
+        colour = {"ok": "green", "missing": "yellow", "error": "red", "disabled": "dim"}[row["status"]]
+        health.add_row(
+            row["group"],
+            row["name"],
+            f"[{colour}]{row['status']}[/{colour}]",
+            str(row["detail"])[:64],
+        )
+    console.print(health)
 
     if selftest:
         console.print()
@@ -456,7 +474,6 @@ def plan(
     """Search, select and align — spends API quota, downloads nothing heavy."""
     settings = get_settings()
     ratings = [r.strip().upper() for r in rating.split(",")] if rating else None
-    provider = get_provider(settings=settings)
     inputs = NadeshikoCutInputs(
         word=word,
         mode="plan",
@@ -469,21 +486,22 @@ def plan(
         only=_only_list(only),
         dry_run=dry_run,
     )
-    with _client() as client:
-        try:
+    recipe = reelmod.NadeshikoCutRecipe()
+    try:
+        with resolve_recipe_providers(recipe.spec, settings) as providers:
             _, outputs = run_nadeshiko_cut(
                 inputs,
-                client=client,
-                provider=provider,
+                client=providers["corpus"],
+                provider=providers["source"],
                 settings=settings,
                 progress=ConsoleProgress(verbose),
             )
-        except QuotaExceeded as exc:
-            err.print(f"[red]quota exhausted[/red] {exc}")
-            sys.exit(2)
-        except ReelError as exc:
-            err.print(f"[red]{exc.message}[/red]" + (f"\n{exc.hint}" if exc.hint else ""))
-            sys.exit(1)
+    except QuotaExceeded as exc:
+        err.print(f"[red]quota exhausted[/red] {exc}")
+        sys.exit(2)
+    except ReelError as exc:
+        err.print(f"[red]{exc.message}[/red]" + (f"\n{exc.hint}" if exc.hint else ""))
+        sys.exit(1)
 
     plan = outputs["compose"].plan
     target = out or (settings.workdir / f"plan-{slugify(word)}.json")
@@ -521,7 +539,6 @@ def build(
     """Plan, cut, subtitle and render a reel."""
     settings = get_settings()
     ratings = [r.strip().upper() for r in rating.split(",")] if rating else None
-    provider = get_provider(settings=settings)
     inputs = NadeshikoCutInputs(
         word=word,
         mode="build",
@@ -542,22 +559,23 @@ def build(
     def nothing_aligned(run, _outputs) -> bool:
         return run.id == "compose" and not (run.output.plan.get("stats") or {}).get("ok")
 
-    with _client() as client:
-        try:
+    recipe = reelmod.NadeshikoCutRecipe()
+    try:
+        with resolve_recipe_providers(recipe.spec, settings) as providers:
             _, outputs = run_nadeshiko_cut(
                 inputs,
-                client=client,
-                provider=provider,
+                client=providers["corpus"],
+                provider=providers["source"],
                 settings=settings,
                 progress=ConsoleProgress(verbose),
                 stop_when=nothing_aligned,
             )
-        except QuotaExceeded as exc:
-            err.print(f"[red]quota exhausted[/red] {exc}")
-            sys.exit(2)
-        except ReelError as exc:
-            err.print(f"[red]{exc.message}[/red]" + (f"\n{exc.hint}" if exc.hint else ""))
-            sys.exit(1)
+    except QuotaExceeded as exc:
+        err.print(f"[red]quota exhausted[/red] {exc}")
+        sys.exit(2)
+    except ReelError as exc:
+        err.print(f"[red]{exc.message}[/red]" + (f"\n{exc.hint}" if exc.hint else ""))
+        sys.exit(1)
 
     plan = outputs["compose"].plan
     console.print(summarise(plan))

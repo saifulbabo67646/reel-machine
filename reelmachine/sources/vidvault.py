@@ -396,6 +396,11 @@ class VidVaultProvider(SourceProvider):
         self._token: str = ""
         self._token_expiry: float = 0.0
 
+    def missing(self) -> list[str]:
+        if not self.settings.tmdb_api_key:
+            return ["REEL_TMDB_API_KEY is not set (needed to bridge Nadeshiko ids to TMDB)"]
+        return []
+
     # ------------------------------------------------------------------ http
     def headers(self) -> dict[str, str]:
         return {

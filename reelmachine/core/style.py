@@ -56,10 +56,41 @@ def bundled_styles(root: Path | None = None) -> dict[str, StylePack]:
 
 
 def get_style(style_id: str, root: Path | None = None) -> StylePack:
-    packs = bundled_styles(root)
+    packs = load_styles()
+    if not packs:
+        packs = bundled_styles(root)
     try:
         return packs[style_id]
     except KeyError as exc:
         raise StyleNotFound(
             f"unknown style {style_id!r} (available: {', '.join(sorted(packs)) or 'none'})"
         ) from exc
+
+
+def bundled_style_map() -> dict[str, StylePack]:
+    """The built-in packs, exposed through the `reelmachine.styles` entry point."""
+    return bundled_styles()
+
+
+def load_styles(registry: object | None = None) -> dict[str, StylePack]:
+    """Merge style packs discovered through entry points.
+
+    A styles entry point may be a `StylePack`, a callable returning one, or a mapping of
+    id → pack. First-party packs arrive through the same mechanism as third-party ones.
+    """
+    from .registry import Registry
+
+    registry = registry if registry is not None else Registry()
+    packs: dict[str, StylePack] = {}
+    for result in registry.load_all("styles").values():
+        if not result.ok:
+            continue
+        value = result.value
+        produced = value() if callable(value) and not isinstance(value, StylePack) else value
+        if isinstance(produced, StylePack):
+            packs[produced.id] = produced
+        elif isinstance(produced, dict):
+            for pack in produced.values():
+                if isinstance(pack, StylePack):
+                    packs[pack.id] = pack
+    return packs

@@ -16,6 +16,29 @@ dependencies = [
 [project.scripts]
 reel = "reelmachine.cli:main"
 
+# Built-in providers register through exactly the same entry points as third-party
+# packages; nothing in the core knows their names.
+[project.entry-points."reelmachine.recipes"]
+nadeshiko-cut = "reelmachine.recipes.nadeshiko_cut.recipe:NadeshikoCutRecipe"
+
+[project.entry-points."reelmachine.sources"]
+local = "reelmachine.sources.local:LocalLibraryProvider"
+hls = "reelmachine.sources.hls:HlsProvider"
+vidvault = "reelmachine.sources.vidvault:VidVaultProvider"
+mock = "reelmachine.sources.mock:MockProvider"
+
+[project.entry-points."reelmachine.corpora"]
+nadeshiko = "reelmachine.corpora.nadeshiko:NadeshikoCorpus"
+nadeshiko-fake = "reelmachine.recipes.nadeshiko_cut.fake:FakeNadeshikoCorpus"
+
+[project.entry-points."reelmachine.storage"]
+local = "reelmachine.storage.local:LocalStorage"
+memory = "reelmachine.storage:InMemoryStorage"
+s3 = "reelmachine.storage.s3:S3Storage"
+
+[project.entry-points."reelmachine.styles"]
+bundled = "reelmachine.core.style:bundled_style_map"
+
 [dependency-groups]
 dev = ["pytest>=8.0"]
 
@@ -25,6 +48,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["reelmachine*"]
+
+[tool.setuptools.package-data]
+reelmachine = ["data/*.json", "data/styles/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

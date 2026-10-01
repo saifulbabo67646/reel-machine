@@ -25,6 +25,13 @@ class LocalLibraryProvider(SourceProvider):
         self._root = (self.settings.local_root or Path(".")).expanduser()
         self._index: list[Path] | None = None
 
+    def missing(self) -> list[str]:
+        if self.settings.local_root is None:
+            return ["REEL_LOCAL_ROOT is not set"]
+        if not self._root.exists():
+            return [f"REEL_LOCAL_ROOT does not exist: {self.settings.local_root}"]
+        return []
+
     # ------------------------------------------------------------------ helpers
     @property
     def root(self) -> Path:

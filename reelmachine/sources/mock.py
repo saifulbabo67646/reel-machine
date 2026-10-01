@@ -53,6 +53,9 @@ class MockProvider(SourceProvider):
         self.source_offset_ms = int(os.environ.get("REEL_MOCK_OFFSET_MS", "2500"))
         self._tracks: dict[str, tuple[np.ndarray, list[tuple[int, int]]]] = {}
 
+    def missing(self) -> list[str]:
+        return []  # synthetic media; nothing to configure (ffmpeg is checked globally)
+
     # -------------------------------------------------------------- audio model
     def track(self, media_public_id: str, episode: int) -> tuple[np.ndarray, list[tuple[int, int]]]:
         """Deterministic audio + the (start_ms, duration_ms) of each speech burst.

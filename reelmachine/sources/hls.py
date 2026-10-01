@@ -142,6 +142,18 @@ class HlsProvider(SourceProvider):
         self._text_cache: dict[str, tuple[float, str]] = {}
         self._map: dict[str, Any] | None = None
 
+    def missing(self) -> list[str]:
+        problems: list[str] = []
+        if not self.settings.hls_template:
+            problems.append("REEL_HLS_TEMPLATE is not set")
+        elif "{token}" in self.settings.hls_template and not (
+            self.settings.hls_resolver_cmd or self.settings.hls_token_cmd
+        ):
+            problems.append(
+                "REEL_HLS_RESOLVER_CMD or REEL_HLS_TOKEN_CMD is required to mint signed tokens"
+            )
+        return problems
+
     # ------------------------------------------------------------------- map
     @property
     def site_map(self) -> dict[str, Any]:
