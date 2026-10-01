@@ -488,6 +488,44 @@ skips the lookup entirely; the card then loses its meaning but still renders.
 
 Romaji is generated, not looked up: it is a pure function of the kana reading.
 
+### J-Drama, and reels that mix it with anime
+
+Nadeshiko indexes **J-Drama alongside anime**, and `filters.category` is a real
+filter rather than a default — asking for `["ANIME"]` genuinely excludes drama.
+Both are searched by default:
+
+```bash
+uv run reel build 約束 --category jdrama            # drama only
+uv run reel build 約束 --category anime,jdrama --per-category 2   # a real mix
+uv run reel mine <id>:<ep> --category jdrama        # mine a drama episode
+```
+
+`--category` accepts `anime`, `jdrama` (or `drama`) and `youtube`, and
+`REEL_CATEGORY` sets the default.
+
+**A mix needs `--per-category`.** The two corpora are wildly lopsided: for one
+word measured here, the top 50 hits were **47 anime to 3 J-Drama**. Ranking
+alone therefore produces an anime reel that merely happens to contain a drama
+line, so `--per-category N` caps how many clips any one corpus may contribute
+while `--per-media` keeps doing the same per title. `reel plan` prints the
+resulting mix:
+
+```
+hits: 150  usable: 150  selected: 4  aligned: 4
+corpus: anime 2  jdrama 2
+```
+
+Drama needs no separate download path — J-Drama on TMDB is ordinary `tv`, and
+the vidvault provider keys on TMDB ids, so it resolves drama episodes exactly
+as it does anime. It is also *easier* to bridge than anime: J-Drama titles
+usually carry `externalIds.tmdb`, the direct-id path that only about 1 in 20
+anime has. Measured on six drama titles: four resolved to a downloadable
+Japanese stream straight from the TMDB id, one matched by title search, one had
+no streams.
+
+Verified end to end: `The Makanai: Cooking for the Maiko House`, `I Cannot
+Reach You` and `The Naked Director` all resolved to 720p Japanese streams.
+
 ### Or a local library
 
 ```env

@@ -103,6 +103,61 @@ def compute_cut_window(
     return low, high
 
 
+def select_segments(
+    usable: Sequence[Segment],
+    media_by_id: dict[str, Media],
+    settings: Settings,
+    *,
+    max_segments: int,
+    min_segments: int = 1,
+    per_media: int = 1,
+    per_category: int | None = None,
+) -> list[Segment]:
+    """Pick the clips a reel is built from, best-scoring first.
+
+    Three limits apply at once, and each exists for a different reason:
+
+    * `per_media` keeps one title from filling the reel;
+    * `per_category` does the same for a whole corpus — anime outnumbers
+      J-Drama in the index by roughly 15 to 1, so without it a "mixed" reel is
+      simply an anime reel with the occasional drama line;
+    * `max_segments` is a hard ceiling, while `settings.target_ms` is the goal:
+      a tight cut is only a few seconds, so the count is driven by how much
+      running time has been lined up rather than by a fixed number.
+
+    The overshoot on the target leaves room for a clip or two failing to align
+    without the finished reel dropping under it.
+    """
+    ranked = sorted(usable, key=score_segment, reverse=True)
+    cap = settings.per_category if per_category is None else per_category
+    goal_ms = int(settings.target_ms * TARGET_OVERSHOOT) if settings.target_ms > 0 else 0
+    per_media_count: dict[str, int] = {}
+    per_category_count: dict[str, int] = {}
+    selected: list[Segment] = []
+    planned_ms = 0
+    for segment in ranked:
+        if per_media_count.get(segment.mediaPublicId, 0) >= per_media:
+            continue
+        kind = _category_of(segment, media_by_id)
+        if cap and per_category_count.get(kind, 0) >= cap:
+            continue
+        per_media_count[segment.mediaPublicId] = per_media_count.get(segment.mediaPublicId, 0) + 1
+        per_category_count[kind] = per_category_count.get(kind, 0) + 1
+        selected.append(segment)
+        planned_ms += expected_clip_ms(segment, settings)
+        if len(selected) >= max_segments:
+            break
+        if goal_ms and len(selected) >= min_segments and planned_ms >= goal_ms:
+            break
+    return selected
+
+
+def _category_of(segment: Segment, media_by_id: dict[str, Media]) -> str:
+    """`ANIME` / `JDRAMA` / … for a segment, from the media it belongs to."""
+    media = media_by_id.get(segment.mediaPublicId)
+    return getattr(media, "category", "") or "ANIME"
+
+
 def expected_clip_ms(segment: Segment, settings: Settings) -> int:
     """How long this candidate's clip will be, before any alignment is spent.
 
@@ -139,6 +194,7 @@ class PlannedSegment:
     scene_end_ms: int = 0
     context_count: int = 0
     word: str = ""            # the word this clip is meant to teach
+    category: str = "ANIME"   # ANIME | JDRAMA — which corpus it came from
     status: str = "pending"  # ok | unaligned | unresolved | out-of-range
     note: str = ""
 
@@ -161,6 +217,7 @@ class PlannedSegment:
             "segmentId": self.segment.publicId,
             "mediaPublicId": self.segment.mediaPublicId,
             "media": self.media_name,
+            "category": self.category,
             "episode": self.segment.episode,
             "srcStartMs": self.segment.startTimeMs,
             "srcEndMs": self.segment.endTimeMs,
@@ -237,6 +294,8 @@ def build_plan(
     max_segments: int = 12,
     min_segments: int = 1,
     per_media: int = 1,
+    categories: Sequence[str] | None = None,
+    per_category: int | None = None,
     content_rating: list[str] | None = None,
     exact_match: bool = False,
     max_candidates: int = 150,
@@ -259,6 +318,11 @@ def build_plan(
     # `--only` pins the reels to episodes you actually have, using the API's own
     # media filter rather than filtering client-side after spending the request.
     filters: dict[str, Any] = {}
+    wanted = [c.upper() for c in (categories if categories is not None else settings.categories)]
+    if wanted:
+        # Nadeshiko indexes anime and J-Drama together; omitting this returns
+        # both, which is why drama never showed up unless asked for by name.
+        filters["category"] = wanted
     if only:
         filters["media"] = {
             "include": [
@@ -315,27 +379,16 @@ def build_plan(
             f"(REEL_MATCH_MODE={settings.match_mode})"
         )
 
-    # ---- 3. select (spread across titles by default) --------------------
-    # A tight cut is only a few seconds long, so the count is driven by the
-    # target duration rather than being a fixed number: keep taking the next
-    # best candidate until the reel would reach `target`, capped by
-    # `max_segments`.  The overshoot leaves room for a clip or two failing to
-    # align without the finished reel dropping under the target.
-    usable.sort(key=score_segment, reverse=True)
-    per_media_count: dict[str, int] = {}
-    selected: list[Segment] = []
-    planned_ms = 0
-    goal_ms = int(settings.target_ms * TARGET_OVERSHOOT) if settings.target_ms > 0 else 0
-    for segment in usable:
-        if per_media_count.get(segment.mediaPublicId, 0) >= per_media:
-            continue
-        per_media_count[segment.mediaPublicId] = per_media_count.get(segment.mediaPublicId, 0) + 1
-        selected.append(segment)
-        planned_ms += expected_clip_ms(segment, settings)
-        if len(selected) >= max_segments:
-            break
-        if goal_ms and len(selected) >= min_segments and planned_ms >= goal_ms:
-            break
+    # ---- 3. select (spread across titles and corpora) --------------------
+    selected = select_segments(
+        usable,
+        media_by_id,
+        settings,
+        max_segments=max_segments,
+        min_segments=min_segments,
+        per_media=per_media,
+        per_category=per_category,
+    )
 
     # ---- 3b. widen each pick to its scene --------------------------------
     # `Segment.startTimeMs` describes one line; a line can be under a second and
@@ -388,6 +441,11 @@ def build_plan(
         "usableCandidates": len(usable),
         "selected": len(selected),
         "titles": len({s.mediaPublicId for s in selected}),
+        "categories": wanted or ["ANIME", "JDRAMA"],
+        "byCategory": {
+            k: sum(1 for s in selected if _category_of(s, media_by_id) == k)
+            for k in sorted({_category_of(s, media_by_id) for s in selected})
+        },
         "contextSegments": sum(len(n) for _, _, n in scenes.values()),
         "matchMode": settings.match_mode,
         "droppedVariants": len(dropped_variants),
@@ -415,6 +473,7 @@ def build_plan(
                     scene_end_ms=high,
                     context_count=len(neighbours),
                     word=word,
+                    category=_category_of(group_segment, media_by_id),
                 )
             )
         plan.items.extend(items)
@@ -513,6 +572,7 @@ def mine_episodes(
     levels: Sequence[int] | None = None,
     limit: int = 25,
     per_episode_cap: int = 900,
+    categories: Sequence[str] | None = None,
     dictionary: Any = None,
     verbose: bool = False,
 ) -> list[tuple[Any, int]]:
@@ -533,9 +593,11 @@ def mine_episodes(
     ratings = settings.content_rating or None
     tokens: list[Any] = []
     for media_public_id, episode in targets:
-        filters = {
+        filters: dict[str, Any] = {
             "media": {"include": [{"mediaPublicId": media_public_id, "episodes": [episode]}]}
         }
+        if categories:
+            filters["category"] = [c.upper() for c in categories]
         found = 0
         for segment in client.iter_search(
             None,
@@ -848,13 +910,20 @@ def summarise(plan: Plan) -> str:
         f"source: {plan.source}",
         f"hits: {plan.stats.get('totalHits')}  usable: {plan.stats.get('usableCandidates')}  "
         f"selected: {plan.stats.get('selected')}  aligned: {plan.stats.get('ok')}",
-        "",
     ]
+    # A mixed reel has to show its mix, or "why is this all anime?" is unanswerable.
+    by_category = plan.stats.get("byCategory") or {}
+    if by_category:
+        lines.append(
+            "corpus: " + "  ".join(f"{k.lower()} {v}" for k, v in sorted(by_category.items()))
+        )
+    lines.append("")
     for index, item in enumerate(plan.items, start=1):
         flag = {"ok": "OK ", "unaligned": "ALN", "unresolved": "SRC", "out-of-range": "RNG"}.get(item.status, "?  ")
         extra = f" (+{item.context_count} context)" if item.context_count else ""
         lines.append(
-            f"{index:>2}. [{flag}] {item.media_name} ep{item.segment.episode} "
+            f"{index:>2}. [{flag}] {item.category.lower():6s} {item.media_name} "
+            f"ep{item.segment.episode} "
             f"scene {item.scene_start_ms}-{item.scene_end_ms} ms -> "
             f"local {item.local_start_ms}-{item.local_end_ms} ms{extra}"
         )

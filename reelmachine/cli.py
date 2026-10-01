@@ -275,6 +275,9 @@ def mine(
         "", "--level", help="Only these JLPT levels, e.g. N5,N4. Default: all."
     ),
     limit: int = typer.Option(25, "--limit", "-n", help="How many words to show."),
+    category: Optional[str] = typer.Option(
+        None, "--category", help="Which corpora to search: anime, jdrama, or both."
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Find JLPT words inside episodes you already downloaded.
@@ -303,7 +306,8 @@ def mine(
     settings = get_settings()
     with _client() as client:
         results = mine_episodes(
-            client, targets, settings=settings, levels=levels, limit=limit, verbose=verbose
+            client, targets, settings=settings, levels=levels, limit=limit,
+            categories=_parse_categories(category), verbose=verbose,
         )
     if not results:
         err.print("no graded vocabulary found in those episodes")
@@ -373,6 +377,25 @@ def _parse_only(raw: str | None) -> list[tuple[str, int]] | None:
     return pairs or None
 
 
+def _parse_categories(raw: str | None) -> list[str] | None:
+    """`"anime,jdrama"` -> `["ANIME", "JDRAMA"]`; None means "use the setting"."""
+    if not raw or not raw.strip():
+        return None
+    aliases = {"anime": "ANIME", "jdrama": "JDRAMA", "drama": "JDRAMA",
+               "youtube": "YOUTUBE"}
+    out: list[str] = []
+    for chunk in re.split(r"[,\s]+", raw.strip()):
+        if not chunk:
+            continue
+        key = aliases.get(chunk.lower(), chunk.upper())
+        if key not in {"ANIME", "JDRAMA", "YOUTUBE"}:
+            err.print(f"[red]unknown category {chunk!r}; expected anime, jdrama or both[/red]")
+            sys.exit(2)
+        if key not in out:
+            out.append(key)
+    return out or None
+
+
 @app.command()
 def plan(
     word: str = typer.Argument(...),
@@ -380,6 +403,14 @@ def plan(
     count: Optional[int] = typer.Option(None, "--count", "-c", help="Max segments in the reel."),
     per_media: int = typer.Option(1, "--per-media", help="Max segments taken from one title."),
     rating: Optional[str] = typer.Option(None, "--rating"),
+    category: Optional[str] = typer.Option(
+        None, "--category",
+        help="Which corpora to search: anime, jdrama, or both. Default: both.",
+    ),
+    per_category: Optional[int] = typer.Option(
+        None, "--per-category",
+        help="Max clips from any one corpus — use it to make a mixed reel actually mix.",
+    ),
     exact: bool = typer.Option(False, "--exact"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Search and select only, do not touch the video source."),
     only: Optional[str] = typer.Option(
@@ -405,6 +436,8 @@ def plan(
                 verbose=verbose,
                 dry_run=dry_run,
                 only=_parse_only(only),
+                categories=_parse_categories(category),
+                per_category=per_category,
             )
         except QuotaExceeded as exc:
             err.print(f"[red]quota exhausted[/red] {exc}")
@@ -422,6 +455,14 @@ def build(
     count: Optional[int] = typer.Option(None, "--count", "-c"),
     per_media: int = typer.Option(1, "--per-media"),
     rating: Optional[str] = typer.Option(None, "--rating"),
+    category: Optional[str] = typer.Option(
+        None, "--category",
+        help="Which corpora to search: anime, jdrama, or both. Default: both.",
+    ),
+    per_category: Optional[int] = typer.Option(
+        None, "--per-category",
+        help="Max clips from any one corpus — use it to make a mixed reel actually mix.",
+    ),
     exact: bool = typer.Option(False, "--exact"),
     aspect: Optional[str] = typer.Option(None, "--aspect", help="vertical | square | original"),
     pre: Optional[int] = typer.Option(None, "--pre", help="Pre-roll ms."),
@@ -450,6 +491,8 @@ def build(
                 exact_match=exact,
                 verbose=verbose,
                 only=_parse_only(only),
+                categories=_parse_categories(category),
+                per_category=per_category,
             )
         except QuotaExceeded as exc:
             err.print(f"[red]quota exhausted[/red] {exc}")

@@ -141,6 +141,14 @@ class Settings:
     #: lines is not 8 seconds long.
     target_ms: int = 20_000
     content_rating: list[str] = field(default_factory=lambda: ["SAFE", "SUGGESTIVE"])
+    #: Which corpora to search.  Nadeshiko indexes J-Drama alongside anime, and
+    #: the API only returns the categories you ask for — `["ANIME"]` is a real
+    #: filter, not the default.  Order matters only for readability.
+    categories: list[str] = field(default_factory=lambda: ["ANIME", "JDRAMA"])
+    #: Optional cap on how many clips may come from one category.  0 = no cap.
+    #: Without it a "mixed" reel is not actually mixed: anime outnumbers J-Drama
+    #: in the corpus by roughly 15 to 1, so the top-ranked clips are all anime.
+    per_category: int = 0
     source_lang: str = "ja"
     font_ja: str = "Hiragino Sans"
     font_en: str = "Helvetica"
@@ -259,6 +267,8 @@ def get_settings() -> Settings:
         cut_pad_ms=_env_int("REEL_CUT_PAD_MS", 220),
         target_ms=_env_int("REEL_TARGET_MS", 20_000),
         content_rating=_csv("REEL_CONTENT_RATING", "SAFE,SUGGESTIVE"),
+        categories=[c.upper() for c in _csv("REEL_CATEGORY", "ANIME,JDRAMA")],
+        per_category=_env_int("REEL_PER_CATEGORY", 0),
         source_lang=_env("REEL_SOURCE_LANG", "ja").split()[0] if _env("REEL_SOURCE_LANG", "ja").strip() else "ja",
         font_ja=_env("REEL_FONT_JA", "Hiragino Sans"),
         font_en=_env("REEL_FONT_EN", "Helvetica"),

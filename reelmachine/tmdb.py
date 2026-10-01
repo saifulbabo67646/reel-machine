@@ -24,7 +24,7 @@ import time
 import unicodedata
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -188,9 +188,11 @@ class TmdbClient:
                 kind = "movie" if (media.airingFormat or "").upper() == "MOVIE" else "tv"
                 candidate = self._describe(tmdb_id, kind)
                 if candidate:
-                    candidate = TmdbMatch(
-                        **{**candidate.__dict__, "reason": "externalIds.tmdb"}
-                    )
+                    # `TmdbMatch` is a slots dataclass, so it has no `__dict__`
+                    # to splat; `replace` is the copy-with-one-field-changed
+                    # that actually works.  Every title carrying a TMDB id hit
+                    # this path, and it raised AttributeError.
+                    candidate = replace(candidate, reason="externalIds.tmdb")
                     self._cache.put(f"match:{media.publicId}", _as_dict(candidate))
                     return candidate
 
