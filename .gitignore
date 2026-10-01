@@ -20,3 +20,6 @@ local-test/
 
 # os
 .DS_Store
+
+# tooling
+.commandcode/
