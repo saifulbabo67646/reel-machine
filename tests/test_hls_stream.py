@@ -26,7 +26,8 @@ from pathlib import Path
 
 import pytest
 
-from reelmachine import ffmpeg, reel as reelmod
+from reelmachine import ffmpeg
+from reelmachine.recipes import nadeshiko_cut as reelmod
 from reelmachine.align import align_episode
 from reelmachine.config import get_settings
 from reelmachine.sources.base import UnresolvedEpisode

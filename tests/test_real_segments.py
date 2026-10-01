@@ -21,7 +21,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from reelmachine import ffmpeg, reel as reelmod
+from reelmachine import ffmpeg
+from reelmachine.recipes import nadeshiko_cut as reelmod
 from reelmachine.align import align_episode
 from reelmachine.config import get_settings
 from reelmachine.models import Segment

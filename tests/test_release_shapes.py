@@ -115,7 +115,7 @@ def test_cut_drops_subtitles_and_takes_the_japanese_track(release_like: Path, tm
 
 def test_embedded_subtitles_do_not_reach_the_reel(release_like: Path, tmp_path: Path) -> None:
     """The reel's subtitles are Nadeshiko's; the file's own are irrelevant."""
-    from reelmachine import reel as reelmod
+    from reelmachine.recipes import nadeshiko_cut as reelmod
     from reelmachine.align import TimelineMap
 
     asset = EpisodeAsset(

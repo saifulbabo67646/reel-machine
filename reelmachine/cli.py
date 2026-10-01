@@ -23,10 +23,14 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from . import __version__, ffmpeg, reel as reelmod
+from . import __version__, ffmpeg
 from .align import align_episode, save_timeline
 from .config import get_settings
+from .core.errors import ReelError
+from .core.text import slugify
 from .nadeshiko import NadeshikoClient, NadeshikoError, QuotaExceeded
+from .recipes import nadeshiko_cut as reelmod
+from .recipes.nadeshiko_cut import NadeshikoCutInputs, run_nadeshiko_cut, summarise
 from .sources import SourceError, UnresolvedEpisode, get_provider
 
 app = typer.Typer(
@@ -47,6 +51,37 @@ def _fmt_ms(ms: int) -> str:
     seconds, millis = divmod(max(0, int(ms)), 1000)
     minutes, seconds = divmod(seconds, 60)
     return f"{minutes:d}:{seconds:02d}.{millis // 100:1d}"
+
+
+class ConsoleProgress:
+    """Stage progress for a human at a terminal; the engine never prints by itself."""
+
+    def __init__(self, verbose: bool) -> None:
+        self.verbose = verbose
+
+    def stage(self, stage_id: str, index: int, total: int) -> None:
+        if self.verbose:
+            console.print(f"[dim]stage {index}/{total}: {stage_id}[/dim]")
+
+    def percent(self, value: float) -> None:
+        return None
+
+    def detail(self, text: str) -> None:
+        if self.verbose:
+            console.print(text)
+
+
+def _corpus_param(raw: str | None) -> str | None:
+    """CLI `--category anime,jdrama` → the recipe's one corpus string."""
+    categories = _parse_categories(raw)
+    if not categories:
+        return None
+    return "+".join(category.lower() for category in categories)
+
+
+def _only_list(raw: str | None) -> list[str]:
+    pairs = _parse_only(raw)
+    return [f"{media_id}:{episode}" for media_id, episode in (pairs or [])]
 
 
 # ------------------------------------------------------------------------ doctor
@@ -137,7 +172,7 @@ def _run_selftest(*, verbose: bool) -> None:
     console.print("[green]selftest passed[/green] — alignment recovers the injected offset")
 
     plan = reelmod.Plan(word="彼女", source="mock")
-    from .reel import PlannedSegment
+    from .recipes.nadeshiko_cut import PlannedSegment
 
     for segment in segments:
         plan.items.append(
@@ -285,7 +320,7 @@ def mine(
     One reel costs a download; this shows every *other* reel the same file can
     make, so the download is spent once.
     """
-    from .reel import mine_episodes
+    from .recipes.nadeshiko_cut import mine_episodes
 
     targets = _parse_only(",".join(episodes))
     if not targets:
@@ -422,30 +457,39 @@ def plan(
     settings = get_settings()
     ratings = [r.strip().upper() for r in rating.split(",")] if rating else None
     provider = get_provider(settings=settings)
+    inputs = NadeshikoCutInputs(
+        word=word,
+        mode="plan",
+        corpus=_corpus_param(category),
+        count=count,
+        per_media=per_media,
+        per_category=per_category,
+        content_rating=ratings,
+        exact_match=exact,
+        only=_only_list(only),
+        dry_run=dry_run,
+    )
     with _client() as client:
         try:
-            result = reelmod.build_plan(
-                client,
-                word,
+            _, outputs = run_nadeshiko_cut(
+                inputs,
+                client=client,
                 provider=provider,
                 settings=settings,
-                max_segments=count or settings.max_segments,
-                per_media=per_media,
-                content_rating=ratings,
-                exact_match=exact,
-                verbose=verbose,
-                dry_run=dry_run,
-                only=_parse_only(only),
-                categories=_parse_categories(category),
-                per_category=per_category,
+                progress=ConsoleProgress(verbose),
             )
         except QuotaExceeded as exc:
             err.print(f"[red]quota exhausted[/red] {exc}")
             sys.exit(2)
+        except ReelError as exc:
+            err.print(f"[red]{exc.message}[/red]" + (f"\n{exc.hint}" if exc.hint else ""))
+            sys.exit(1)
 
-    target = out or (settings.workdir / f"plan-{reelmod.slugify(word)}.json")
-    result.save(target)
-    console.print(reelmod.summarise(result))
+    plan = outputs["compose"].plan
+    target = out or (settings.workdir / f"plan-{slugify(word)}.json")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(plan, indent=2, ensure_ascii=False), encoding="utf-8")
+    console.print(summarise(plan))
     console.print(f"\nplan: [bold]{target}[/bold]")
 
 
@@ -478,41 +522,50 @@ def build(
     settings = get_settings()
     ratings = [r.strip().upper() for r in rating.split(",")] if rating else None
     provider = get_provider(settings=settings)
+    inputs = NadeshikoCutInputs(
+        word=word,
+        mode="build",
+        corpus=_corpus_param(category),
+        count=count,
+        per_media=per_media,
+        per_category=per_category,
+        content_rating=ratings,
+        exact_match=exact,
+        only=_only_list(only),
+        aspect=aspect,
+        pre_roll_ms=pre,
+        post_roll_ms=post,
+        watermark=watermark,
+        name=name,
+    )
+
+    def nothing_aligned(run, _outputs) -> bool:
+        return run.id == "compose" and not (run.output.plan.get("stats") or {}).get("ok")
+
     with _client() as client:
         try:
-            result = reelmod.build_plan(
-                client,
-                word,
+            _, outputs = run_nadeshiko_cut(
+                inputs,
+                client=client,
                 provider=provider,
                 settings=settings,
-                max_segments=count or settings.max_segments,
-                per_media=per_media,
-                content_rating=ratings,
-                exact_match=exact,
-                verbose=verbose,
-                only=_parse_only(only),
-                categories=_parse_categories(category),
-                per_category=per_category,
+                progress=ConsoleProgress(verbose),
+                stop_when=nothing_aligned,
             )
         except QuotaExceeded as exc:
             err.print(f"[red]quota exhausted[/red] {exc}")
             sys.exit(2)
+        except ReelError as exc:
+            err.print(f"[red]{exc.message}[/red]" + (f"\n{exc.hint}" if exc.hint else ""))
+            sys.exit(1)
 
-    console.print(reelmod.summarise(result))
-    if not result.ok_items:
+    plan = outputs["compose"].plan
+    console.print(summarise(plan))
+    if "render" not in outputs:
         err.print("[red]nothing aligned; not rendering[/red]")
         sys.exit(1)
 
-    rendered = reelmod.render(
-        result,
-        settings=settings,
-        name=name,
-        pre_roll_ms=pre,
-        post_roll_ms=post,
-        aspect=aspect,
-        watermark=watermark,
-        verbose=verbose,
-    )
+    rendered = outputs["render"]
     console.print()
     console.print(f"[green]reel[/green]  {rendered.video}  ({rendered.duration_ms / 1000:.1f}s)")
     console.print(f"[green]subs[/green]  {rendered.ass}")
@@ -619,7 +672,7 @@ def align(
             f"mapping: local_ms = {timeline.a:.6f} * src_ms {timeline.b:+.0f}  "
             f"(constant offset {timeline.offset_ms:+d} ms)"
         )
-    out = settings.workdir / "timelines" / f"{reelmod.slugify(str(media or url or 'adhoc'))}-ep{ep}.json"
+    out = settings.workdir / "timelines" / f"{slugify(str(media or url or 'adhoc'))}-ep{ep}.json"
     save_timeline(out, timeline, meta={"asset": str(asset.url), "episode": ep})
     console.print(f"timeline: {out}")
     if not timeline.ok:
