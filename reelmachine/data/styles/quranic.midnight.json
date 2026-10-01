@@ -1,0 +1,33 @@
+{
+  "id": "quranic.midnight",
+  "title": "Midnight",
+  "summary": "Deep blue gradient with cool, luminous Arabic text.",
+  "render_modes": ["quranic"],
+  "aspect": "vertical",
+  "palette": {
+    "background": "#0a1224",
+    "arabic": "#eef4ff",
+    "highlight": "#6fb7ff",
+    "translation": "#b9c8dd"
+  },
+  "fonts": {
+    "arabic": "Amiri Quran",
+    "translation": "Helvetica"
+  },
+  "params": {
+    "outline": 2,
+    "shadow": 2,
+    "arabic_size": 60,
+    "translation_size": 32
+  },
+  "licence": {
+    "name": "CC0-1.0",
+    "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "reel-machine default style"
+  },
+  "provenance": {
+    "provider": "reelmachine",
+    "provider_version": "bundled",
+    "source": "data/styles/quranic.midnight.json"
+  }
+}

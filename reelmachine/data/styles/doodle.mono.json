@@ -1,0 +1,31 @@
+{
+  "id": "doodle.mono",
+  "title": "Mono",
+  "summary": "Black and white only, for dense program graphics.",
+  "render_modes": ["program"],
+  "aspect": "landscape",
+  "palette": {
+    "paper": "#fdfdfd",
+    "ink": "#101010",
+    "accent": "#101010",
+    "accent2": "#555555"
+  },
+  "fonts": {
+    "caption": "Helvetica",
+    "title": "Helvetica"
+  },
+  "params": {
+    "stroke_width": 4,
+    "corner_radius": 18
+  },
+  "licence": {
+    "name": "CC0-1.0",
+    "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "reel-machine default style"
+  },
+  "provenance": {
+    "provider": "reelmachine",
+    "provider_version": "bundled",
+    "source": "data/styles/doodle.mono.json"
+  }
+}
