@@ -35,6 +35,7 @@ from reelmachine.recipes.doodle.narration.cloud import (
     pcm_to_wav_bytes,
     words_from_characters,
 )
+from reelmachine.recipes.doodle.scenes.program import ProgramRenderer
 from reelmachine.recipes.doodle.scenes.spec import (
     choose_structure,
     program_scene,
@@ -146,6 +147,164 @@ def test_stroke_annotation_is_canvas_checked() -> None:
     )
     with pytest.raises(ValueError):
         build_annotation(bad, art_size=(500, 500))
+
+
+# --------------------------------------------------------- fast: scripts
+
+
+def test_llm_script_provider_parses_fenced_json(tmp_path) -> None:
+    from reelmachine.recipes.doodle.script import LlmScriptProvider
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/chat/completions"
+        assert request.headers["Authorization"] == "Bearer test-key"
+        body = json.loads(request.content)
+        assert body["messages"][0]["role"] == "system"
+        assert "compound interest" in body["messages"][1]["content"]
+        answer = (
+            "Here is the script:\n```json\n"
+            '{"beats": [{"narration": "Interest earns interest.", "keywords": ["Compound"]}, '
+            '{"narration": "The curve bends upward.", "keywords": ["Curve"], "extra": true}]}\n```'
+        )
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": answer}}]},
+        )
+
+    provider = LlmScriptProvider(
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        base_url="https://api.test/v1",
+        api_key="test-key",
+        model="test-model",
+    )
+    beats = provider.beats("compound interest")
+    assert [beat.id for beat in beats] == ["beat-1", "beat-2"]
+    assert beats[0].narration == "Interest earns interest."
+    assert beats[1].keywords == ["Curve"]
+    assert provider.missing() == []
+
+
+def test_llm_script_provider_fails_loudly_without_a_key_or_json(tmp_path) -> None:
+    from reelmachine.core.errors import InvalidInput, ProviderUnavailable
+    from reelmachine.recipes.doodle.script import LlmScriptProvider
+
+    keyless = LlmScriptProvider(api_key="", base_url="https://api.test/v1")
+    assert keyless.missing() == ["REEL_SCRIPT_API_KEY (or OPENAI_API_KEY) is not set"]
+    with pytest.raises(ProviderUnavailable) as missing:
+        keyless.beats("anything")
+
+    assert "REEL_SCRIPT_API_KEY" in (missing.value.hint or "")
+
+    def garbage(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"choices": [{"message": {"content": "I cannot help."}}]})
+
+    provider = LlmScriptProvider(
+        client=httpx.Client(transport=httpx.MockTransport(garbage)),
+        base_url="https://api.test/v1",
+        api_key="test-key",
+    )
+    with pytest.raises(InvalidInput) as bad:
+        provider.beats("anything")
+    assert "not JSON" in str(bad.value)
+
+
+def test_topic_probe_reports_a_keyless_llm_writer() -> None:
+    from reelmachine.core.recipe import ProbeContext
+    from reelmachine.core.stage import StaticProviders
+    from reelmachine.recipes.doodle.narration.fake import FakeNarration
+    from reelmachine.recipes.doodle.recipe import DoodleRecipe
+    from reelmachine.recipes.doodle.script import LlmScriptProvider
+
+    settings = get_settings()
+    ctx = ProbeContext(
+        config=settings,
+        providers=StaticProviders(
+            {"script": LlmScriptProvider(api_key=""), "narration": FakeNarration(settings)}
+        ),
+    )
+    report = DoodleRecipe().probe(DoodleInputs(topic="compound interest"), ctx)
+    assert report.ok is False
+    assert any(
+        check.name == "script_writer" and "REEL_SCRIPT_API_KEY" in check.detail
+        for check in report.checks
+    )
+
+
+# ------------------------------------------------------ fast: program layout
+
+
+def test_program_text_never_splits_a_word_or_leaves_its_box() -> None:
+    """The bug the screenshots caught: mid-word cuts ("balance" → "alance") and overflow."""
+    from PIL import Image, ImageDraw
+
+    from reelmachine.recipes.doodle.scenes.program import fit_text, text_width, wrap_to_width
+
+    canvas = Image.new("RGB", (1080, 1920), (255, 255, 255))
+    draw = ImageDraw.Draw(canvas)
+    sentence = "Over decades, the curve stops looking like a line and starts bending upward."
+
+    font, lines = fit_text(draw, sentence, width=1080 - 2 * 26, height=300, max_size=120)
+    assert " ".join(lines).split() == sentence.split(), lines  # nothing dropped, nothing split
+    assert all(text_width(draw, line, font) <= 1080 - 2 * 26 for line in lines), lines
+
+    # a word longer than the box is still kept whole
+    assert wrap_to_width(draw, "antidisestablishmentarianism", font, 40) == [
+        "antidisestablishmentarianism"
+    ]
+
+    # the drawn frame has no ink past the card's right edge
+    beat = Beat(
+        id="beat-1",
+        narration="Each period, the interest is added to your balance.",
+        keywords=["Add"],
+    )
+    scene = program_scene(beat, 1, canvas=(1080, 1920), duration_ms=3000)
+    renderer = ProgramRenderer()
+    frame = renderer.frame(scene, 1500)  # after the draw-in has finished
+    card = next(element for element in scene.elements if element.kind == "card")
+
+    def has_ink(region) -> bool:
+        return region.convert("L").getextrema()[0] < 250  # anything not the white canvas
+
+    assert scene.elements[1].enter == "draw"
+    assert not has_ink(frame.crop((card.x + card.width + 6, card.y, 1080, card.y + card.height))), (
+        "text ran past the card's right edge"
+    )
+    assert not has_ink(frame.crop((0, card.y + card.height + 6, 1080, int(1920 * 0.9)))), (
+        "text ran below the card"
+    )
+    # and the card does have its text, inside the box
+    inside = frame.crop((card.x + 6, card.y + 6, card.x + card.width - 6, card.y + card.height - 6))
+    assert has_ink(inside), "the card text is missing"
+
+
+def test_program_sentences_become_whole_cards() -> None:
+    """One sentence per card — no character-count chunking, and the arrow links them."""
+    one = program_scene(
+        Beat(id="b1", narration="Compound interest grows slowly at first.", keywords=["Compound"]),
+        1,
+        canvas=(1080, 1920),
+        duration_ms=3000,
+    )
+    assert [element.kind for element in one.elements].count("card") == 1
+    assert not [element for element in one.elements if element.kind == "arrow"]
+
+    two = program_scene(
+        Beat(
+            id="b2",
+            narration="Interest is added to the balance. Then the balance earns its own interest.",
+            keywords=["Balance"],
+        ),
+        2,
+        canvas=(1080, 1920),
+        duration_ms=4000,
+    )
+    assert [element.kind for element in two.elements].count("card") == 2
+    assert [element.kind for element in two.elements].count("arrow") == 1
+    assert all(
+        element.text in two.narration or not element.text.startswith("Interest is added")
+        for element in two.elements
+    )
 
 
 # ------------------------------------------------------------- fast: narration
@@ -444,6 +603,44 @@ def test_stroke_preflight_refuses_blank_line_art(tmp_path) -> None:
     assert finished.error is not None and finished.error.code == "PREFLIGHT_FAILED"
     names = {artifact.name for artifact in (finished.result.artifacts if finished.result else [])}
     assert "reel.mp4" not in names
+
+
+@pytest.mark.slow
+def test_a_cached_script_does_not_decide_the_next_jobs_mode(tmp_path) -> None:
+    """The script stage's cache ignores `mode` — later stages must not read stale inputs.
+
+    Found by asking for a stroke reel and getting the previous program reel: the cached
+    beats carried the old request's `inputs`, and every stage after it trusted them.
+    """
+    shared = dataclasses.replace(
+        get_settings(), workdir=tmp_path / "work", outdir=tmp_path / "out", mock_dir=tmp_path / "mock", tts="fake"
+    )
+    script = [{"narration": "First line about the idea.", "keywords": ["Idea"]}]
+    engine = Engine(shared)
+    try:
+        program = engine.submit(
+            JobRequest(recipe="doodle", inputs={"script": script, "mode": "program", "name": "first"}),
+            caller="local",
+        )
+        first = engine.wait(program.id, caller="local", timeout_s=600)
+        stroke = engine.submit(
+            JobRequest(recipe="doodle", inputs={"script": script, "mode": "stroke", "name": "second"}),
+            caller="local",
+        )
+        second = engine.wait(stroke.id, caller="local", timeout_s=600)
+    finally:
+        engine.close()
+
+    assert first.state is JobState.SUCCEEDED, first.error
+    assert second.state is JobState.SUCCEEDED, second.error
+    first_manifest = json.loads(Path(first.result.manifest).read_text(encoding="utf-8"))
+    second_manifest = json.loads(Path(second.result.manifest).read_text(encoding="utf-8"))
+    assert first_manifest["render_mode"] == "program"
+    stages = {stage["id"]: stage for stage in second_manifest["stages"]}
+    assert stages["script"]["cached"] is True, "the regression only bites on a cache hit"
+    assert second_manifest["render_mode"] == "stroke", "a cached script drove the wrong renderer"
+    tracks = [record["asset"] for record in second_manifest["assets"] if record["asset"]["kind"] == "scene_track"]
+    assert tracks and all(asset["provenance"]["provider"] == "stroke" for asset in tracks)
 
 
 @pytest.mark.slow

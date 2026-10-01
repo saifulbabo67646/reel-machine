@@ -25,6 +25,7 @@ GROUPS = (
     "sources",
     "corpora",
     "narration",
+    "scripts",
     "renderers",
     "backgrounds",
     "styles",

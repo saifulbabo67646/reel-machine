@@ -199,6 +199,7 @@ Entry-point groups:
 | `reelmachine.sources` | `sources.base.SourceProvider` | local, hls, vidvault, mock |
 | `reelmachine.corpora` | per-recipe corpus protocols | nadeshiko, quran_com, alquran_cloud (+ fakes) |
 | `reelmachine.narration` | doodle's `NarrationProvider` (TTS → TimedSpeech) | fake, ElevenLabs, Cartesia |
+| `reelmachine.scripts` | doodle's `ScriptProvider` (topic → beats) | template (deterministic), llm (OpenAI-compatible) |
 | `reelmachine.renderers` | a scene renderer (`render(scene, ...) -> Path`) | stroke (whiteboard runtime), program (Pillow) |
 | `reelmachine.backgrounds` | `quranic.backgrounds.BackgroundProvider` (a clip + its provenance and licence) | gradient, pexels, fake |
 | `reelmachine.styles` | `core.style.StylePack` | quranic/*, doodle/* |
@@ -322,9 +323,11 @@ No source media, no Nadeshiko, no alignment. Inputs: Surah/Ayah range, reciter,
 translation language, style preset, background choice, audio mastering profile. A
 background is `gradient` (procedural, the default, no key), `file` (the caller's own
 clip) or `pexels` (stock; needs `PEXELS_API_KEY` — the deployment may simply not have
-one, in which case the probe says so and nothing silently substitutes). Either way the
-chosen clip's provenance and licence land in the manifest, Pexels attributions
-included. Two pluggable corpora: Quran Foundation v4 (text,
+one, in which case the probe says so and nothing silently substitutes). `backgrounds`
+takes a whole list instead: the reel is split evenly across the clips and they are joined
+into one continuous background, each part keeping its own provenance, licence and switch
+window. Either way the chosen clips' provenance and licence land in the manifest, Pexels
+attributions included. Two pluggable corpora: Quran Foundation v4 (text,
 translations, audio, word-level millisecond timings) and alquran.cloud text + mp3quran
 audio with deterministic proportional timings. The timeline is recitation audio +
 word-level highlight captions + translation overlays + background; rendering is
@@ -332,7 +335,11 @@ background + karaoke ASS + loudness profile.
 
 ### 8.3 `doodle`
 
-Hand-drawn explainer reels, one recipe parameterised by `mode`:
+Hand-drawn explainer reels, one recipe parameterised by `mode`. A caller's own `script`
+is used exactly as given — the path a calling agent takes, and the one to prefer; a bare
+`topic` goes through the `scripts` provider group (deterministic `template`, or `llm` when
+a deployment would rather a model wrote the beats). Length follows the script: one beat,
+one narration line, nothing else caps it.
 
 - `stroke` — whiteboard inking: raster line art is inked stroke by stroke on a continuous
   canvas; semantic regions are revealed in the order the narration reaches them; scene

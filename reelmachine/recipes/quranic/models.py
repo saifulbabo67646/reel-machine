@@ -66,6 +66,8 @@ class QuranicInputs(BaseModel):
 
     style: str = "quranic.parchment"
     background: BackgroundChoice = Field(default_factory=GradientBackground)
+    # several clips for one reel: the recitation is split evenly across them, in order
+    backgrounds: list[BackgroundChoice] = Field(default_factory=list)
     aspect: Aspect = "vertical"
     audio_profile: AudioProfile = "studio"
     word_highlight: bool = True
@@ -127,6 +129,7 @@ class QuranPrep(StageOutput):
     audio_duration_ms: int = 0
     background_asset: str = ""
     background_origin: str = "gradient"
+    backgrounds: list[tuple[str, int, int]] = Field(default_factory=list)  # (asset, start, end)
     ayah_windows: list[tuple[int, int, int]] = Field(default_factory=list)  # (ayah, start, end)
     words: list[WordSpan] = Field(default_factory=list)  # global, in recitation order
     ayahs: list[AyahMaterial] = Field(default_factory=list)

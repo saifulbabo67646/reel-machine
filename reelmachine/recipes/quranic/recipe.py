@@ -17,7 +17,7 @@ from ...core.recipe import CostNote, ProbeContext, ProbeReport, ProviderReq, Rec
 from ...core.stage import StageContext
 from ...core.style import StyleNotFound, get_style
 from .models import FileBackground, PexelsBackground, QuranicInputs
-from .stages import ComposeStage, PrepStage, RenderStage, SelectStage
+from .stages import ComposeStage, PrepStage, RenderStage, SelectStage, background_choices
 
 
 def _resolve_checks(corpus: Any, inputs: QuranicInputs) -> list[CheckResult]:
@@ -121,23 +121,25 @@ class QuranicRecipe:
         except StyleNotFound as exc:
             checks.append(CheckResult(name="style", ok=False, detail=str(exc)))
 
-        choice = inputs.background
-        if isinstance(choice, FileBackground):
-            path = Path(choice.path).expanduser()
-            background_ok = path.is_file()
-            background_detail = str(path) if background_ok else f"missing: {path}"
-        else:
-            role = f"background_{choice.kind}"
-            try:
-                background_provider = ctx.providers.get(role) if ctx.providers else None
-            except KeyError:  # a probe context need not bind optional roles
-                background_provider = None
-            problems = background_provider.missing() if background_provider is not None else [f"no provider bound to {role}"]
-            background_ok = not problems
-            background_detail = "; ".join(problems) or getattr(background_provider, "name", role)
-            if isinstance(choice, PexelsBackground) and not choice.query.strip():
-                background_ok, background_detail = False, "a Pexels background needs a query"
-        checks.append(CheckResult(name="background", ok=background_ok, detail=background_detail))
+        choices = background_choices(inputs)
+        for index, choice in enumerate(choices):
+            name = "background" if len(choices) == 1 else f"background[{index}]"
+            if isinstance(choice, FileBackground):
+                path = Path(choice.path).expanduser()
+                ok = path.is_file()
+                detail = str(path) if ok else f"missing: {path}"
+            else:
+                role = f"background_{choice.kind}"
+                try:
+                    provider = ctx.providers.get(role) if ctx.providers else None
+                except KeyError:  # a probe context need not bind optional roles
+                    provider = None
+                problems = provider.missing() if provider is not None else [f"no provider bound to {role}"]
+                ok = not problems
+                detail = "; ".join(problems) or getattr(provider, "name", role)
+                if isinstance(choice, PexelsBackground) and not choice.query.strip():
+                    ok, detail = False, "a Pexels background needs a query"
+            checks.append(CheckResult(name=name, ok=ok, detail=detail))
 
         corpus = ctx.providers.get("corpus") if ctx.providers else None
         checks.append(

@@ -78,6 +78,25 @@ def jsonable(output: Any) -> Any:
     return output
 
 
+def _restamp_inputs(output: Any, stage_payload: Any) -> Any:
+    """A cached output's `inputs` are refreshed from the request in hand.
+
+    A stage's cache key may deliberately ignore fields that cannot change that stage's own
+    result (the background list cannot change an ayah selection; the render mode cannot
+    change the beats). But every output carries the request it was computed for, and later
+    stages read `payload.inputs` — so a stale copy would silently drive them: a stroke job
+    rendered as program, a three-clip background rendered as one.
+    """
+    if not hasattr(output, "inputs") or not hasattr(output, "model_copy"):
+        return output
+    fresh = getattr(stage_payload, "inputs", None)
+    if fresh is None:
+        fresh = type(output.inputs).model_validate(stage_payload)
+    if fresh == output.inputs:
+        return output
+    return output.model_copy(update={"inputs": fresh})
+
+
 def run_stages(
     recipe: Any,
     payload: Any,
@@ -161,6 +180,7 @@ def run_stages(
             if cached is not None:
                 model = getattr(stage, "output_model", None)
                 run.output = model.model_validate(cached) if model is not None else cached
+                run.output = _restamp_inputs(run.output, stage_payload)
                 run.cached = True
                 run.cache_key = cache_key
                 run.finished_ms = now_ms()

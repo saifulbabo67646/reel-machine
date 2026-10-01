@@ -569,6 +569,108 @@ def test_quranic_renders_with_no_nadeshiko_key_and_no_source_media(tmp_path, mon
     assert "Translation" in text
 
 
+def test_background_slices_split_the_reel_without_gaps() -> None:
+    from reelmachine.recipes.quranic.stages import background_slices
+
+    windows = background_slices(46_100, 3)
+    assert windows[0][0] == 0 and windows[-1][1] == 46_100
+    assert all(
+        windows[index][1] == windows[index + 1][0] for index in range(len(windows) - 1)
+    ), windows
+    assert all(end - start >= 15_000 for start, end in windows), windows  # evenly spread
+    assert background_slices(1000, 1) == [(0, 1000)]
+
+
+@pytest.mark.slow
+def test_quranic_plays_a_sequence_of_backgrounds(tmp_path) -> None:
+    """Several clips, one after another: each is fetched, credited and switched in turn."""
+    settings = dataclasses.replace(  # cache_dir follows workdir, so both jobs share one cache
+        get_settings(), workdir=tmp_path / "work", outdir=tmp_path / "out"
+    )
+    registry = RecordingRegistry()
+    engine = Engine(
+        settings,
+        registry=registry,
+        provider_overrides={
+            "corpus": "quran-fake",
+            "background_pexels": "fake",
+            "background_gradient": "fake",
+        },
+    )
+    try:
+        # prime the ayah-selection cache with a one-clip job: the selection ignores the
+        # background, so the sequence job must still see its own list
+        priming = engine.submit(
+            JobRequest(
+                recipe="quranic",
+                inputs={
+                    "surah": 1,
+                    "ayah_start": 1,
+                    "ayah_end": 2,
+                    "corpus": "quran-fake",
+                    "name": "quran-priming",
+                },
+            ),
+            caller="local",
+        )
+        primed = engine.wait(priming.id, caller="local", timeout_s=300)
+        assert primed.state is JobState.SUCCEEDED, primed.error
+        job = engine.submit(
+            JobRequest(
+                recipe="quranic",
+                inputs={
+                    "surah": 1,
+                    "ayah_start": 1,
+                    "ayah_end": 2,
+                    "corpus": "quran-fake",
+                    "backgrounds": [
+                        {"kind": "pexels", "query": "clouds"},
+                        {"kind": "gradient", "colors": ["#203040", "#405060"]},
+                        {"kind": "pexels", "query": "night sky"},
+                    ],
+                    "name": "quran-sequence",
+                },
+            ),
+            caller="local",
+        )
+        finished = engine.wait(job.id, caller="local", timeout_s=300)
+    finally:
+        engine.close()
+
+    assert finished.state is JobState.SUCCEEDED, finished.error
+    manifest = json.loads(Path(finished.result.manifest).read_text(encoding="utf-8"))
+    stages = {stage["id"]: stage for stage in manifest["stages"]}
+    assert stages["select"]["cached"] is True, "the regression only bites on a cache hit"
+    backgrounds = [record["asset"] for record in manifest["assets"] if record["asset"]["kind"] == "background"]
+    assert len(backgrounds) >= 3, "the distinct slices plus the sequence they were joined into"
+    assert {asset["provenance"]["provider"] for asset in backgrounds} >= {"fake"}
+    sequence = next(asset for asset in backgrounds if asset["meta"].get("origin") == "sequence")
+    assert len(sequence["meta"]["parts"]) == 3, sequence["meta"]
+    assert len(sequence["meta"]["windows"]) == 3
+
+    # the concat list must carry absolute paths: ffmpeg resolves entries against its own
+    # directory, and a stage workdir is relative whenever the caller's is
+    concat_lists = list((tmp_path / "work" / "jobs").rglob("background-concat.txt"))
+    assert concat_lists, "the sequence should have been joined through a concat list"
+    entries = [
+        line[len("file '") : -1]
+        for line in concat_lists[0].read_text(encoding="utf-8").splitlines()
+    ]
+    assert len(entries) == 3
+    assert all(Path(entry).is_absolute() for entry in entries), entries
+
+    timeline_artifact = Path(
+        next(a.path for a in finished.result.artifacts if a.name == "timeline.json")
+    )
+    meta = json.loads(timeline_artifact.read_text(encoding="utf-8"))["meta"]
+    assert len(meta["backgrounds"]) == 3 and all(entry["asset"] for entry in meta["backgrounds"])
+    windows = [(entry["startMs"], entry["endMs"]) for entry in meta["backgrounds"]]
+    assert windows[0][0] == 0
+    assert all(windows[index][1] == windows[index + 1][0] for index in range(len(windows) - 1))
+    assert meta["background"] == "sequence"
+    assert manifest["verification"]["ok"] is True
+
+
 @pytest.mark.slow
 def test_quranic_takes_its_background_from_the_named_provider(tmp_path) -> None:
     """A provider background flows through prep with its own provenance and licence."""

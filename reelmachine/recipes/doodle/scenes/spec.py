@@ -7,6 +7,7 @@ from even division.
 
 from __future__ import annotations
 
+import re
 from typing import Sequence
 
 from ....core.timeline import WordSpan
@@ -148,7 +149,12 @@ def program_scene(
     if last_word_end < 200:
         last_word_end = duration
     title = (beat.keywords[0] if beat.keywords else beat.narration.split(" ")[0][:24]).strip()
-    lines = [line.strip() for line in beat.narration.split(".") if line.strip()][:2]
+    # one sentence per card; the renderer measures and wraps the text inside it
+    body = [
+        line.strip()
+        for line in re.split(r"(?<=[.!?])\s+", beat.narration.strip())
+        if line.strip()
+    ][:2] or [beat.narration.strip()]
     margin = int(width * 0.08)
     card_w = width - margin * 2
     card_h = int(height * 0.16) if height > width else int(height * 0.24)
@@ -176,13 +182,7 @@ def program_scene(
             style_ref="doodle.title",
         )
     ]
-    body: list[str] = []
-    for line in lines:
-        if len(line) > 44:
-            body.extend([line[i : i + 44].strip() for i in range(0, len(line), 44)])
-        else:
-            body.append(line)
-    for row, line in enumerate(body[:3]):
+    for row, line in enumerate(body):
         elements.append(
             SceneElement(
                 id=f"{beat.id}-card{row + 1}",
@@ -227,7 +227,7 @@ def program_scene(
                 kind="label",
                 text=keyword,
                 x=margin + column * int(card_w / 3),
-                y=top + len(body[:3]) * int(card_h * 1.25) + 40,
+                y=top + len(body) * int(card_h * 1.25) + 40,
                 width=int(card_w / 3) - 16,
                 height=int(card_h * 0.5),
                 enter_ms=word_at(0.8 + 0.1 * column),

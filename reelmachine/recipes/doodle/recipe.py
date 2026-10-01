@@ -53,6 +53,12 @@ class DoodleRecipe:
             StageSpec(stage=RenderStage(), feeds="compose"),
         ),
         providers={
+            "script": ProviderReq(
+                group="scripts",
+                default="template",
+                required=False,
+                description="Turns a topic into beats (deterministic template, or an LLM)",
+            ),
             "narration": ProviderReq(
                 group="narration",
                 default="fake",
@@ -100,6 +106,21 @@ class DoodleRecipe:
             checks.append(CheckResult(name="style", ok=True, detail=style.id))
         except StyleNotFound as exc:
             checks.append(CheckResult(name="style", ok=False, detail=str(exc)))
+
+        if inputs.topic and not inputs.script:
+            # a topic only needs a writer when a model is what writes it; the template never fails
+            try:
+                writer = ctx.providers.get("script") if ctx.providers else None
+            except KeyError:
+                writer = None
+            problems = writer.missing() if writer is not None else []
+            checks.append(
+                CheckResult(
+                    name="script_writer",
+                    ok=not problems,
+                    detail="; ".join(problems) or getattr(writer, "name", "supplied beats"),
+                )
+            )
 
         for index, path in enumerate(inputs.line_art, start=1):
             resolved = Path(path).expanduser()

@@ -63,8 +63,13 @@ class ScriptStage:
             beats = inputs.beat_list()
             source = "supplied"
         elif inputs.topic:
-            beats = TemplateScriptProvider().beats(inputs.topic, language=inputs.language)
-            source = "template"
+            try:
+                provider = ctx.providers.get("script")
+            except KeyError:  # a stage test need not bind the optional role
+                provider = TemplateScriptProvider()
+            beats = provider.beats(inputs.topic, language=inputs.language)
+            source = getattr(provider, "name", "template")
+            ctx.progress.detail(f"  · script from {source}: {len(beats)} beats")
         else:
             raise InvalidInput(
                 "give a topic or a structured script",

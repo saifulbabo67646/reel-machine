@@ -14,7 +14,7 @@ from typing import Any
 
 from ... import ffmpeg
 from ...config import Settings, normalise_aspect
-from ...core.assets import AssetKind, Provenance
+from ...core.assets import AssetKind, Licence, Provenance
 from ...core.errors import InvalidInput, ProviderUnavailable
 from ...core.stage import StageContext
 from ...core.style import StylePack, get_style
@@ -134,7 +134,7 @@ class PrepStage:
             windows.append((ayah.ayah, start, end))
             cursor = end
 
-        background_asset, origin = _materialise_background(
+        background_asset, origin, background_windows = _materialise_backgrounds(
             ctx, inputs, style, duration_ms=total_ms
         )
 
@@ -152,6 +152,7 @@ class PrepStage:
             audio_duration_ms=total_ms,
             background_asset=background_asset.id,
             background_origin=origin,
+            backgrounds=background_windows,
             ayah_windows=windows,
             words=words,
             ayahs=payload.ayahs,
@@ -160,24 +161,31 @@ class PrepStage:
         )
 
 
-def _materialise_background(
+def background_choices(inputs: QuranicInputs) -> list[Any]:
+    """`backgrounds` (a sequence) wins over `background` (a single clip)."""
+    return list(inputs.backgrounds) if inputs.backgrounds else [inputs.background]
+
+
+def background_slices(total_ms: int, count: int) -> list[tuple[int, int]]:
+    """Split the reel evenly across `count` clips; the last one takes the remainder."""
+    bounds = [int(round(total_ms * index / count)) for index in range(count + 1)]
+    return [(bounds[index], bounds[index + 1]) for index in range(count)]
+
+
+def _slice_clip(
     ctx: StageContext,
-    inputs: QuranicInputs,
+    choice: Any,
     style: StylePack,
     *,
-    duration_ms: int,
-) -> tuple[Any, str]:
-    """One background clip, from a provider or from the caller's own file.
-
-    The provider owns where a clip comes from (and its licence); this stage owns the
-    reel's geometry and exact duration, so the render has no surprises.
-    """
+    width: int,
+    height: int,
+    start_ms: int,
+    end_ms: int,
+) -> tuple[Path, Provenance, Licence | None, str]:
+    """Fetch (or take) one clip and normalise it to the reel's geometry and its slice."""
     settings: Settings = ctx.config
-    width, height = GEOMETRY[inputs.aspect]
-    out = ctx.workdir / "background.mp4"
-    duration_s = max(0.5, duration_ms / 1000.0)
-    choice = inputs.background
-
+    duration_ms = max(200, end_ms - start_ms)
+    duration_s = duration_ms / 1000.0
     if isinstance(choice, FileBackground):
         source = Path(choice.path).expanduser()
         if not source.is_file():
@@ -185,9 +193,7 @@ def _materialise_background(
                 f"background file not found: {source}",
                 hint="points at a video or image the caller supplies",
             )
-        origin = "file"
-        provenance = Provenance(provider="tenant", source="upload")
-        licence = None
+        origin, provenance, licence = "file", Provenance(provider="tenant", source="upload"), None
     else:
         origin = choice.kind
         provider = ctx.providers.get(f"background_{origin}")
@@ -204,48 +210,120 @@ def _materialise_background(
                 str((style.palette or {}).get("background", "#0e1621")),
                 str((style.palette or {}).get("highlight", "#1f3b4d")),
             ]
-        request = BackgroundRequest(
-            kind=origin,
-            query=str(getattr(choice, "query", "") or ""),
-            orientation=str(getattr(choice, "orientation", "portrait") or "portrait"),
-            min_height=int(getattr(choice, "min_height", 720) or 720),
-            colors=colors,
-            speed=float(getattr(choice, "speed", 0.02) or 0.02),
-            duration_ms=duration_ms,
-            width=width,
-            height=height,
+        clip = provider.fetch(
+            BackgroundRequest(
+                kind=origin,
+                query=str(getattr(choice, "query", "") or ""),
+                orientation=str(getattr(choice, "orientation", "portrait") or "portrait"),
+                min_height=int(getattr(choice, "min_height", 720) or 720),
+                colors=colors,
+                speed=float(getattr(choice, "speed", 0.02) or 0.02),
+                duration_ms=duration_ms,
+                width=width,
+                height=height,
+            ),
+            dest_dir=ctx.workdir,
         )
-        clip = provider.fetch(request, dest_dir=ctx.workdir)
-        source = clip.path
-        provenance = clip.provenance
-        licence = clip.licence
+        source, provenance, licence = clip.path, clip.provenance, clip.licence
         ctx.progress.detail(
-            f"  · background: {origin} ({clip.width}x{clip.height}, "
-            f"{clip.duration_ms / 1000:.1f}s)"
+            f"  · background {origin}: {clip.width}x{clip.height} "
+            f"{clip.duration_ms / 1000:.1f}s → {duration_s:.1f}s on screen"
         )
-
-    cmd = [
-        settings.ffmpeg, "-hide_banner", "-nostdin", "-y",
-        "-stream_loop", "-1", "-i", str(source),
-        "-t", f"{duration_s:.3f}", "-an",
-        "-vf", (
-            f"scale={width}:{height}:force_original_aspect_ratio=increase,"
-            f"crop={width}:{height},fps=30"
-        ),
-        "-c:v", "libx264", "-preset", settings.preset, "-crf", str(settings.crf),
-        "-pix_fmt", "yuv420p", str(out),
-    ]
-    ffmpeg.run(cmd, cancel=ctx.cancel)
-
-    asset = ctx.assets.put(
-        out,
-        kind=AssetKind.BACKGROUND,
-        provenance=provenance,
-        licence=licence,
-        ext=".mp4",
-        meta={"origin": origin},
+    out = ctx.workdir / f"background-{start_ms:07d}.mp4"
+    ffmpeg.run(
+        [
+            settings.ffmpeg, "-hide_banner", "-nostdin", "-y",
+            "-stream_loop", "-1", "-i", str(source),
+            "-t", f"{duration_s:.3f}", "-an",
+            "-vf", (
+                f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+                f"crop={width}:{height},fps=30"
+            ),
+            "-c:v", "libx264", "-preset", settings.preset, "-crf", str(settings.crf),
+            "-pix_fmt", "yuv420p", str(out),
+        ],
+        cancel=ctx.cancel,
     )
-    return asset, origin
+    return out, provenance, licence, origin
+
+
+def _materialise_backgrounds(
+    ctx: StageContext,
+    inputs: QuranicInputs,
+    style: StylePack,
+    *,
+    duration_ms: int,
+) -> tuple[Any, str, list[tuple[str, int, int]]]:
+    """The reel's background: every chosen clip, each covering its own slice.
+
+    The provider owns where a clip comes from (and its licence); this stage owns the
+    reel's geometry, the split and the exact durations, so the render has no surprises.
+    """
+    settings: Settings = ctx.config
+    width, height = GEOMETRY[inputs.aspect]
+    choices = background_choices(inputs)
+    windows = background_slices(duration_ms, len(choices))
+    parts: list[tuple[Any, str, int, int]] = []
+    for index, (choice, (start, end)) in enumerate(zip(choices, windows), start=1):
+        ctx.cancel.raise_if_cancelled()
+        path, provenance, licence, origin = _slice_clip(
+            ctx, choice, style, width=width, height=height, start_ms=start, end_ms=end
+        )
+        asset = ctx.assets.put(
+            path,
+            kind=AssetKind.BACKGROUND,
+            provenance=provenance,
+            licence=licence,
+            ext=".mp4",
+            meta={"origin": origin, "index": index},  # when it plays is on the sequence
+        )
+        parts.append((asset, origin, start, end))
+
+    if len(parts) == 1:
+        asset, origin, start, end = parts[0]
+        return asset, origin, [(asset.id, start, end)]
+
+    # many clips: one continuous background, so the render stays a single input
+    concat_file = ctx.workdir / "background-concat.txt"
+    # absolute paths: the concat demuxer resolves list entries against the list's own
+    # directory, and a stage workdir is relative whenever the caller's is
+    concat_file.write_text(
+        "".join(
+            f"file '{(ctx.workdir / f'background-{start:07d}.mp4').resolve()}'\n"
+            for _, _, start, _ in parts
+        ),
+        encoding="utf-8",
+    )
+    merged = ctx.workdir / "background-sequence.mp4"
+    ffmpeg.run(
+        [
+            settings.ffmpeg, "-hide_banner", "-nostdin", "-y",
+            "-f", "concat", "-safe", "0", "-i", str(concat_file),
+            "-c", "copy", str(merged),
+        ],
+        cancel=ctx.cancel,
+    )
+    providers = ", ".join(sorted({origin for _, origin, _, _ in parts}))
+    order = " → ".join(origin for _, origin, _, _ in parts)
+    asset = ctx.assets.put(
+        merged,
+        kind=AssetKind.BACKGROUND,
+        provenance=Provenance(
+            provider="reelmachine",
+            source="background-sequence",
+            notes=f"{len(parts)} clips ({order}); parts in provenance {providers}",
+        ),
+        licence=None,
+        ext=".mp4",
+        meta={
+            "origin": "sequence",
+            "parts": [part[0].id for part in parts],
+            "windows": [
+                {"asset": part[0].id, "startMs": part[2], "endMs": part[3]} for part in parts
+            ],
+        },
+    )
+    return asset, "sequence", [(part[0].id, part[2], part[3]) for part in parts]
 
 
 class ComposeStage:
@@ -317,6 +395,10 @@ class ComposeStage:
                 "ayahs": [ayah.key for ayah in payload.ayahs],
                 "reciter": payload.ayahs[0].meta.get("reciter") if payload.ayahs else None,
                 "background": payload.background_origin,
+                "backgrounds": [
+                    {"asset": asset, "startMs": start, "endMs": end}
+                    for asset, start, end in payload.backgrounds
+                ],
             },
         )
         reel_name = inputs.name or ctx.job.id

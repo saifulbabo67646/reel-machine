@@ -8,6 +8,7 @@ requires one.
 
 from __future__ import annotations
 
+import functools
 import shutil
 from pathlib import Path
 from typing import Any
@@ -17,14 +18,105 @@ from ....config import Settings
 from ....core.errors import ProviderUnavailable
 from ..models import SceneElement, SceneSpec
 
+# A real face, so text can be measured; the fallback is Pillow's own.
+FONT_CANDIDATES = (
+    "/System/Library/Fonts/Helvetica.ttc",
+    "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "/Library/Fonts/Arial.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "C:/Windows/Fonts/arial.ttf",
+)
+INSET = 26  # breathing room between a card's edge and its text
 
+
+@functools.lru_cache(maxsize=64)
 def _font(size: int):
     from PIL import ImageFont
 
+    for candidate in FONT_CANDIDATES:
+        if Path(candidate).is_file():
+            try:
+                return ImageFont.truetype(candidate, size)
+            except OSError:  # pragma: no cover - unreadable font file
+                continue
     try:
         return ImageFont.load_default(size=size)
     except TypeError:  # pragma: no cover - older Pillow
         return ImageFont.load_default()
+
+
+def text_width(draw, text: str, font) -> float:
+    box = draw.textbbox((0, 0), text, font=font)
+    return box[2] - box[0]
+
+
+def wrap_to_width(draw, text: str, font, width: float) -> list[str]:
+    """Greedy wrap by measured width — a word is never split down the middle."""
+    lines: list[str] = []
+    current = ""
+    for word in text.split():
+        candidate = f"{current} {word}".strip()
+        if current and text_width(draw, candidate, font) > width:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines or [""]
+
+
+def fit_text(
+    draw,
+    text: str,
+    *,
+    width: float,
+    height: float,
+    max_size: int,
+    min_size: int = 16,
+    line_ratio: float = 1.3,
+) -> tuple[Any, list[str]]:
+    """Largest face size at which `text` wraps inside the box — measured, not guessed."""
+    size = max(min_size, int(max_size))
+    while size > min_size:
+        font = _font(size)
+        lines = wrap_to_width(draw, text, font, width)
+        if len(lines) * size * line_ratio <= height:
+            return font, lines
+        size = int(size * 0.9)
+    font = _font(min_size)
+    lines = wrap_to_width(draw, text, font, width)
+    room = max(1, int(height / (min_size * line_ratio)))
+    if len(lines) > room:  # extremely long text: keep whole lines, mark the cut
+        lines = lines[:room]
+        lines[-1] = lines[-1].rstrip() + "…"
+    return font, lines
+
+
+def draw_block(
+    draw,
+    text: str,
+    *,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    colour: tuple[int, int, int],
+    max_size: int,
+    inset: int = INSET,
+    align: str = "left",
+) -> None:
+    """Draw `text` fitted and vertically centred inside its box, never past its edges."""
+    box_w = max(24, width - inset * 2)
+    box_h = max(20, height - inset * 2)
+    font, lines = fit_text(draw, text, width=box_w, height=box_h, max_size=max_size)
+    size = getattr(font, "size", None) or max_size
+    line_h = size * 1.3
+    top = y + inset + max(0.0, (box_h - len(lines) * line_h) / 2)
+    for row, line in enumerate(lines):
+        offset = 0 if align == "left" else max(0, (box_w - text_width(draw, line, font)) / 2)
+        draw.text((x + inset + offset, top + row * line_h), line, fill=colour, font=font)
 
 
 def _mix(colour: tuple[int, int, int], background: tuple[int, int, int], alpha: float) -> tuple[int, int, int]:
@@ -90,18 +182,27 @@ class ProgramRenderer:
                 width=4,
             )
             if progress > 0.5:
-                draw.multiline_text(
-                    (element.x + 24, element.y + 24 + offset),
+                draw_block(
+                    draw,
                     element.text,
-                    fill=_mix(ink, (255, 255, 255), alpha),
-                    font=_font(max(20, int(element.height * 0.24))),
+                    x=element.x,
+                    y=element.y + offset,
+                    width=element.width,
+                    height=element.height,
+                    colour=_mix(ink, (255, 255, 255), alpha),
+                    max_size=max(20, int(element.height * 0.34)),
                 )
         elif element.kind == "text":
-            draw.text(
-                (element.x, element.y + offset),
+            draw_block(
+                draw,
                 element.text,
-                fill=colour,
-                font=_font(max(24, int(element.height * 0.7))),
+                x=element.x,
+                y=element.y + offset,
+                width=element.width,
+                height=element.height,
+                colour=colour,
+                max_size=max(24, int(element.height * 0.9)),
+                inset=0,
             )
         elif element.kind == "label":
             width = int(element.width * (0.4 + 0.6 * progress))
@@ -110,11 +211,17 @@ class ProgramRenderer:
                 radius=14,
                 fill=_mix(accent, (255, 255, 255), alpha),
             )
-            draw.text(
-                (element.x + 12, element.y + 10 + offset),
+            draw_block(
+                draw,
                 element.text,
-                fill=(255, 255, 255),
-                font=_font(max(18, int(element.height * 0.45))),
+                x=element.x,
+                y=element.y + offset,
+                width=element.width,
+                height=element.height,
+                colour=(255, 255, 255),
+                max_size=max(18, int(element.height * 0.5)),
+                inset=12,
+                align="center",
             )
         elif element.kind == "arrow" and len(element.points) >= 2:
             (x0, y0), (x1, y1) = element.points[0], element.points[-1]
