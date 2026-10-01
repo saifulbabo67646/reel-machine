@@ -75,6 +75,9 @@ def test_recipe_roles_resolve_to_live_providers(tmp_path) -> None:
     settings = _settings(source="mock", workdir=tmp_path / "w")
     with resolve_recipe_providers(NadeshikoCutRecipe().spec, settings) as providers:
         assert providers.pin("source") == "mock"
+        # a provider's version is part of the pin, so a parsing fix invalidates the
+        # stage outputs it produced instead of serving them from the cache
+        assert providers.pin("corpus") == "nadeshiko:1"
         assert providers["corpus"].name == "nadeshiko"
         assert providers["source"].name == "mock"
         assert "source" in providers

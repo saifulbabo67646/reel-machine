@@ -129,15 +129,18 @@ class DoodleRecipe:
         if provider is not None and not provider.missing():
             listing = provider.voices()
             if listing is not None and requested == provider_name:
-                ids = {voice.id for voice in listing}
-                names = {voice.name.lower() for voice in listing if voice.name}
-                wanted = inputs.voice.split(":", 1)[1].lower()
-                if wanted and wanted not in ids and wanted not in names:
+                # a voice may be named by its full id, its short id, or its name
+                known = {voice.id.lower() for voice in listing}
+                known |= {voice.id.split(":", 1)[-1].lower() for voice in listing}
+                known |= {voice.name.lower() for voice in listing if voice.name}
+                wanted_raw = inputs.voice.strip().lower()
+                wanted = wanted_raw.split(":", 1)[1] if ":" in wanted_raw else wanted_raw
+                if wanted and wanted_raw not in known and wanted not in known:
                     checks.append(
                         CheckResult(
                             name="voice_exists",
                             ok=False,
-                            detail=f"{wanted!r} is not one of: {', '.join(sorted(ids)[:6])}",
+                            detail=f"{inputs.voice!r} is not one of: {', '.join(sorted(known)[:6])}",
                         )
                     )
 

@@ -75,6 +75,7 @@ def merge_translation(ayahs: list[AyahMaterial], payload: dict[str, Any]) -> str
 
 class AlQuranCloudCorpus:
     name = "alquran_cloud"
+    version = "v1"
 
     def __init__(
         self,
@@ -120,6 +121,15 @@ class AlQuranCloudCorpus:
                 hint=f"use an edition id like ar.alafasy, or one of: {known}",
             )
         return edition
+
+    def resolve_reciter(self, reciter: str) -> tuple[str, str]:
+        """The edition id for a reciter name — used by `probe` to fail early."""
+        edition = self._reciter_edition(reciter)
+        return edition, edition
+
+    def resolve_translation(self, translation: str) -> tuple[str, str]:
+        edition = self._translation_edition(translation)
+        return edition, edition
 
     def _translation_edition(self, translation: str) -> str:
         text = (translation or "").strip()

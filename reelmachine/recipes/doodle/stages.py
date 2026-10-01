@@ -155,13 +155,23 @@ class NarrationStage:
             local = workdir / f"{beat.id}{suffix}"
             shutil.copy2(speech.path, local)
             paths.append(local)
+            # a beat's timings arrive on that beat's own clock; shift them onto the
+            # reel's timeline so every later stage reads one coordinate system
+            words = [
+                WordSpan(
+                    text=word.text,
+                    start_ms=cursor + word.start_ms,
+                    end_ms=cursor + word.end_ms,
+                )
+                for word in (speech.segments[0].words if speech.segments else [])
+            ]
             segments.append(
                 NarrationSegment(
                     beat_id=beat.id,
                     text=beat.narration,
                     start_ms=cursor,
                     end_ms=cursor + duration,
-                    words=list(speech.segments[0].words) if speech.segments else [],
+                    words=words,
                 )
             )
             cursor += duration
@@ -302,8 +312,10 @@ class PrepStage:
         raw_dir.mkdir(parents=True, exist_ok=True)
         final_dir.mkdir(parents=True, exist_ok=True)
 
-        def render_one(scene: SceneSpec) -> Path:
+        def render_one(scene: SceneSpec) -> tuple[Path, Path, Path | None]:
+            """`(raw, normalised, art)` — the raw track keeps the art's own geometry."""
             raw = raw_dir / f"{scene.id}.mp4"
+            art: Path | None = None
             if scene.mode == "stroke":
                 art = ctx.assets.get(scene.line_art_asset or "")
                 params = style.params or {}
@@ -332,7 +344,7 @@ class PrepStage:
                 duration_ms=scene.duration_ms,
                 cancel=ctx.cancel,
             )
-            return final
+            return raw, final, art
 
         preflight: dict[str, Any] = {"skipped": not inputs.preflight}
         ordered = list(payload.scenes)
@@ -340,14 +352,18 @@ class PrepStage:
         rendered: dict[str, Path] = {}
         if inputs.preflight and representative is not None:
             ctx.progress.detail(f"  · preflight: scene {representative.index} ({representative.id})")
-            path = render_one(representative)
+            raw_path, path, art = render_one(representative)
             info = ffmpeg.probe(path)
             try:
                 ink = last_frame_stddev(path, settings=settings)
             except Exception:  # noqa: BLE001 - an undecodable track is a failed preflight
                 ink = 0.0
             grew, counts = (
-                ink_growth(path, settings=settings) if inputs.mode == "stroke" else (True, [])
+                # measure on the raw track against the art itself: the hand the runtime
+                # draws is not part of the picture and must not count as progress
+                ink_growth(raw_path, settings=settings, art=art)
+                if inputs.mode == "stroke"
+                else (True, [])
             )
             # "it produced a file" is not "it drew something": the canvas must not be
             # blank, and in stroke mode the ink must accumulate rather than being a pan
@@ -378,7 +394,8 @@ class PrepStage:
         for scene in ordered:
             if scene.id in rendered:
                 continue
-            rendered[scene.id] = render_one(scene)
+            _, final, _ = render_one(scene)
+            rendered[scene.id] = final
 
         tracks: list[SceneTrack] = []
         for scene in ordered:

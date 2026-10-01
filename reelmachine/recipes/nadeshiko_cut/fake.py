@@ -18,6 +18,7 @@ MEDIA_ID = "MOCKMEDIA001"
 
 class FakeNadeshikoCorpus:
     name = "nadeshiko-fake"
+    version = "1"
 
     def __init__(self, settings: Settings | None = None, *, count: int = 3):
         self.settings = settings or get_settings()

@@ -37,6 +37,7 @@ FAKE_AYAHS: dict[int, list[tuple[str, str]]] = {
 
 class FakeQuranCorpus:
     name = "quran-fake"
+    version = "1"
 
     def __init__(self, settings: Settings | None = None, *, base_url: str = "fake://quran") -> None:
         self.settings = settings

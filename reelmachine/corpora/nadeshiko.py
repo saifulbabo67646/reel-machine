@@ -15,6 +15,7 @@ from ..nadeshiko import NadeshikoClient
 
 class NadeshikoCorpus:
     name = "nadeshiko"
+    version = "1"  # part of the stage cache key; bump when the parsing changes
 
     def __init__(self, settings: Settings | None = None):
         self.settings = settings

@@ -21,30 +21,82 @@ from ....core.timeline import WordSpan
 from ..models import AyahMaterial, QuranSelection, QuranicInputs
 
 API_BASE = "https://api.quran.com/api/v4"
+#: The API returns recitation URLs as bare paths ("Alafasy/mp3/001001.mp3").
+AUDIO_BASE = "https://verses.quran.com"
 
-TRANSLATION_HINTS = {
-    "en.sahih": "sahih international",
-    "en.pickthall": "pickthall",
-    "en.yusufali": "yusuf ali",
-    "ur.jalandhry": "jalandhry",
-    "fr.hamidullah": "hamidullah",
-    "es.cortes": "cortes",
-    "id.kemenag": "kemenag",
+#: The API's own spellings differ from the ones users type; names are compared after
+#: stripping punctuation and case, so an alias only needs a distinctive substring.
+RECITER_ALIASES = {
+    "alafasy": "afasy",
+    "alafasi": "afasy",
+    "afasy": "afasy",
+    "mishary": "mishari",
+    "abdulbasit": "abdulbaset",
+    "abdulbaset": "abdulbaset",
+    "shuraim": "shuraym",
+    "shuraym": "shuraym",
+    "sudais": "sudais",
+    "husary": "husary",
+    "husari": "husary",
+    "minshawi": "minshawi",
+    "shatri": "shatri",
+    "rifai": "rifai",
+    "tablawi": "tablawi",
+}
+
+#: Each alias lists the spellings different mirrors use for the same translation.
+TRANSLATION_ALIASES: dict[str, tuple[str, ...]] = {
+    "en.sahih": ("saheeh international", "sahih international"),
+    "en.pickthall": ("pickthall",),
+    "en.yusufali": ("yusuf ali",),
+    "en.abdelhaleem": ("abdel haleem", "haleem"),
+    "fr.hamidullah": ("hamidullah",),
+    "id.kemenag": ("indonesian islamic affairs",),
 }
 
 _TAGS = re.compile(r"<[^>]+>")
+_SUP = re.compile(r"<sup[^>]*>.*?</sup>", re.IGNORECASE | re.DOTALL)
+_NOT_ALNUM = re.compile(r"[^a-z0-9]+")
+#: Without `word_fields=text_uthmani` the API returns font glyph codes (U+FB50…) for
+#: words, which no shaper will join — they render as isolated letters.
+_GLYPH_FORMS = re.compile(r"[\ufb50-\ufdff\ufe70-\ufeff]")
+
+
+def normalise_name(text: str) -> str:
+    """Lowercase, punctuation-free form for matching the API's transliterations."""
+    return _NOT_ALNUM.sub("", (text or "").lower())
+
+
+def name_matches(needle: str, candidate: str) -> bool:
+    left, right = normalise_name(needle), normalise_name(candidate)
+    if not left or not right:
+        return False
+    return left in right or right in left
 
 
 def strip_html(text: str) -> str:
-    return _TAGS.sub("", text or "").replace("&amp;", "&").strip()
+    """Plain text: footnote markers (`<sup>1</sup>`) go, not just their tags."""
+    return _TAGS.sub("", _SUP.sub("", text or "")).replace("&amp;", "&").strip()
 
 
-def absolute(url: str) -> str:
+def word_text(word: dict[str, Any]) -> str:
+    """A word's Uthmani spelling, never the presentation-form glyph codes."""
+    for key in ("text_uthmani", "text"):
+        value = strip_html(str(word.get(key) or ""))
+        if value and not _GLYPH_FORMS.search(value):
+            return value
+    return ""
+
+
+def absolute(url: str, base: str = AUDIO_BASE) -> str:
+    """A playable URL: the API serves bare paths and protocol-relative URLs."""
     if not url:
         return ""
     if url.startswith("//"):
         return "https:" + url
-    return url
+    if url.startswith(("http://", "https://")):
+        return url
+    return f"{base.rstrip('/')}/{url.lstrip('/')}"
 
 
 def parse_verses(payload: dict[str, Any], *, surah: int, start: int, end: int) -> list[AyahMaterial]:
@@ -58,8 +110,9 @@ def parse_verses(payload: dict[str, Any], *, surah: int, start: int, end: int) -
         if not (start <= ayah_number <= end):
             continue
         words = [
-            strip_html(word.get("text_uthmani") or word.get("text") or "")
+            word_text(word)
             for word in verse.get("words") or []
+            if str(word.get("char_type_name") or "word").lower() == "word"
         ]
         translations = verse.get("translations") or []
         translation = strip_html(translations[0].get("text", "")) if translations else ""
@@ -76,7 +129,9 @@ def parse_verses(payload: dict[str, Any], *, surah: int, start: int, end: int) -
     return materials
 
 
-def parse_recitation(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def parse_recitation(
+    payload: dict[str, Any], *, audio_base: str = AUDIO_BASE
+) -> dict[str, dict[str, Any]]:
     """`{verse_key: {"url": ..., "segments": [word spans]}}` from a by_chapter payload."""
     out: dict[str, dict[str, Any]] = {}
     for entry in payload.get("audio_files") or []:
@@ -84,7 +139,7 @@ def parse_recitation(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
         if not key:
             continue
         out[key] = {
-            "url": absolute(str(entry.get("url") or "")),
+            "url": absolute(str(entry.get("url") or ""), audio_base),
             "segments": entry.get("segments") or [],
         }
     return out
@@ -118,6 +173,7 @@ def word_spans_from_segments(words: list[str], segments: Any) -> list[WordSpan]:
 
 class QuranComCorpus:
     name = "quran_com"
+    version = "v5"  # bump when the parsing changes: it is part of the stage cache key
 
     def __init__(
         self,
@@ -128,6 +184,9 @@ class QuranComCorpus:
     ) -> None:
         self.settings = settings
         self.base_url = (base_url or os.environ.get("REEL_QURAN_API_BASE") or API_BASE).rstrip("/")
+        self.audio_base = (
+            os.environ.get("REEL_QURAN_AUDIO_BASE") or AUDIO_BASE
+        ).rstrip("/")
         self._client = client
         self._recitations: list[dict[str, Any]] | None = None
         self._translations: list[dict[str, Any]] | None = None
@@ -164,17 +223,15 @@ class QuranComCorpus:
         text = (reciter or "").strip()
         if text.isdigit():
             return text, ""
-        needle = text.lower().replace("-", " ").replace("_", " ")
+        needle = RECITER_ALIASES.get(normalise_name(text), text)
         for entry in self._recitation_listing():
-            names = {
-                str(entry.get("reciter_name") or "").lower(),
-                str((entry.get("translated_name") or {}).get("name") or "").lower(),
-            }
-            if any(needle in name or name in needle for name in names if name):
+            names = [
+                str(entry.get("reciter_name") or ""),
+                str((entry.get("translated_name") or {}).get("name") or ""),
+            ]
+            if any(name_matches(needle, name) or name_matches(text, name) for name in names):
                 return str(entry.get("id")), str(entry.get("reciter_name") or "")
-        known = ", ".join(
-            str(entry.get("reciter_name") or "") for entry in self._recitation_listing()[:8]
-        )
+        known = ", ".join(sorted(RECITER_ALIASES))
         raise InvalidInput(
             f"unknown reciter {reciter!r} for the quran.com corpus",
             hint=f"use a recitation id, or one of: {known}",
@@ -184,14 +241,14 @@ class QuranComCorpus:
         text = (translation or "").strip()
         if text.isdigit():
             return text, ""
-        needle = TRANSLATION_HINTS.get(text.lower(), text.lower().replace("en.", "").replace(".", " "))
+        candidates = TRANSLATION_ALIASES.get(text.lower(), (text.replace(".", " "),))
         if self._translations is None:
             self._translations = list(self._get("/resources/translations").get("translations") or [])
         for entry in self._translations:
-            name = str(entry.get("name") or "").lower()
-            if needle and needle in name:
-                return str(entry.get("id")), str(entry.get("name") or "")
-        known = ", ".join(str(entry.get("name") or "") for entry in self._translations[:8])
+            name = str(entry.get("name") or "")
+            if any(name_matches(candidate, name) for candidate in candidates):
+                return str(entry.get("id")), name
+        known = ", ".join(sorted(TRANSLATION_ALIASES))
         raise InvalidInput(
             f"unknown translation {translation!r} for the quran.com corpus",
             hint=f"use a translations id, or one of: {known}",
@@ -210,6 +267,7 @@ class QuranComCorpus:
                 "translations": translation_id,
                 "per_page": 300,
                 "fields": "text_uthmani",
+                "word_fields": "text_uthmani",
             },
         )
         ayahs = parse_verses(verses_payload, surah=inputs.surah, start=start, end=end)
@@ -220,7 +278,7 @@ class QuranComCorpus:
             )
 
         recitation_payload = self._get(f"/recitations/{recitation_id}/by_chapter/{inputs.surah}")
-        audio_by_key = parse_recitation(recitation_payload)
+        audio_by_key = parse_recitation(recitation_payload, audio_base=self.audio_base)
         used_provider_timings = False
         for ayah in ayahs:
             entry = audio_by_key.get(ayah.key) or {}

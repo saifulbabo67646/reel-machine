@@ -27,10 +27,14 @@ class ProviderSet:
             raise KeyError(f"no provider bound to role {role!r}") from exc
 
     def pin(self, role: str) -> str:
+        """`name[:version]` — part of every stage cache key, so a provider that changes
+        its parsing invalidates the outputs it produced rather than serving them again."""
         provider = self.resolved.get(role)
         if provider is None:
             return ""
-        return getattr(provider, "name", "") or type(provider).__name__
+        name = getattr(provider, "name", "") or type(provider).__name__
+        version = str(getattr(provider, "version", "") or "")
+        return f"{name}:{version}" if version else name
 
     def __getitem__(self, role: str) -> Any:
         return self.get(role)

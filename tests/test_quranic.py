@@ -108,6 +108,14 @@ def test_parse_recitation_and_segment_mapping() -> None:
     }
     parsed = parse_recitation(payload)
     assert parsed["1:1"]["url"].startswith("https://")
+    # the live API serves bare relative paths; those get the audio CDN base
+    bare = parse_recitation({"audio_files": [{"verse_key": "1:1", "url": "Alafasy/mp3/001001.mp3"}]})
+    assert bare["1:1"]["url"] == "https://verses.quran.com/Alafasy/mp3/001001.mp3"
+    custom = parse_recitation(
+        {"audio_files": [{"verse_key": "1:1", "url": "Alafasy/mp3/001001.mp3"}]},
+        audio_base="https://audio.example.test/",
+    )
+    assert custom["1:1"]["url"] == "https://audio.example.test/Alafasy/mp3/001001.mp3"
     spans = word_spans_from_segments(WORDS, parsed["1:1"]["segments"])
     assert [span.end_ms for span in spans] == [400, 900, 1400, 2000]
     # a partial mapping would highlight the wrong word and is refused
@@ -158,6 +166,115 @@ def test_quran_com_fetch_over_a_stubbed_transport() -> None:
     assert selection.ayahs[0].audio_url.endswith("1_1.mp3")
     assert len(selection.ayahs[0].word_timings) == len(WORDS)
     assert selection.timings_source == "provider"
+
+
+def test_word_text_never_uses_font_glyph_codes() -> None:
+    """Without `word_fields=text_uthmani` the API returns U+FB50 glyph codes."""
+    from reelmachine.recipes.quranic.corpora.quran_com import strip_html, word_text
+
+    glyph = {"text": "\ufb51", "code_v1": "\ufb51", "text_uthmani": None}
+    assert word_text(glyph) == ""  # never render an unjoinable glyph code
+    assert word_text({"text_uthmani": "بِسْمِ", "text": "\ufb51"}) == "بِسْمِ"
+    assert word_text({"text": "بِسْمِ"}) == "بِسْمِ"
+
+    assert strip_html("<p>Allāh,<sup>1</sup> the Merciful<sup>footnote</sup>.</p>") == "Allāh, the Merciful."
+
+    payload = {
+        "verses": [
+            {
+                "verse_key": "1:1",
+                "text_uthmani": "بِسْمِ ٱللَّهِ",
+                "words": [
+                    {"text_uthmani": "بِسْمِ", "text": "\ufb51", "char_type_name": "word"},
+                    {"text_uthmani": "ٱللَّهِ", "text": "\ufb52", "char_type_name": "word"},
+                    {"text_uthmani": "١", "char_type_name": "end"},  # the ayah marker
+                ],
+                "translations": [{"text": "In the name of Allāh,<sup>1</sup>"}],
+            }
+        ]
+    }
+    ayahs = parse_verses(payload, surah=1, start=1, end=1)
+    assert ayahs[0].words == ["بِسْمِ", "ٱللَّهِ"]
+    assert ayahs[0].translation == "In the name of Allāh,"
+
+
+def test_quran_com_resolves_the_apis_own_spellings() -> None:
+    """The live API says "Mishari Rashid al-`Afasy" and "Saheeh International"."""
+    from reelmachine.core.errors import InvalidInput
+    from reelmachine.recipes.quranic.corpora.quran_com import name_matches, normalise_name
+
+    assert normalise_name("Mishari Rashid al-`Afasy") == "misharirashidalafasy"
+    assert name_matches("alafasy", "Mishari Rashid al-`Afasy")
+    assert name_matches("shuraim", "saudashshuraym") is False  # aliased, not substring
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/resources/recitations"):
+            return httpx.Response(
+                200,
+                json={
+                    "recitations": [
+                        {"id": 7, "reciter_name": "Mishari Rashid al-`Afasy",
+                         "translated_name": {"name": "Mishari Rashid al-`Afasy"}},
+                        {"id": 10, "reciter_name": "Sa`ud ash-Shuraym",
+                         "translated_name": {"name": "Sa`ud ash-Shuraym"}},
+                    ]
+                },
+            )
+        if request.url.path.endswith("/resources/translations"):
+            return httpx.Response(
+                200,
+                json={
+                    "translations": [
+                        {"id": 20, "name": "Saheeh International"},
+                        {"id": 19, "name": "M. Pickthall"},
+                    ]
+                },
+            )
+        return httpx.Response(404)
+
+    corpus = QuranComCorpus(client=httpx.Client(transport=httpx.MockTransport(handler)),
+                            base_url="https://api.example.test/api/v4")
+    assert corpus.resolve_reciter("alafasy") == ("7", "Mishari Rashid al-`Afasy")
+    assert corpus.resolve_reciter("alafasi")[0] == "7"      # common misspelling
+    assert corpus.resolve_reciter("shuraim")[0] == "10"     # alias → API's "shuraym"
+    assert corpus.resolve_translation("en.sahih") == ("20", "Saheeh International")
+    assert corpus.resolve_translation("en.pickthall")[0] == "19"
+    assert corpus.resolve_translation("Saheeh International")[0] == "20"
+    with pytest.raises(InvalidInput):
+        corpus.resolve_reciter("nobody-in-the-listing")
+    with pytest.raises(InvalidInput):
+        corpus.resolve_translation("en.nope")
+
+
+def test_quranic_probe_catches_an_unresolvable_reciter() -> None:
+    """probe must fail on a bad reciter, not the job halfway through (found live)."""
+    from reelmachine.core.recipe import ProbeContext
+    from reelmachine.core.stage import StaticProviders
+    from reelmachine.recipes.quranic.recipe import QuranicRecipe
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/resources/recitations"):
+            return httpx.Response(200, json={"recitations": [
+                {"id": 7, "reciter_name": "Mishari Rashid al-`Afasy"},
+            ]})
+        if request.url.path.endswith("/resources/translations"):
+            return httpx.Response(200, json={"translations": [{"id": 20, "name": "Saheeh International"}]})
+        return httpx.Response(404)
+
+    corpus = QuranComCorpus(client=httpx.Client(transport=httpx.MockTransport(handler)),
+                            base_url="https://api.example.test/api/v4")
+    settings = get_settings()
+    ctx = ProbeContext(config=settings, providers=StaticProviders({"corpus": corpus}))
+
+    report = QuranicRecipe().probe(QuranicInputs(surah=1, ayah_start=1, ayah_end=1), ctx)
+    assert report.ok is True
+    assert any(check.name == "reciter" and check.ok for check in report.checks)
+
+    bad = QuranicRecipe().probe(
+        QuranicInputs(surah=1, ayah_start=1, ayah_end=1, reciter="nobody"), ctx
+    )
+    assert bad.ok is False
+    assert any(check.name == "reciter" and not check.ok for check in bad.checks)
 
 
 def test_alquran_cloud_fetch_over_a_stubbed_transport() -> None:

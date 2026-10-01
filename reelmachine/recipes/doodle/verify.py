@@ -49,22 +49,38 @@ def last_frame_stddev(video: Path, *, settings: Settings) -> float:
     return float(pixels.std())
 
 
+INK_LEVEL = 160
+
+
+def _art_mask(art: Path, size: tuple[int, int]) -> np.ndarray:
+    """Where the source art has ink — the hand that draws it is not part of the art."""
+    from PIL import Image
+
+    with Image.open(art).convert("L") as image:
+        if image.size != size:
+            image = image.resize(size)
+        return np.asarray(image) < INK_LEVEL
+
+
 def ink_growth(
     video: Path,
     *,
     settings: Settings,
+    art: Path | None = None,
     samples: int = 3,
     start_s: float = 0.1,
     end_s: float = 0.9,
 ) -> tuple[bool, list[int]]:
-    """Sample ink pixels across a clip; `(grew, counts)`.
+    """Sample ink across a clip; `(grew, counts)`.
 
-    "It produced a file" is not the same as "it drew something": a blank canvas with a
-    moving hand has ink, but the ink does not *grow*. This is the machine-checkable form
-    of "not a static-image pan".
+    "It produced a file" is not the same as "it drew something". With `art` given, only
+    pixels where the source art has ink are counted — the runtime draws a photographic
+    hand over the canvas, and counting that hand would confuse "the hand moved" with
+    "the picture was drawn".
     """
     counts: list[int] = []
     span = max(0.0, end_s - start_s)
+    mask: np.ndarray | None = None
     for index in range(max(2, samples)):
         at_s = start_s + span * index / (max(2, samples) - 1)
         proc = subprocess.run(
@@ -79,7 +95,14 @@ def ink_growth(
         if proc.returncode != 0:
             return False, counts
         pixels = np.frombuffer(proc.stdout or b"", dtype=np.uint8)
-        counts.append(int((pixels < 160).sum()))
+        dark = pixels < INK_LEVEL
+        if art is not None:
+            if mask is None:
+                info = ffmpeg.probe(video)
+                mask = _art_mask(art, (info.width, info.height))
+            if mask.size == dark.size:
+                dark = dark.reshape(mask.shape) & mask
+        counts.append(int(dark.sum()))
     if len(counts) < 2:
         return False, counts
     grew = counts[-1] >= counts[0] + max(200, int(0.05 * max(1, counts[-1])))

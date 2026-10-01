@@ -232,6 +232,80 @@ def test_cartesia_missing_key_is_reported(monkeypatch) -> None:
     assert provider.describe()["group"] == "narration"
 
 
+def test_narration_timings_are_global_and_drive_a_real_reveal(tmp_path) -> None:
+    """A beat's words arrive on the beat's clock; they must be shifted onto the reel's.
+
+    When they were not, the second scene's reveal window collapsed to its 200 ms floor
+    and the art appeared at once — found by driving the MCP server live.
+    """
+    from reelmachine.core.assets import AssetStore
+    from reelmachine.core.job import Job, JobRequest
+    from reelmachine.core.stage import NullProgress, StageContext, StaticProviders
+    from reelmachine.recipes.doodle.narration.fake import FakeNarration
+    from reelmachine.recipes.doodle.stages import NarrationStage, ScenesStage, ScriptStage
+
+    settings = get_settings()
+    ctx = StageContext(
+        job=Job(id="t", recipe="doodle", request=JobRequest(recipe="doodle")),
+        workdir=tmp_path,
+        assets=AssetStore(tmp_path / "assets"),
+        config=settings,
+        providers=StaticProviders({"narration": FakeNarration(settings)}),
+        progress=NullProgress(),
+    )
+    script = ScriptStage().run(
+        ctx,
+        {
+            "script": [
+                {"narration": "First line.", "keywords": ["One"]},
+                {"narration": "Second line here.", "keywords": ["Two"]},
+            ],
+            "mode": "stroke",
+        },
+    )
+    narration = NarrationStage().run(ctx, script)
+    scenes = ScenesStage().run(ctx, narration)
+
+    second = narration.segments[1]
+    assert second.words, "the fake voice reports word timings"
+    assert all(second.start_ms <= word.start_ms < second.end_ms for word in second.words)
+    assert second.words[-1].end_ms > narration.segments[0].end_ms  # global, not beat-local
+
+    scene = scenes.scenes[1]
+    region = scene.regions[0]
+    assert region.start_ms == 0
+    assert region.duration_ms > 500, "the reveal window must be the narration's, not a floor"
+    assert region.duration_ms <= scene.duration_ms - 400  # room for the gaze tail
+
+
+def test_doodle_probe_validates_the_voice() -> None:
+    """A voice the provider does not serve fails the probe with a clear check."""
+    from reelmachine.core.recipe import ProbeContext
+    from reelmachine.core.stage import StaticProviders
+    from reelmachine.recipes.doodle.narration.fake import FakeNarration
+    from reelmachine.recipes.doodle.recipe import DoodleRecipe
+    from reelmachine.recipes.doodle.scenes.program import ProgramRenderer
+    from reelmachine.recipes.doodle.scenes.stroke import StrokeRenderer
+
+    settings = get_settings()
+    ctx = ProbeContext(
+        config=settings,
+        providers=StaticProviders(
+            {
+                "narration": FakeNarration(settings),
+                "renderer_stroke": StrokeRenderer(settings),
+                "renderer_program": ProgramRenderer(settings),
+            }
+        ),
+    )
+    good = DoodleRecipe().probe(DoodleInputs(topic="x", mode="stroke"), ctx)
+    assert good.ok is True, [(check.name, check.detail) for check in good.checks]
+
+    bad = DoodleRecipe().probe(DoodleInputs(topic="x", voice="fake:missing"), ctx)
+    assert bad.ok is False
+    assert any(check.name == "voice_exists" and not check.ok for check in bad.checks)
+
+
 # ------------------------------------------------------------------ slow: jobs
 
 

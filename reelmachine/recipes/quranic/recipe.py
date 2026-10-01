@@ -11,12 +11,35 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ...core.errors import ReelError
 from ...core.manifest import CheckResult, VerificationReport
 from ...core.recipe import CostNote, ProbeContext, ProbeReport, ProviderReq, RecipeSpec, StageSpec
 from ...core.stage import StageContext
 from ...core.style import StyleNotFound, get_style
 from .models import FileBackground, QuranicInputs
 from .stages import ComposeStage, PrepStage, RenderStage, SelectStage
+
+
+def _resolve_checks(corpus: Any, inputs: QuranicInputs) -> list[CheckResult]:
+    """One check per name the corpus must resolve, so `probe` catches a bad one early."""
+    checks: list[CheckResult] = []
+    resolvers = (
+        ("reciter", getattr(corpus, "resolve_reciter", None), inputs.reciter),
+        ("translation", getattr(corpus, "resolve_translation", None), inputs.translation),
+    )
+    for name, resolver, value in resolvers:
+        if not callable(resolver) or not value:
+            continue
+        try:
+            identifier, resolved = resolver(value)
+            checks.append(CheckResult(name=name, ok=True, detail=resolved or identifier))
+        except ReelError as exc:
+            checks.append(CheckResult(name=name, ok=False, detail=exc.message))
+        except Exception as exc:  # noqa: BLE001 - a probe reports, it does not crash
+            checks.append(
+                CheckResult(name=name, ok=False, detail=f"{type(exc).__name__}: {exc}"[:200])
+            )
+    return checks
 
 
 class QuranicRecipe:
@@ -102,6 +125,10 @@ class QuranicRecipe:
                 detail=getattr(corpus, "name", "") or "none configured",
             )
         )
+        # a reciter or translation the corpus cannot resolve must fail the probe, not
+        # the job halfway through (that is what the first live MCP run caught)
+        if corpus is not None:
+            checks.extend(_resolve_checks(corpus, inputs))
         return ProbeReport(
             ok=all(check.ok for check in checks),
             checks=checks,
