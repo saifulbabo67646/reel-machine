@@ -668,9 +668,13 @@ def _card_events(layout: Layout, vocab: Any, start: str, end: str, font_card: st
             f"{escape_ass_text(tagline)}"
         )
 
-    word = getattr(vocab, "romaji", "") or getattr(vocab, "word", "")
+    word = (
+        getattr(vocab, "romaji_display", "")
+        or getattr(vocab, "romaji", "")
+        or getattr(vocab, "word", "")
+    )
     meaning = getattr(vocab, "meaning", "") or ""
-    kana = getattr(vocab, "kana", "") or ""
+    kana = getattr(vocab, "kana_display", "") or getattr(vocab, "kana", "") or ""
     kanji = getattr(vocab, "word", "") or ""
     level = getattr(vocab, "level_label", "") or ""
 
@@ -691,15 +695,17 @@ def _card_events(layout: Layout, vocab: Any, start: str, end: str, font_card: st
             f"{{\\an5\\pos({cx},{layout.kana_y})}}{escape_ass_text(kana)}"
         )
     if kanji:
-        # A box around the kanji, the way a flashcard would show it: an
-        # unfilled rectangle drawn just behind the glyphs.
-        pad_x = max(46, int(layout.kanji_size * 0.9))
-        pad_y = int(layout.kanji_size * 0.62)
-        events.append(
-            f"Dialogue: 0,{start},{end},CardBox,,0,0,0,,"
-            f"{{\\an7\\pos({cx - pad_x},{layout.kanji_y - pad_y})\\p1"
-            f"\\1c{CARD_GOLD}\\1a&HFF&\\bord3}}{_rect_path(pad_x * 2, pad_y * 2)}{{\\p0}}"
-        )
+        if has_kanji(kanji):
+            # A box around the kanji, the way a flashcard would show it: an
+            # unfilled rectangle drawn just behind the glyphs.  A kana word has
+            # no glyph to frame — a box around it reads as a stray rectangle.
+            pad_x = max(46, int(layout.kanji_size * 0.9))
+            pad_y = int(layout.kanji_size * 0.62)
+            events.append(
+                f"Dialogue: 0,{start},{end},CardBox,,0,0,0,,"
+                f"{{\\an7\\pos({cx - pad_x},{layout.kanji_y - pad_y})\\p1"
+                f"\\1c{CARD_GOLD}\\1a&HFF&\\bord3}}{_rect_path(pad_x * 2, pad_y * 2)}{{\\p0}}"
+            )
         events.append(
             f"Dialogue: 0,{start},{end},CardKanji,,0,0,0,,"
             f"{{\\an5\\pos({cx},{layout.kanji_y})}}{escape_ass_text(kanji)}"

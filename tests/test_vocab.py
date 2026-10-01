@@ -76,6 +76,26 @@ def test_find_word_matches_on_the_reading_too() -> None:
     assert find_word("やくそく", "やくそく") is not None
 
 
+def test_one_word_with_two_kana_spellings_is_shown_as_both() -> None:
+    """The bundled list keys やっぱり/やはり as one entry; the card shows both."""
+    entry = describe("やっぱり")
+    assert entry.level == 4
+    assert entry.has_kanji is False
+    assert entry.two_kana_forms is True
+    assert entry.kana_display == "やはり/やっぱり"
+    assert entry.romaji_display == "Yahari/Yappari"
+
+    # a kanji word keeps its reading/word split exactly as before
+    promise = describe("約束")
+    assert promise.two_kana_forms is False
+    assert promise.kana_display == "やくそく"
+    assert promise.romaji_display == "Yakusoku"
+
+    # a single kana word is unchanged too
+    kana = describe("これ")
+    assert kana.kana_display == kana.kana
+
+
 # -------------------------------------------------------------------- scanning
 
 
