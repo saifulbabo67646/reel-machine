@@ -262,6 +262,32 @@ def test_quranic_probe_catches_an_unresolvable_reciter() -> None:
             ]})
         if request.url.path.endswith("/resources/translations"):
             return httpx.Response(200, json={"translations": [{"id": 20, "name": "Saheeh International"}]})
+        if request.url.path.endswith("/verses/by_chapter/1"):
+            return httpx.Response(
+                200,
+                json={
+                    "verses": [
+                        {
+                            "verse_key": "1:1",
+                            "text_uthmani": "بِسْمِ ٱللَّهِ",
+                            "words": [
+                                {"text_uthmani": "بِسْمِ", "position": 1},
+                                {"text_uthmani": "ٱللَّهِ", "position": 2},
+                            ],
+                            "translations": [{"resource_id": 20, "text": "In the name of Allah"}],
+                        }
+                    ]
+                },
+            )
+        if "/recitations/7/by_chapter/1" in request.url.path:
+            return httpx.Response(
+                200,
+                json={
+                    "audio_files": [
+                        {"verse_key": "1:1", "url": "Alafasy/mp3/001001.mp3"},
+                    ]
+                },
+            )
         return httpx.Response(404)
 
     corpus = QuranComCorpus(client=httpx.Client(transport=httpx.MockTransport(handler)),
@@ -279,6 +305,10 @@ def test_quranic_probe_catches_an_unresolvable_reciter() -> None:
     report = QuranicRecipe().probe(QuranicInputs(surah=1, ayah_start=1, ayah_end=1), ctx)
     assert report.ok is True
     assert any(check.name == "reciter" and check.ok for check in report.checks)
+    # the probe hands the caller the verses, so backgrounds can be chosen by meaning
+    verse = report.details["verses"][0]
+    assert verse["text"] and verse["words"] == ["بِسْمِ", "ٱللَّهِ"]
+    assert verse["translation"] == "In the name of Allah"
 
     bad = QuranicRecipe().probe(
         QuranicInputs(surah=1, ayah_start=1, ayah_end=1, reciter="nobody"), ctx
@@ -465,6 +495,47 @@ def test_pexels_picks_a_portrait_rendition_and_records_its_licence(tmp_path) -> 
     assert all(not path.endswith("portrait.mp4") for path in seen[2:])
 
 
+def test_pexels_photos_and_a_rejected_key(tmp_path) -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        if request.url.path == "/v1/search":  # photos live under /v1, videos do not
+            return httpx.Response(
+                200,
+                json={
+                    "photos": [
+                        {
+                            "id": 9, "width": 1080, "height": 1920,
+                            "url": "https://www.pexels.com/photo/9", "photographer": "Someone",
+                            "src": {"large2x": "https://cdn.test/p.jpg", "original": "https://cdn.test/o.jpg"},
+                        }
+                    ]
+                },
+            )
+        if request.url.path == "/p.jpg":
+            return httpx.Response(200, content=b"jpeg-bytes")
+        return httpx.Response(401, json={"error": "unauthorized"})
+
+    provider = PexelsBackgroundProvider(
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        api_key="test-key",
+        base_url="https://api.test",
+        cache_dir=tmp_path / "cache",
+    )
+    clip = provider.fetch(
+        BackgroundRequest(kind="pexels", query="light through trees", media="photo"),
+        dest_dir=tmp_path,
+    )
+    assert seen[0] == "/v1/search", seen
+    assert clip.still is True and clip.path.read_bytes() == b"jpeg-bytes"
+    assert clip.licence is not None and "Someone" in clip.licence.attribution
+
+    with pytest.raises(ProviderUnavailable) as rejected:
+        provider.fetch(BackgroundRequest(kind="pexels", query="clouds"), dest_dir=tmp_path)
+    assert "PEXELS_API_KEY" in (rejected.value.hint or "")
+
+
 def test_pexels_needs_a_key_and_a_match(tmp_path) -> None:
     provider = PexelsBackgroundProvider(
         client=httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"videos": []}))),
@@ -579,6 +650,126 @@ def test_background_slices_split_the_reel_without_gaps() -> None:
     ), windows
     assert all(end - start >= 15_000 for start, end in windows), windows  # evenly spread
     assert background_slices(1000, 1) == [(0, 1000)]
+
+
+def test_background_scopes_must_tile_the_ayahs() -> None:
+    from reelmachine.recipes.quranic.models import QuranicInputs
+    from reelmachine.recipes.quranic.stages import scope_problem, scoped_slices
+
+    def scoped(*pairs):
+        return QuranicInputs(
+            surah=1,
+            ayah_start=1,
+            ayah_end=5,
+            backgrounds=[
+                {"kind": "pexels", "query": "x", "ayah_start": start, "ayah_end": end}
+                for start, end in pairs
+            ],
+        ).backgrounds
+
+    assert scope_problem(scoped((1, 2), (3, 5)), (1, 5)) == ""
+    assert scope_problem(scoped((3, 5), (1, 2)), (1, 5)) == "backgrounds must follow the ayah order"
+    assert "no background for ayah(s) [4, 5]" in scope_problem(scoped((1, 3)), (1, 5))
+    assert "more than one" in scope_problem(scoped((1, 3), (3, 5)), (1, 5))
+    assert "outside the selected range" in scope_problem(scoped((1, 2), (3, 6)), (1, 5))
+    assert "either scope every background" in scope_problem(
+        [*scoped((1, 2)), QuranicInputs().background], (1, 5)
+    )
+    # unscoped: the even split still applies, and needs no validation
+    assert scope_problem([QuranicInputs().background], (1, 5)) == ""
+
+    windows = [(1, 0, 1000), (2, 1000, 2600), (3, 2600, 4200), (4, 4200, 5800), (5, 5800, 9000)]
+    assert scoped_slices(scoped((1, 2), (3, 5)), windows) == [(0, 2600), (2600, 9000)]
+
+
+@pytest.mark.slow
+def test_quranic_scopes_backgrounds_to_ayah_boundaries(tmp_path) -> None:
+    """A background chosen for an ayah starts and ends where that ayah does."""
+    settings = dataclasses.replace(
+        get_settings(), workdir=tmp_path / "work", outdir=tmp_path / "out"
+    )
+    engine = Engine(
+        settings,
+        provider_overrides={"corpus": "quran-fake", "background_pexels": "fake"},
+    )
+    try:
+        job = engine.submit(
+            JobRequest(
+                recipe="quranic",
+                inputs={
+                    "surah": 1,
+                    "ayah_start": 1,
+                    "ayah_end": 3,
+                    "corpus": "quran-fake",
+                    "backgrounds": [
+                        {"kind": "pexels", "query": "light", "ayah_start": 1, "ayah_end": 1},
+                        {"kind": "pexels", "query": "path", "ayah_start": 2, "ayah_end": 3},
+                    ],
+                    "name": "quran-scoped",
+                },
+            ),
+            caller="local",
+        )
+        finished = engine.wait(job.id, caller="local", timeout_s=300)
+    finally:
+        engine.close()
+
+    assert finished.state is JobState.SUCCEEDED, finished.error
+    timeline = json.loads(
+        Path(next(a.path for a in finished.result.artifacts if a.name == "timeline.json")).read_text(
+            encoding="utf-8"
+        )
+    )
+    windows = [(entry["startMs"], entry["endMs"]) for entry in timeline["meta"]["backgrounds"]]
+    arabic = [caption for caption in timeline["captions"] if caption["lang"] == "ar"]
+    assert len(arabic) == 3
+    first_ayah_end = arabic[0]["end_ms"]
+    assert windows[0] == (0, first_ayah_end), "the first background must end with its ayah"
+    assert windows[1][0] == first_ayah_end and windows[1][1] == timeline["duration_ms"]
+    even_split = timeline["duration_ms"] / 2
+    assert abs(windows[0][1] - even_split) > 200, "this is not an even split"
+
+
+@pytest.mark.slow
+def test_quranic_gives_a_still_background_a_slow_push_in(tmp_path) -> None:
+    """A photograph is not left static: it gets the zoom that keeps a hook shot alive."""
+    from PIL import Image, ImageDraw
+
+    photo = tmp_path / "backdrop.png"
+    image = Image.new("RGB", (1080, 1920), (20, 30, 60))
+    ImageDraw.Draw(image).ellipse((200, 500, 880, 1200), fill=(240, 200, 80))
+    image.save(photo)
+
+    settings = dataclasses.replace(
+        get_settings(), workdir=tmp_path / "work", outdir=tmp_path / "out"
+    )
+    engine = Engine(settings, provider_overrides={"corpus": "quran-fake"})
+    try:
+        job = engine.submit(
+            JobRequest(
+                recipe="quranic",
+                inputs={
+                    "surah": 1,
+                    "ayah_start": 1,
+                    "ayah_end": 1,
+                    "corpus": "quran-fake",
+                    "background": {"kind": "file", "path": str(photo)},
+                    "name": "quran-still",
+                },
+            ),
+            caller="local",
+        )
+        finished = engine.wait(job.id, caller="local", timeout_s=300)
+    finally:
+        engine.close()
+
+    assert finished.state is JobState.SUCCEEDED, finished.error
+    manifest = json.loads(Path(finished.result.manifest).read_text(encoding="utf-8"))
+    background = next(
+        record["asset"] for record in manifest["assets"] if record["asset"]["kind"] == "background"
+    )
+    assert background["provenance"]["provider"] == "tenant"
+    assert manifest["verification"]["ok"] is True
 
 
 @pytest.mark.slow

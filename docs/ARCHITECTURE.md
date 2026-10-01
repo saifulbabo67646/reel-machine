@@ -324,10 +324,13 @@ translation language, style preset, background choice, audio mastering profile. 
 background is `gradient` (procedural, the default, no key), `file` (the caller's own
 clip) or `pexels` (stock; needs `PEXELS_API_KEY` — the deployment may simply not have
 one, in which case the probe says so and nothing silently substitutes). `backgrounds`
-takes a whole list instead: the reel is split evenly across the clips and they are joined
-into one continuous background, each part keeping its own provenance, licence and switch
-window. Either way the chosen clips' provenance and licence land in the manifest, Pexels
-attributions included. Two pluggable corpora: Quran Foundation v4 (text,
+takes a whole list instead: with no scopes the reel is split evenly across the clips;
+with `ayah_start`/`ayah_end` on every entry each clip starts and ends exactly where its
+ayahs do, so a caller can match a verse's meaning to what is behind it (a photo gets a
+slow push-in, a clip is looped). The parts are joined into one continuous background,
+each keeping its own provenance, licence and switch window — all of it in the manifest,
+Pexels attributions included. `probe` hands the caller the verses (text, words,
+translation), which is what makes choosing by meaning possible without a second lookup. Two pluggable corpora: Quran Foundation v4 (text,
 translations, audio, word-level millisecond timings) and alquran.cloud text + mp3quran
 audio with deterministic proportional timings. The timeline is recitation audio +
 word-level highlight captions + translation overlays + background; rendering is

@@ -17,7 +17,14 @@ from ...core.recipe import CostNote, ProbeContext, ProbeReport, ProviderReq, Rec
 from ...core.stage import StageContext
 from ...core.style import StyleNotFound, get_style
 from .models import FileBackground, PexelsBackground, QuranicInputs
-from .stages import ComposeStage, PrepStage, RenderStage, SelectStage, background_choices
+from .stages import (
+    ComposeStage,
+    PrepStage,
+    RenderStage,
+    SelectStage,
+    background_choices,
+    scope_problem,
+)
 
 
 def _resolve_checks(corpus: Any, inputs: QuranicInputs) -> list[CheckResult]:
@@ -122,6 +129,9 @@ class QuranicRecipe:
             checks.append(CheckResult(name="style", ok=False, detail=str(exc)))
 
         choices = background_choices(inputs)
+        problem = scope_problem(choices, inputs.ayah_range())
+        if problem:
+            checks.append(CheckResult(name="background_scopes", ok=False, detail=problem))
         for index, choice in enumerate(choices):
             name = "background" if len(choices) == 1 else f"background[{index}]"
             if isinstance(choice, FileBackground):
@@ -153,16 +163,40 @@ class QuranicRecipe:
         # the job halfway through (that is what the first live MCP run caught)
         if corpus is not None:
             checks.extend(_resolve_checks(corpus, inputs))
+        details: dict[str, Any] = {
+            "surah": inputs.surah,
+            "ayahs": [start, end],
+            "corpus": inputs.corpus,
+            "requested_corpus": inputs.corpus,
+        }
+        # the caller chooses backgrounds and art by meaning, so it is handed the verses
+        if corpus is not None:
+            try:
+                selection = corpus.fetch(inputs)
+            except ReelError as exc:
+                checks.append(CheckResult(name="verses", ok=False, detail=exc.message))
+            except Exception as exc:  # noqa: BLE001 - a probe reports, it does not crash
+                checks.append(
+                    CheckResult(name="verses", ok=False, detail=f"{type(exc).__name__}: {exc}"[:200])
+                )
+            else:
+                verses = [
+                    {
+                        "ayah": ayah.ayah,
+                        "text": ayah.text,
+                        "translation": ayah.translation,
+                        "words": list(ayah.words),
+                    }
+                    for ayah in selection.ayahs
+                ]
+                details["verses"] = verses[:20]
+                if len(verses) > 20:
+                    details["verses_note"] = f"showing 20 of {len(verses)}"
         return ProbeReport(
             ok=all(check.ok for check in checks),
             checks=checks,
             quota_free=True,
-            details={
-                "surah": inputs.surah,
-                "ayahs": [start, end],
-                "corpus": inputs.corpus,
-                "requested_corpus": inputs.corpus,
-            },
+            details=details,
         )
 
     def verify(self, ctx: StageContext, result: dict[str, Any]) -> VerificationReport | None:

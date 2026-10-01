@@ -135,7 +135,7 @@ class PrepStage:
             cursor = end
 
         background_asset, origin, background_windows = _materialise_backgrounds(
-            ctx, inputs, style, duration_ms=total_ms
+            ctx, inputs, style, duration_ms=total_ms, ayah_windows=windows
         )
 
         if provider_hits == len(pieces):
@@ -170,6 +170,55 @@ def background_slices(total_ms: int, count: int) -> list[tuple[int, int]]:
     """Split the reel evenly across `count` clips; the last one takes the remainder."""
     bounds = [int(round(total_ms * index / count)) for index in range(count + 1)]
     return [(bounds[index], bounds[index + 1]) for index in range(count)]
+
+
+def scope_problem(choices: list[Any], ayah_range: tuple[int, int]) -> str:
+    """Why the ayah scopes don't tile `ayah_range` exactly, or "" when they do.
+
+    A caller matching backgrounds to meanings needs the mapping to be unambiguous: every
+    ayah covered once, in order, with no gaps and nothing claimed twice.
+    """
+    scopes = [choice.covers() for choice in choices]
+    if all(scope is None for scope in scopes):
+        return ""
+    if any(scope is None for scope in scopes):
+        return "either scope every background with ayah_start/ayah_end, or none of them"
+    start, end = ayah_range
+    wanted = list(range(start, end + 1))
+    claimed: list[int] = []
+    for scope in scopes:
+        lo, hi = scope  # type: ignore[misc]
+        claimed.extend(range(lo, hi + 1))
+    missing = [ayah for ayah in wanted if ayah not in claimed]
+    extra = [ayah for ayah in claimed if ayah not in wanted]
+    repeated = sorted({ayah for ayah in claimed if claimed.count(ayah) > 1})
+    if missing:
+        return f"no background for ayah(s) {missing}"
+    if extra:
+        return f"background(s) outside the selected range: {extra}"
+    if repeated:
+        return f"ayah(s) claimed by more than one background: {repeated}"
+    if claimed and claimed != sorted(claimed):
+        return "backgrounds must follow the ayah order"
+    return ""
+
+
+def scoped_slices(
+    choices: list[Any], ayah_windows: list[tuple[int, int, int]]
+) -> list[tuple[int, int]]:
+    """One clip's time span per choice, taken from the ayahs it covers."""
+    by_ayah = {ayah: (start, end) for ayah, start, end in ayah_windows}
+    spans: list[tuple[int, int]] = []
+    for choice in choices:
+        lo, hi = choice.covers()  # type: ignore[misc]
+        covered = [by_ayah[ayah] for ayah in range(lo, hi + 1) if ayah in by_ayah]
+        if not covered:
+            raise InvalidInput(
+                f"no recitation for ayah(s) {lo}-{hi} to hang a background on",
+                hint="check the ayah range against what the corpus returned",
+            )
+        spans.append((min(start for start, _ in covered), max(end for _, end in covered)))
+    return spans
 
 
 def _slice_clip(
@@ -214,6 +263,7 @@ def _slice_clip(
             BackgroundRequest(
                 kind=origin,
                 query=str(getattr(choice, "query", "") or ""),
+                media=str(getattr(choice, "media", "video") or "video"),
                 orientation=str(getattr(choice, "orientation", "portrait") or "portrait"),
                 min_height=int(getattr(choice, "min_height", 720) or 720),
                 colors=colors,
@@ -225,11 +275,33 @@ def _slice_clip(
             dest_dir=ctx.workdir,
         )
         source, provenance, licence = clip.path, clip.provenance, clip.licence
+        still = clip.still
         ctx.progress.detail(
-            f"  · background {origin}: {clip.width}x{clip.height} "
+            f"  · background {origin}{' photo' if still else ''}: {clip.width}x{clip.height} "
             f"{clip.duration_ms / 1000:.1f}s → {duration_s:.1f}s on screen"
         )
     out = ctx.workdir / f"background-{start_ms:07d}.mp4"
+    if isinstance(choice, FileBackground):
+        still = source.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".heic"}
+    if still:
+        # a still needs the slow push-in that keeps a hook shot alive
+        vf = (
+            f"scale={width * 2}:{height * 2}:force_original_aspect_ratio=increase,"
+            f"crop={width * 2}:{height * 2},"
+            f"zoompan=z='min(zoom+0.0008,1.3)':d=1:"
+            f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={width}x{height},fps=30"
+        )
+        ffmpeg.run(
+            [
+                settings.ffmpeg, "-hide_banner", "-nostdin", "-y",
+                "-loop", "1", "-framerate", "30", "-i", str(source),
+                "-t", f"{duration_s:.3f}", "-an", "-vf", vf,
+                "-c:v", "libx264", "-preset", settings.preset, "-crf", str(settings.crf),
+                "-pix_fmt", "yuv420p", str(out),
+            ],
+            cancel=ctx.cancel,
+        )
+        return out, provenance, licence, origin
     ffmpeg.run(
         [
             settings.ffmpeg, "-hide_banner", "-nostdin", "-y",
@@ -253,16 +325,28 @@ def _materialise_backgrounds(
     style: StylePack,
     *,
     duration_ms: int,
+    ayah_windows: list[tuple[int, int, int]] = (),
 ) -> tuple[Any, str, list[tuple[str, int, int]]]:
     """The reel's background: every chosen clip, each covering its own slice.
 
     The provider owns where a clip comes from (and its licence); this stage owns the
     reel's geometry, the split and the exact durations, so the render has no surprises.
+    Scoped backgrounds follow their ayahs; unscoped ones split the reel evenly.
     """
     settings: Settings = ctx.config
     width, height = GEOMETRY[inputs.aspect]
     choices = background_choices(inputs)
-    windows = background_slices(duration_ms, len(choices))
+    problem = scope_problem(choices, inputs.ayah_range())
+    if problem:
+        raise InvalidInput(
+            f"the background scopes do not cover the ayahs: {problem}",
+            hint="scope every background with ayah_start/ayah_end, or none of them",
+            details={"ayahs": list(inputs.ayah_range()), "backgrounds": len(choices)},
+        )
+    if choices and choices[0].covers() is not None:
+        windows = scoped_slices(choices, list(ayah_windows))
+    else:
+        windows = background_slices(duration_ms, len(choices))
     parts: list[tuple[Any, str, int, int]] = []
     for index, (choice, (start, end)) in enumerate(zip(choices, windows), start=1):
         ctx.cancel.raise_if_cancelled()

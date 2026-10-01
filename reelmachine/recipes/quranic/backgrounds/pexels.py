@@ -64,6 +64,31 @@ def pick_video_file(
     return video, entry
 
 
+def pick_photo(
+    payload: dict[str, Any],
+    *,
+    orientation: str = "portrait",
+    min_height: int = 1080,
+) -> dict[str, Any] | None:
+    """The best still for the reel: right shape, enough resolution, one clear winner."""
+    best: tuple[float, dict[str, Any]] | None = None
+    for photo in payload.get("photos") or []:
+        width = int(photo.get("width") or 0)
+        height = int(photo.get("height") or 0)
+        if width <= 0 or height <= 0:
+            continue
+        if orientation == "portrait" and height <= width:
+            continue
+        if orientation == "landscape" and width <= height:
+            continue
+        if height < min_height:
+            continue
+        score = abs(height - 1920) + abs(width - 1080) / 4
+        if best is None or score < best[0]:
+            best = (score, photo)
+    return best[1] if best else None
+
+
 class PexelsBackgroundProvider:
     name = "pexels"
     version = "v1"
@@ -101,14 +126,96 @@ class PexelsBackgroundProvider:
             "missing": self.missing(),
         }
 
-    def search(self, query: str, *, orientation: str = "portrait") -> dict[str, Any]:
-        response = self._http().get(
-            f"{self.base_url}/videos/search",
-            headers={"Authorization": self.api_key},
-            params={"query": query, "orientation": orientation, "per_page": PER_PAGE, "size": "medium"},
+    def _get(self, url: str, **kwargs: Any) -> httpx.Response:
+        """Every Pexels failure becomes an actionable error, never a bare HTTPError."""
+        try:
+            response = self._http().get(url, headers={"Authorization": self.api_key}, **kwargs)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            hint = {
+                401: "PEXELS_API_KEY was rejected — check the key",
+                403: "PEXELS_API_KEY is not allowed to do that",
+                429: "Pexels rate limit reached — retry shortly",
+            }.get(status, "retry; if it persists, check the query and the account")
+            raise ProviderUnavailable(
+                f"Pexels answered {status} for this search",
+                hint=hint,
+                details={"url": exc.request.url.path, "provider": self.name},
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise ProviderUnavailable(
+                "could not reach Pexels",
+                hint="check the network, then retry",
+                details={"error": type(exc).__name__, "provider": self.name},
+            ) from exc
+        return response
+
+    def search(self, query: str, *, orientation: str = "portrait", media: str = "video") -> dict[str, Any]:
+        # Pexels is asymmetric: videos live at /videos/search, photos at /v1/search
+        endpoint = "videos/search" if media == "video" else "v1/search"
+        params = {"query": query, "orientation": orientation, "per_page": PER_PAGE}
+        if media == "video":
+            params["size"] = "medium"
+        return self._get(f"{self.base_url}/{endpoint}", params=params).json()
+
+    def _download(self, url: str, dest: Path) -> None:
+        try:
+            with self._http().stream("GET", url) as response:
+                response.raise_for_status()
+                with dest.open("wb") as handle:
+                    for chunk in response.iter_bytes():
+                        handle.write(chunk)
+        except httpx.HTTPError as exc:
+            dest.unlink(missing_ok=True)  # never leave half a file in the cache
+            raise ProviderUnavailable(
+                "the Pexels file could not be downloaded",
+                hint="retry; if it persists, widen the query",
+                details={"error": type(exc).__name__, "provider": self.name},
+            ) from exc
+
+    def _fetch_photo(self, request: BackgroundRequest, dest_dir: Path) -> BackgroundClip:
+        payload = self.search(request.query, orientation=request.orientation, media="photo")
+        photo = pick_photo(payload, orientation=request.orientation, min_height=request.min_height)
+        if photo is None:
+            raise InvalidInput(
+                f"no Pexels photo matched {request.query!r}",
+                hint="try a broader query, or ask for media=video",
+                details={"orientation": request.orientation},
+            )
+        source = (photo.get("src") or {}).get("large2x") or (photo.get("src") or {}).get("original")
+        if not source:
+            raise ProviderUnavailable(
+                "the Pexels photo carried no downloadable file",
+                hint="retry, or ask for media=video",
+                details={"photo": photo.get("id")},
+            )
+        photographer = str(photo.get("photographer") or "")
+        page_url = str(photo.get("url") or "")
+        suffix = Path(str(source).split("?", 1)[0]).suffix or ".jpg"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        cached = self.cache_dir / f"pexels-photo-{photo.get('id')}{suffix}"
+        if not cached.is_file():
+            self._download(str(source), cached)
+        return BackgroundClip(
+            path=cached,
+            provenance=Provenance(
+                provider=self.name,
+                provider_version=self.version,
+                source=page_url or self.base_url,
+                source_id=str(photo.get("id") or ""),
+                upstream="https://www.pexels.com",
+                notes=f"Photo by {photographer} on Pexels" if photographer else "Pexels",
+            ),
+            licence=Licence(
+                name="Pexels licence",
+                url=LICENCE_URL,
+                attribution=f"Photo by {photographer} on Pexels" if photographer else "Pexels",
+            ),
+            width=int(photo.get("width") or 0),
+            height=int(photo.get("height") or 0),
+            still=True,
         )
-        response.raise_for_status()
-        return response.json()
 
     def fetch(self, request: BackgroundRequest, *, dest_dir: Path) -> BackgroundClip:
         if not self.api_key:
@@ -119,7 +226,9 @@ class PexelsBackgroundProvider:
             )
         if not request.query.strip():
             raise InvalidInput("a Pexels background needs a search query")
-        payload = self.search(request.query, orientation=request.orientation)
+        if request.media == "photo":
+            return self._fetch_photo(request, dest_dir)
+        payload = self.search(request.query, orientation=request.orientation, media="video")
         chosen = pick_video_file(payload, orientation=request.orientation, min_height=request.min_height)
         if chosen is None:
             raise InvalidInput(
@@ -135,11 +244,7 @@ class PexelsBackgroundProvider:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         cached = self.cache_dir / f"pexels-{video.get('id')}{suffix}"
         if not cached.is_file():
-            with self._http().stream("GET", link) as response:
-                response.raise_for_status()
-                with cached.open("wb") as handle:
-                    for chunk in response.iter_bytes():
-                        handle.write(chunk)
+            self._download(link, cached)
         return BackgroundClip(
             path=cached,
             provenance=Provenance(

@@ -23,6 +23,7 @@ class BackgroundRequest(BaseModel):
 
     kind: str
     query: str = ""
+    media: str = "video"
     orientation: str = "portrait"
     min_height: int = 720
     colors: list[str] = Field(default_factory=list)
@@ -35,7 +36,7 @@ class BackgroundRequest(BaseModel):
 
 @dataclass(slots=True)
 class BackgroundClip:
-    """A video file plus everything the manifest needs to explain where it came from."""
+    """A media file plus everything the manifest needs to explain where it came from."""
 
     path: Path
     provenance: Provenance = field(default_factory=Provenance)
@@ -43,6 +44,7 @@ class BackgroundClip:
     width: int = 0
     height: int = 0
     duration_ms: int = 0
+    still: bool = False  # a photograph: the stage gives it the slow push-in
 
 
 @runtime_checkable

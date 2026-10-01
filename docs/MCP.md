@@ -95,6 +95,14 @@ Validate inputs and source availability without spending quota or rendering.
 {"recipeId": "nadeshiko-cut", "inputs": {"word": "彼女", "only": ["<mediaPublicId>:3"]}}
 ```
 
+For `quranic` the result's `details.verses` carries the selected ayahs — Arabic text,
+words and translation — so a caller can choose things that depend on meaning (which
+background behind 1:6, which art for a beat) before starting the job:
+
+```json
+{"recipeId": "quranic", "inputs": {"surah": 1, "ayah_start": 1, "ayah_end": 7}}
+```
+
 ### `start_job`
 
 Start a render; returns a job id immediately. An `idempotencyKey` makes retries safe: the

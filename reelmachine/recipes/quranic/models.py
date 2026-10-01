@@ -19,30 +19,48 @@ Aspect = Literal["vertical", "square", "landscape"]
 AudioProfile = Literal["none", "studio", "mobile", "youtube", "tiktok"]
 
 
-class GradientBackground(BaseModel):
+class BackgroundScope(BaseModel):
+    """Which ayahs a background covers.
+
+    With no scope anywhere the reel is split evenly by time; with scopes on every entry
+    each clip follows the ayahs it was chosen for, so a caller can match a verse's meaning
+    to what is on screen behind it.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
+    ayah_start: int | None = Field(default=None, ge=1)
+    ayah_end: int | None = Field(default=None, ge=1)
+
+    def covers(self) -> tuple[int, int] | None:
+        if self.ayah_start is None and self.ayah_end is None:
+            return None
+        start = self.ayah_start if self.ayah_start is not None else self.ayah_end
+        end = self.ayah_end if self.ayah_end is not None else self.ayah_start
+        assert start is not None and end is not None
+        return (start, end) if start <= end else (end, start)
+
+
+class GradientBackground(BackgroundScope):
     kind: Literal["gradient"] = "gradient"
     colors: list[str] = Field(default_factory=list)  # empty → the style palette
     speed: float = 0.02
     angle_deg: float = 135.0
 
 
-class FileBackground(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class FileBackground(BackgroundScope):
     kind: Literal["file"] = "file"
     path: str
     fit: Literal["cover", "contain"] = "cover"
 
 
-class PexelsBackground(BaseModel):
-    """A stock clip: the deployment needs `PEXELS_API_KEY`, and the manifest records it."""
-
-    model_config = ConfigDict(extra="forbid")
+class PexelsBackground(BackgroundScope):
+    """A stock clip or photo: the deployment needs `PEXELS_API_KEY`, and the manifest
+    records the licence and the photographer."""
 
     kind: Literal["pexels"] = "pexels"
     query: str
+    media: Literal["video", "photo"] = "video"
     orientation: Literal["portrait", "landscape", "square"] = "portrait"
     min_height: int = 720
 
