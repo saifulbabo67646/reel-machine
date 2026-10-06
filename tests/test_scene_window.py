@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from reelmachine.models import Segment, TextJa, Translation
-from reelmachine.reel import compute_scene_window
+from reelmachine.recipes.nadeshiko_cut.selection import compute_scene_window
 
 
 def seg(public_id: str, start: int, end: int, text: str = "…") -> Segment:

@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 import shutil
@@ -23,10 +24,18 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from . import __version__, ffmpeg, reel as reelmod
+from . import __version__, ffmpeg
 from .align import align_episode, save_timeline
 from .config import get_settings
+from .core.errors import QuotaExceededError, ReelError
+from .core.job import Job, JobRequest, JobState
+from .core.registry import Registry
+from .core.text import slugify
+from .engine import Engine
+from .engine.providers import provider_health
 from .nadeshiko import NadeshikoClient, NadeshikoError, QuotaExceeded
+from .recipes import nadeshiko_cut as reelmod
+from .recipes.nadeshiko_cut import NadeshikoCutInputs, summarise
 from .sources import SourceError, UnresolvedEpisode, get_provider
 
 app = typer.Typer(
@@ -39,14 +48,87 @@ err = Console(stderr=True)
 
 
 def _client(cache: bool = True) -> NadeshikoClient:
+    """The corpus client for the local caller — including its per-caller quota ledger."""
     settings = get_settings()
-    return NadeshikoClient(settings=settings, cache=cache)
+    caller_ledger = settings.workdir / "jobs" / "local" / "quota" / "nadeshiko.json"
+    return NadeshikoClient(settings=dataclasses.replace(settings, ledger_file=caller_ledger), cache=cache)
 
 
 def _fmt_ms(ms: int) -> str:
     seconds, millis = divmod(max(0, int(ms)), 1000)
     minutes, seconds = divmod(seconds, 60)
     return f"{minutes:d}:{seconds:02d}.{millis // 100:1d}"
+
+
+class ConsoleJobProgress:
+    """Prints a job's stage changes and detail lines once each, for a human."""
+
+    def __init__(self, verbose: bool) -> None:
+        self.verbose = verbose
+        self._stage: tuple[str, int, int] | None = None
+        self._detail = ""
+
+    def __call__(self, job: Job) -> None:
+        if not self.verbose:
+            return
+        progress = job.progress
+        key = (progress.stage, progress.stage_index, progress.stages_total)
+        if key != self._stage and progress.stage:
+            self._stage = key
+            console.print(
+                f"[dim]stage {progress.stage_index}/{progress.stages_total}: {progress.stage}[/dim]"
+            )
+        if progress.detail and progress.detail != self._detail:
+            self._detail = progress.detail
+            console.print(progress.detail)
+
+
+def _job_failure(finished: Job) -> None:
+    """Print a failed job's structured error and exit with the right code."""
+    error = finished.error
+    if error is not None and error.code == "QUOTA_EXCEEDED":
+        err.print(f"[red]quota exhausted[/red] {error.message}")
+        sys.exit(2)
+    message = error.message if error is not None else "the job failed"
+    hint = f"\n{error.hint}" if error is not None and error.hint else ""
+    err.print(f"[red]{message}[/red]{hint}")
+    sys.exit(1)
+
+
+def _job_plan(finished: Job) -> dict | None:
+    """The plan artifact of a job, if it got as far as composing one."""
+    for artifact in (finished.result.artifacts if finished.result else []):
+        if artifact.name == "plan.json" and Path(artifact.path).is_file():
+            return json.loads(Path(artifact.path).read_text(encoding="utf-8"))
+    return None
+
+
+def _run_job(engine: Engine, inputs: NadeshikoCutInputs, *, verbose: bool) -> Job:
+    try:
+        job = engine.submit(
+            JobRequest(recipe="nadeshiko-cut", inputs=inputs.model_dump(mode="json")),
+            caller="local",
+        )
+    except QuotaExceededError as exc:
+        err.print(f"[red]quota exhausted[/red] {exc.message}")
+        sys.exit(2)
+    except ReelError as exc:
+        err.print(f"[red]{exc.message}[/red]" + (f"\n{exc.hint}" if exc.hint else ""))
+        sys.exit(1)
+    return engine.wait(job.id, caller="local", on_progress=ConsoleJobProgress(verbose))
+
+
+def _corpus_param(raw: str | None) -> str | None:
+    """CLI `--category anime,jdrama` → the recipe's one corpus string."""
+    categories = _parse_categories(raw)
+    if not categories:
+        return None
+    return "+".join(category.lower() for category in categories)
+
+
+def _only_list(raw: str | None) -> list[str]:
+    pairs = _parse_only(raw)
+    return [f"{media_id}:{episode}" for media_id, episode in (pairs or [])]
 
 
 # ------------------------------------------------------------------------ doctor
@@ -95,6 +177,22 @@ def doctor(
     else:
         console.print("[yellow]no API key: search/plan/build will not run (selftest still will)[/yellow]")
 
+    console.print()
+    health = Table(header_style="bold", title="providers")
+    health.add_column("group")
+    health.add_column("provider")
+    health.add_column("state")
+    health.add_column("detail")
+    for row in provider_health(Registry(), settings):
+        colour = {"ok": "green", "missing": "yellow", "error": "red", "disabled": "dim"}[row["status"]]
+        health.add_row(
+            row["group"],
+            row["name"],
+            f"[{colour}]{row['status']}[/{colour}]",
+            str(row["detail"])[:64],
+        )
+    console.print(health)
+
     if selftest:
         console.print()
         console.print("[bold]selftest[/bold] — synthetic episode, known offset, no API key required")
@@ -137,7 +235,7 @@ def _run_selftest(*, verbose: bool) -> None:
     console.print("[green]selftest passed[/green] — alignment recovers the injected offset")
 
     plan = reelmod.Plan(word="彼女", source="mock")
-    from .reel import PlannedSegment
+    from .recipes.nadeshiko_cut import PlannedSegment
 
     for segment in segments:
         plan.items.append(
@@ -187,6 +285,42 @@ def _run_selftest(*, verbose: bool) -> None:
         sys.exit(1)
 
     console.print("[green]selftest passed[/green] — alignment, cut, subtitle and mux all verified")
+
+    _run_selftest_non_media(settings)
+
+
+def _run_selftest_non_media(settings) -> None:
+    """One recipe that touches no source media, end to end: quranic with the fake corpus."""
+    console.print()
+    console.print("[bold]selftest[/bold] — a non-media recipe: quranic, fake corpus, no source file")
+    engine = Engine(settings, provider_overrides={"corpus": "quran-fake"})
+    try:
+        job = engine.submit(
+            JobRequest(
+                recipe="quranic",
+                inputs={
+                    "surah": 1,
+                    "ayah_start": 1,
+                    "ayah_end": 2,
+                    "corpus": "quran-fake",
+                    "name": "selftest-quranic",
+                },
+            ),
+            caller="local",
+        )
+        finished = engine.wait(job.id, caller="local", timeout_s=300)
+    finally:
+        engine.close()
+    if finished.state is not JobState.SUCCEEDED:
+        err.print(f"[red]selftest FAILED[/red] — quranic: {finished.error}")
+        sys.exit(1)
+    reel = next(a for a in finished.result.artifacts if a.name == "reel.mp4")
+    info = ffmpeg.probe(reel.path)
+    if not (info.has_video and info.has_audio):
+        err.print("[red]selftest FAILED[/red] — the quranic reel has no video or audio stream")
+        sys.exit(1)
+    console.print(f"  quranic: {reel.path} ({info.duration_s:.1f}s · video+audio)")
+    console.print("[green]selftest passed[/green] — one non-media recipe rendered end to end")
 
 
 # ------------------------------------------------------------------------ search
@@ -285,7 +419,7 @@ def mine(
     One reel costs a download; this shows every *other* reel the same file can
     make, so the download is spent once.
     """
-    from .reel import mine_episodes
+    from .recipes.nadeshiko_cut import mine_episodes
 
     targets = _parse_only(",".join(episodes))
     if not targets:
@@ -421,31 +555,34 @@ def plan(
     """Search, select and align — spends API quota, downloads nothing heavy."""
     settings = get_settings()
     ratings = [r.strip().upper() for r in rating.split(",")] if rating else None
-    provider = get_provider(settings=settings)
-    with _client() as client:
-        try:
-            result = reelmod.build_plan(
-                client,
-                word,
-                provider=provider,
-                settings=settings,
-                max_segments=count or settings.max_segments,
-                per_media=per_media,
-                content_rating=ratings,
-                exact_match=exact,
-                verbose=verbose,
-                dry_run=dry_run,
-                only=_parse_only(only),
-                categories=_parse_categories(category),
-                per_category=per_category,
-            )
-        except QuotaExceeded as exc:
-            err.print(f"[red]quota exhausted[/red] {exc}")
-            sys.exit(2)
+    inputs = NadeshikoCutInputs(
+        word=word,
+        mode="plan",
+        corpus=_corpus_param(category),
+        count=count,
+        per_media=per_media,
+        per_category=per_category,
+        content_rating=ratings,
+        exact_match=exact,
+        only=_only_list(only),
+        dry_run=dry_run,
+    )
+    engine = Engine(settings)
+    try:
+        finished = _run_job(engine, inputs, verbose=verbose)
+        plan = _job_plan(finished)
+    finally:
+        engine.close()
+    if finished.state is not JobState.SUCCEEDED:
+        if plan is not None:
+            console.print(summarise(plan))
+        _job_failure(finished)
 
-    target = out or (settings.workdir / f"plan-{reelmod.slugify(word)}.json")
-    result.save(target)
-    console.print(reelmod.summarise(result))
+    assert plan is not None
+    target = out or (settings.workdir / f"plan-{slugify(word)}.json")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(plan, indent=2, ensure_ascii=False), encoding="utf-8")
+    console.print(summarise(plan))
     console.print(f"\nplan: [bold]{target}[/bold]")
 
 
@@ -477,47 +614,115 @@ def build(
     """Plan, cut, subtitle and render a reel."""
     settings = get_settings()
     ratings = [r.strip().upper() for r in rating.split(",")] if rating else None
-    provider = get_provider(settings=settings)
-    with _client() as client:
-        try:
-            result = reelmod.build_plan(
-                client,
-                word,
-                provider=provider,
-                settings=settings,
-                max_segments=count or settings.max_segments,
-                per_media=per_media,
-                content_rating=ratings,
-                exact_match=exact,
-                verbose=verbose,
-                only=_parse_only(only),
-                categories=_parse_categories(category),
-                per_category=per_category,
-            )
-        except QuotaExceeded as exc:
-            err.print(f"[red]quota exhausted[/red] {exc}")
-            sys.exit(2)
-
-    console.print(reelmod.summarise(result))
-    if not result.ok_items:
-        err.print("[red]nothing aligned; not rendering[/red]")
-        sys.exit(1)
-
-    rendered = reelmod.render(
-        result,
-        settings=settings,
-        name=name,
+    inputs = NadeshikoCutInputs(
+        word=word,
+        mode="build",
+        corpus=_corpus_param(category),
+        count=count,
+        per_media=per_media,
+        per_category=per_category,
+        content_rating=ratings,
+        exact_match=exact,
+        only=_only_list(only),
+        aspect=aspect,
         pre_roll_ms=pre,
         post_roll_ms=post,
-        aspect=aspect,
         watermark=watermark,
-        verbose=verbose,
+        name=name,
+        outdir=str(settings.outdir),
     )
+
+    engine = Engine(settings)
+    try:
+        finished = _run_job(engine, inputs, verbose=verbose)
+        plan = _job_plan(finished)
+    finally:
+        engine.close()
+
+    if finished.state is not JobState.SUCCEEDED:
+        if plan is not None:
+            console.print(summarise(plan))
+            if not (plan.get("stats") or {}).get("ok"):
+                err.print("[red]nothing aligned; not rendering[/red]")
+                sys.exit(1)
+        _job_failure(finished)
+
+    assert plan is not None
+    console.print(summarise(plan))
+    artifacts = {artifact.name: artifact for artifact in (finished.result.artifacts if finished.result else [])}
+    manifest = json.loads(Path(finished.result.manifest).read_text(encoding="utf-8")) if finished.result else {}
+    duration_ms = int((manifest.get("timeline") or {}).get("duration_ms") or 0)
     console.print()
-    console.print(f"[green]reel[/green]  {rendered.video}  ({rendered.duration_ms / 1000:.1f}s)")
-    console.print(f"[green]subs[/green]  {rendered.ass}")
-    console.print(f"[green]srt [/green]  {rendered.srt}")
-    console.print(f"[green]meta[/green]  {rendered.manifest}")
+    console.print(f"[green]reel[/green]  {artifacts['reel.mp4'].path}  ({duration_ms / 1000:.1f}s)")
+    console.print(f"[green]subs[/green]  {artifacts['captions.ass'].path}")
+    console.print(f"[green]srt [/green]  {artifacts['captions.srt'].path}")
+    console.print(f"[green]meta[/green]  {artifacts['reel.json'].path}")
+
+
+mcp_app = typer.Typer(add_completion=False, help="Expose the engine to agents over MCP.")
+app.add_typer(mcp_app, name="mcp")
+
+
+@mcp_app.command("serve")
+def mcp_serve(
+    transport: str = typer.Option("stdio", "--transport", help="stdio | streamable-http"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(8765, "--port"),
+    tenants: Optional[Path] = typer.Option(
+        None, "--tenants", help="JSON file of caller tokens and policies."
+    ),
+) -> None:
+    """Serve the engine over MCP — stdio for a local agent, HTTP for a hosted one."""
+    from .mcp.server import serve as serve_mcp
+
+    serve_mcp(
+        transport=transport,
+        host=host,
+        port=port,
+        tenants_path=str(tenants) if tenants else None,
+    )
+
+
+@mcp_app.command("token-hash")
+def mcp_token_hash(
+    token: str = typer.Argument(..., help="Token to hash; use '-' to read it from stdin."),
+) -> None:
+    """Hash a caller token for a tenants file — servers never store the raw token."""
+    from .mcp.tenants import TenantRegistry
+
+    value = sys.stdin.read().strip() if token == "-" else token
+    if not value:
+        err.print("[red]empty token[/red]")
+        raise typer.Exit(2)
+    console.print(TenantRegistry.hash_token(value))
+
+
+@app.command()
+def recipes(
+    json_out: bool = typer.Option(False, "--json", help="Emit raw JSON."),
+) -> None:
+    """List what this installation can make."""
+    engine = Engine(get_settings())
+    try:
+        rows = engine.list_recipes()
+    finally:
+        engine.close()
+    if json_out:
+        console.print_json(json.dumps(rows, ensure_ascii=False))
+        return
+    table = Table(header_style="bold")
+    table.add_column("recipe")
+    table.add_column("title")
+    table.add_column("render modes")
+    table.add_column("cost / unit")
+    for row in rows:
+        table.add_row(
+            row["id"],
+            row["title"],
+            ", ".join(row["renderModes"]) or "-",
+            row["cost"]["unit"] or "-",
+        )
+    console.print(table)
 
 
 # ------------------------------------------------------------------------- debug
@@ -619,7 +824,7 @@ def align(
             f"mapping: local_ms = {timeline.a:.6f} * src_ms {timeline.b:+.0f}  "
             f"(constant offset {timeline.offset_ms:+d} ms)"
         )
-    out = settings.workdir / "timelines" / f"{reelmod.slugify(str(media or url or 'adhoc'))}-ep{ep}.json"
+    out = settings.workdir / "timelines" / f"{slugify(str(media or url or 'adhoc'))}-ep{ep}.json"
     save_timeline(out, timeline, meta={"asset": str(asset.url), "episode": ep})
     console.print(f"timeline: {out}")
     if not timeline.ok:
@@ -770,6 +975,9 @@ def cache(
 
 
 def main() -> None:
+    from .observability import configure_logging
+
+    configure_logging()
     try:
         app()
     except KeyboardInterrupt:

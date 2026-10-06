@@ -1,0 +1,33 @@
+{
+  "id": "doodle.default",
+  "title": "Neutral ink",
+  "summary": "Neutral hand-drawn default: dark ink on paper, sparse accent colour.",
+  "render_modes": ["stroke", "program"],
+  "aspect": "vertical",
+  "palette": {
+    "paper": "#ffffff",
+    "ink": "#1b1b1b",
+    "accent": "#d94f30",
+    "accent2": "#2f6fb2"
+  },
+  "fonts": {
+    "caption": "Helvetica",
+    "title": "Helvetica"
+  },
+  "params": {
+    "stroke_width": 6,
+    "ink_path": "skeleton",
+    "color_fill": "contour-wipe",
+    "hand_follow": 0.35
+  },
+  "licence": {
+    "name": "CC0-1.0",
+    "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "reel-machine default style"
+  },
+  "provenance": {
+    "provider": "reelmachine",
+    "provider_version": "bundled",
+    "source": "data/styles/doodle.default.json"
+  }
+}

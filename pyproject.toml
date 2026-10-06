@@ -1,6 +1,6 @@
 [project]
 name = "reel-machine"
-version = "0.1.0"
+version = "0.2.0"
 description = "Search Japanese dialogue with the Nadeshiko API, cut the matching scenes from your own streaming library with ffmpeg, and render subtitled vertical reels."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,8 +16,68 @@ dependencies = [
 [project.scripts]
 reel = "reelmachine.cli:main"
 
+# Built-in providers register through exactly the same entry points as third-party
+# packages; nothing in the core knows their names.
+[project.entry-points."reelmachine.recipes"]
+nadeshiko-cut = "reelmachine.recipes.nadeshiko_cut.recipe:NadeshikoCutRecipe"
+quranic = "reelmachine.recipes.quranic.recipe:QuranicRecipe"
+doodle = "reelmachine.recipes.doodle.recipe:DoodleRecipe"
+
+[project.entry-points."reelmachine.sources"]
+local = "reelmachine.sources.local:LocalLibraryProvider"
+hls = "reelmachine.sources.hls:HlsProvider"
+vidvault = "reelmachine.sources.vidvault:VidVaultProvider"
+mock = "reelmachine.sources.mock:MockProvider"
+
+[project.entry-points."reelmachine.corpora"]
+nadeshiko = "reelmachine.corpora.nadeshiko:NadeshikoCorpus"
+nadeshiko-fake = "reelmachine.recipes.nadeshiko_cut.fake:FakeNadeshikoCorpus"
+quran_com = "reelmachine.recipes.quranic.corpora.quran_com:QuranComCorpus"
+alquran_cloud = "reelmachine.recipes.quranic.corpora.alquran_cloud:AlQuranCloudCorpus"
+quran-fake = "reelmachine.recipes.quranic.corpora.fake:FakeQuranCorpus"
+
+[project.entry-points."reelmachine.storage"]
+local = "reelmachine.storage.local:LocalStorage"
+memory = "reelmachine.storage:InMemoryStorage"
+s3 = "reelmachine.storage.s3:S3Storage"
+
+[project.entry-points."reelmachine.renderers"]
+stroke = "reelmachine.recipes.doodle.scenes.stroke:StrokeRenderer"
+program = "reelmachine.recipes.doodle.scenes.program:ProgramRenderer"
+
+[project.entry-points."reelmachine.narration"]
+fake = "reelmachine.recipes.doodle.narration.fake:FakeNarration"
+elevenlabs = "reelmachine.recipes.doodle.narration.cloud:ElevenLabsNarration"
+cartesia = "reelmachine.recipes.doodle.narration.cloud:CartesiaNarration"
+
+[project.entry-points."reelmachine.scripts"]
+template = "reelmachine.recipes.doodle.script:TemplateScriptProvider"
+llm = "reelmachine.recipes.doodle.script:LlmScriptProvider"
+
+[project.entry-points."reelmachine.backgrounds"]
+gradient = "reelmachine.recipes.quranic.backgrounds.gradient:GradientBackgroundProvider"
+fake = "reelmachine.recipes.quranic.backgrounds.gradient:SolidBackgroundProvider"
+pexels = "reelmachine.recipes.quranic.backgrounds.pexels:PexelsBackgroundProvider"
+
+[project.entry-points."reelmachine.styles"]
+bundled = "reelmachine.core.style:bundled_style_map"
+
+[project.optional-dependencies]
+# Every optional capability lives behind an extra; the default install is local-first
+# and needs no browser, no Node and no GPU.
+mcp = ["mcp>=2,<3"]
+stroke = ["opencv-python-headless>=4.9", "Pillow>=10", "av>=12"]
+program = ["Pillow>=10"]
+s3 = ["boto3>=1.34"]
+
 [dependency-groups]
-dev = ["pytest>=8.0"]
+dev = [
+    "pytest>=8.0",
+    "mcp>=2,<3",
+    "opencv-python-headless>=4.9",
+    "Pillow>=10",
+    "av>=12",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -25,6 +85,16 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["reelmachine*"]
+
+[tool.setuptools.package-data]
+reelmachine = [
+    "data/*.json",
+    "data/styles/*.json",
+    "vendor/srt-whiteboard-animation/LICENSE",
+    "vendor/srt-whiteboard-animation/UPSTREAM.md",
+    "vendor/srt-whiteboard-animation/assets/*",
+    "vendor/srt-whiteboard-animation/scripts/*.py",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

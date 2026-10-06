@@ -1,0 +1,33 @@
+{
+  "id": "quranic.parchment",
+  "title": "Parchment",
+  "summary": "Warm, high-contrast Arabic text with a calm dark backdrop.",
+  "render_modes": ["quranic"],
+  "aspect": "vertical",
+  "palette": {
+    "background": "#0f1418",
+    "arabic": "#f4ead8",
+    "highlight": "#d8b25c",
+    "translation": "#cfd6dc"
+  },
+  "fonts": {
+    "arabic": "Amiri Quran",
+    "translation": "Helvetica"
+  },
+  "params": {
+    "outline": 3,
+    "shadow": 1,
+    "arabic_size": 64,
+    "translation_size": 34
+  },
+  "licence": {
+    "name": "CC0-1.0",
+    "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "reel-machine default style"
+  },
+  "provenance": {
+    "provider": "reelmachine",
+    "provider_version": "bundled",
+    "source": "data/styles/quranic.parchment.json"
+  }
+}

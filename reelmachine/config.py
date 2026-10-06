@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import re
 import shutil
@@ -134,6 +135,10 @@ class Settings:
     # Pipeline
     workdir: Path = field(default_factory=lambda: PROJECT_ROOT / ".work")
     outdir: Path = field(default_factory=lambda: PROJECT_ROOT / "out")
+    #: Per-caller quota ledger override (a job runs against its caller's ledger).
+    ledger_file: Path | None = None
+    #: Which narration provider the doodle recipe binds (fake | elevenlabs | cartesia).
+    tts: str = "fake"
     aspect: str = "vertical"
     pre_roll_ms: int = 350
     post_roll_ms: int = 450
@@ -179,7 +184,7 @@ class Settings:
 
     @property
     def ledger_path(self) -> Path:
-        return self.workdir / "quota.json"
+        return self.ledger_file or (self.workdir / "quota.json")
 
     def source_headers(self) -> dict[str, str]:
         headers: dict[str, str] = {}
@@ -266,6 +271,7 @@ def get_settings() -> Settings:
         cookie=_env("REEL_SOURCE_COOKIE"),
         workdir=Path(_env("REEL_WORKDIR", str(PROJECT_ROOT / ".work"))).expanduser(),
         outdir=Path(_env("REEL_OUTDIR", str(PROJECT_ROOT / "out"))).expanduser(),
+        tts=(_env("REEL_TTS", "fake") or "fake").strip().lower(),
         aspect=normalise_aspect(_env("REEL_ASPECT", "vertical")),
         pre_roll_ms=_env_int("REEL_PRE_ROLL_MS", 350),
         post_roll_ms=_env_int("REEL_POST_ROLL_MS", 450),
@@ -293,3 +299,89 @@ def get_settings() -> Settings:
     )
     settings.ensure_dirs()
     return settings
+
+
+# ------------------------------------------------------- per-recipe / per-job resolution
+
+#: Settings whose value lands in the manifest because it changes the output.
+OUTPUT_SETTING_ENV: dict[str, str] = {
+    "aspect": "REEL_ASPECT",
+    "pre_roll_ms": "REEL_PRE_ROLL_MS",
+    "post_roll_ms": "REEL_POST_ROLL_MS",
+    "crf": "REEL_CRF",
+    "preset": "REEL_PRESET",
+    "cut_mode": "REEL_CUT_MODE",
+    "cut_pad_ms": "REEL_CUT_PAD_MS",
+    "target_ms": "REEL_TARGET_MS",
+    "match_mode": "REEL_MATCH_MODE",
+    "context_enabled": "REEL_CONTEXT",
+    "context_take": "REEL_CONTEXT_TAKE",
+    "min_clip_ms": "REEL_MIN_CLIP_MS",
+    "max_clip_ms": "REEL_MAX_CLIP_MS",
+    "font_ja": "REEL_FONT_JA",
+    "font_en": "REEL_FONT_EN",
+    "font_card": "REEL_FONT_CARD",
+    "dictionary_offline": "REEL_DICTIONARY_OFFLINE",
+}
+
+
+def recipe_env_name(recipe_id: str, setting: str) -> str:
+    """`REEL_<RECIPE>_<SETTING>` — a recipe-namespaced override."""
+    token = recipe_id.upper().replace("-", "_")
+    return f"REEL_{token}_{setting.upper()}"
+
+
+def _coerce_env(raw: str, template: object) -> object:
+    text = raw.strip()
+    if isinstance(template, bool):
+        return text.lower() in {"1", "true", "yes", "on"}
+    if isinstance(template, int):
+        try:
+            return int(text)
+        except ValueError:
+            return template
+    if isinstance(template, float):
+        try:
+            return float(text)
+        except ValueError:
+            return template
+    return text
+
+
+def resolve_output_config(
+    recipe_id: str,
+    settings: "Settings",
+    overrides: dict[str, object] | None = None,
+) -> tuple["Settings", dict[str, dict[str, object]]]:
+    """Resolve output-affecting settings and record where each value came from.
+
+    Resolution order: job config > `REEL_<RECIPE>_<SETTING>` > `REEL_<SETTING>` > default.
+    """
+    from .core.errors import InvalidInput
+
+    overrides = dict(overrides or {})
+    unknown = sorted(set(overrides) - set(OUTPUT_SETTING_ENV))
+    if unknown:
+        raise InvalidInput(
+            f"unknown job config setting(s): {', '.join(unknown)}",
+            hint="only output-affecting settings can be overridden; recipe inputs carry the rest",
+            details={"unknown": unknown},
+        )
+
+    updates: dict[str, object] = {}
+    provenance: dict[str, dict[str, object]] = {}
+    for key, env_name in OUTPUT_SETTING_ENV.items():
+        current = getattr(settings, key)
+        if key in overrides:
+            value, source = overrides[key], "job"
+        else:
+            recipe_raw = os.environ.get(recipe_env_name(recipe_id, key))
+            if recipe_raw is not None and recipe_raw.strip():
+                value, source = _coerce_env(recipe_raw, current), "recipe-env"
+            elif os.environ.get(env_name, "").strip():
+                value, source = current, "env"
+            else:
+                value, source = current, "default"
+        updates[key] = value
+        provenance[key] = {"value": value, "source": source}
+    return dataclasses.replace(settings, **updates), provenance

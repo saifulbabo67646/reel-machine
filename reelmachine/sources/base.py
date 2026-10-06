@@ -96,6 +96,22 @@ class SourceProvider(ABC):
     def resolve(self, media: Media | None, episode: int, **kwargs: Any) -> EpisodeAsset:
         """Return a playable asset for this episode or raise `UnresolvedEpisode`."""
 
+    def missing(self) -> list[str]:
+        """Unmet requirements — config names, keys, binaries — for this deployment.
+
+        A provider that reports a missing requirement is still discoverable; a
+        deployment can gate it (`REEL_PROVIDERS_DISABLED`) and `reel doctor` says why.
+        """
+        return []
+
+    def describe(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "group": "sources",
+            "description": (type(self).__doc__ or "").strip().splitlines()[0] if type(self).__doc__ else "",
+            "missing": self.missing(),
+        }
+
     def probe(self, asset: EpisodeAsset) -> ffmpeg.MediaInfo:
         if asset.info is None:
             asset.info = ffmpeg.probe(asset.url, headers=asset.headers or None)
@@ -140,23 +156,31 @@ def find_video_files(root: Path, limit: int = 20000) -> list[Path]:
     return found
 
 
-def get_provider(name: str | None = None, settings: Settings | None = None) -> SourceProvider:
+SOURCE_ALIASES = {"m3u8": "hls", "stream": "hls", "vid": "vidvault", "vv": "vidvault"}
+
+
+def resolve_source_name(name: str | None = None, settings: Settings | None = None) -> str:
     settings = settings or get_settings()
-    key = (name or settings.source or "local").lower()
-    if key == "local":
-        from .local import LocalLibraryProvider
+    key = (name or settings.source or "local").strip().lower()
+    return SOURCE_ALIASES.get(key, key)
 
-        return LocalLibraryProvider(settings)
-    if key in {"hls", "m3u8", "stream"}:
-        from .hls import HlsProvider
 
-        return HlsProvider(settings)
-    if key in {"vidvault", "vid", "vv"}:
-        from .vidvault import VidVaultProvider
+def get_provider(
+    name: str | None = None,
+    settings: Settings | None = None,
+    *,
+    registry: Any = None,
+) -> SourceProvider:
+    """Resolve a source provider through the registry (first-party is not special)."""
+    from ..core.registry import Registry
 
-        return VidVaultProvider(settings)
-    if key == "mock":
-        from .mock import MockProvider
-
-        return MockProvider(settings)
-    raise SourceError(f"unknown source provider {key!r} (expected local | hls | vidvault | mock)")
+    settings = settings or get_settings()
+    registry = registry or Registry()
+    key = resolve_source_name(name, settings)
+    known = {entry.lower() for entry in registry.names("sources")}
+    if key not in known:
+        raise SourceError(
+            f"unknown source provider {key!r} (expected local | hls | vidvault | mock)"
+        )
+    provider_class = registry.load("sources", key)
+    return provider_class(settings)

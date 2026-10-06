@@ -306,6 +306,32 @@ def test_build_ass_card_carries_word_reading_meaning_and_kanji():
     assert "N3" in text
 
 
+def test_card_names_both_kana_forms_and_boxes_only_kanji():
+    """やっぱり/やはり are one word with two spellings; a kana word has no box."""
+    from reelmachine.vocab import VocabEntry, describe
+
+    entry = describe("やっぱり")
+    kana_cues = [
+        Cue(start_ms=0, end_ms=2_000, japanese="やっぱり!", english="I knew it!",
+            word="やっぱり", vocab=entry),
+    ]
+    kana_text = build_ass(kana_cues, layout=Layout.for_aspect("vertical"))
+    assert "Yahari/Yappari" in kana_text  # both romanisations
+    assert "やはり/やっぱり" in kana_text  # both spellings
+    assert "N4" in kana_text
+    assert "\\p1" in kana_text            # the card background panel is drawn
+    assert "\\bord3" not in kana_text, "a kana word must not be framed"
+    assert "Style: CardKanji," in kana_text, "the taught word is still shown large"
+
+    kanji_entry = VocabEntry(word="団長", reading="だんちょう", level=3, meaning="leader")
+    kanji_cues = [
+        Cue(start_ms=0, end_ms=2_000, japanese="団長", english="the commander",
+            word="団長", vocab=kanji_entry),
+    ]
+    kanji_text = build_ass(kanji_cues, layout=Layout.for_aspect("vertical"))
+    assert "\\bord3" in kanji_text, "a kanji headword keeps its box"
+
+
 def test_furigana_is_placed_over_the_kanji_it_reads():
     """Furigana must sit above its own characters, not the whole line."""
     from reelmachine.models import Token

@@ -134,6 +134,10 @@ def romaji_display(text: str) -> str:
 # ------------------------------------------------------------------- the list
 
 
+def _has_kanji(text: str) -> bool:
+    return any("\u4e00" <= character <= "\u9fff" for character in text or "")
+
+
 @dataclass(frozen=True, slots=True)
 class VocabEntry:
     word: str                 # kanji / surface form, e.g. 約束
@@ -163,7 +167,37 @@ class VocabEntry:
 
     @property
     def has_kanji(self) -> bool:
-        return any("\u4e00" <= c <= "\u9fff" for c in self.word)
+        return _has_kanji(self.word)
+
+    @property
+    def two_kana_forms(self) -> bool:
+        """True when one word has two kana spellings, e.g. やっぱり / やはり.
+
+        The bundled list keys such pairs as word + reading (both kana), which is
+        not a reading at all — showing only one of them reads as a misspelling.
+        """
+        return (
+            bool(self.word)
+            and self.word != self.reading
+            and not _has_kanji(self.word)
+            and not _has_kanji(self.reading)
+        )
+
+    @property
+    def kana_display(self) -> str:
+        """The kana line: both spellings when the word has two kana forms."""
+        if self.two_kana_forms:
+            return f"{self.kana}/{self.word}"
+        return self.kana
+
+    @property
+    def romaji_display(self) -> str:
+        """The heading: both romanisations (reading first) when there are two forms."""
+        if self.two_kana_forms:
+            alternate = romaji_display(self.word)
+            if self.romaji and alternate:
+                return f"{self.romaji}/{alternate}"
+        return self.romaji
 
     def to_dict(self) -> dict[str, Any]:
         return {

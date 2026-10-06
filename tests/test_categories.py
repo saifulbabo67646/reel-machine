@@ -13,7 +13,7 @@ import pytest
 
 from reelmachine.config import get_settings
 from reelmachine.models import Media, Segment
-from reelmachine.reel import _category_of, select_segments
+from reelmachine.recipes.nadeshiko_cut.selection import _category_of, select_segments
 
 
 def _segment(public_id: str, media_id: str, *, ms: int = 4000, pos: int = 0) -> Segment:

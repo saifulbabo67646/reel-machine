@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  full:
+    name: full (extras installed)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install ffmpeg
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          else
+            brew install ffmpeg
+          fi
+      - name: Sync (dev group includes the mcp, stroke and program extras)
+        run: uv sync --frozen
+      - name: Tests
+        run: uv run pytest -q
+      - name: Selftest (alignment + a non-media recipe end to end)
+        run: uv run reel doctor --selftest -v
+
+  bare:
+    name: bare install (no extras)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Sync the default install only
+        run: uv sync --frozen --no-dev
+      - name: The engine and the CLI work without any extra
+        run: |
+          uv run --no-dev python -c "import reelmachine.engine, reelmachine.mcp.server; print('engine ok')"
+          uv run --no-dev reel recipes
+          uv run --no-dev reel doctor | tail -20
+      - name: The fast tests pass with extras absent (they skip)
+        run: uv run --isolated --no-dev --with pytest pytest -q -m "not slow"
