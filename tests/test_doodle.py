@@ -235,6 +235,7 @@ def test_topic_probe_reports_a_keyless_llm_writer() -> None:
 
 def test_program_text_never_splits_a_word_or_leaves_its_box() -> None:
     """The bug the screenshots caught: mid-word cuts ("balance" → "alance") and overflow."""
+    pytest.importorskip("PIL")  # the program renderer and its measuring are Pillow's
     from PIL import Image, ImageDraw
 
     from reelmachine.recipes.doodle.scenes.program import fit_text, text_width, wrap_to_width
@@ -452,6 +453,7 @@ def test_narration_timings_are_global_and_drive_a_real_reveal(tmp_path) -> None:
     When they were not, the second scene's reveal window collapsed to its 200 ms floor
     and the art appeared at once — found by driving the MCP server live.
     """
+    pytest.importorskip("PIL")  # the stroke scene writer draws its line art with Pillow
     from reelmachine.core.assets import AssetStore
     from reelmachine.core.job import Job, JobRequest
     from reelmachine.core.stage import NullProgress, StageContext, StaticProviders
@@ -502,12 +504,15 @@ def test_doodle_probe_validates_the_voice() -> None:
     from reelmachine.recipes.doodle.scenes.stroke import StrokeRenderer
 
     settings = get_settings()
+    stroke = StrokeRenderer(settings)
+    if stroke.missing():
+        pytest.skip("stroke renderer unavailable: " + "; ".join(stroke.missing()))
     ctx = ProbeContext(
         config=settings,
         providers=StaticProviders(
             {
                 "narration": FakeNarration(settings),
-                "renderer_stroke": StrokeRenderer(settings),
+                "renderer_stroke": stroke,
                 "renderer_program": ProgramRenderer(settings),
             }
         ),

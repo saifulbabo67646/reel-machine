@@ -418,13 +418,19 @@ def test_measured_metrics_change_the_furigana_positions():
 
     text = "確かに昔"
     tokens = [Token(s="確か", r="タシカ", b=0, e=2), Token(s="昔", r="ムカシ", b=3, e=4)]
-    got = {}
+    metrics = {}
+    positions = {}
     for font in ("Hiragino Sans", "YuGothic"):
         m = measure_metrics(font, 56)
         if m == DEFAULT_METRICS:
             pytest.skip("font/ffmpeg unavailable for calibration")
-        got[font] = [x for x, _reading in make_positions(text, tokens, font_size=56, metrics=m)]
-    assert got["Hiragino Sans"] != got["YuGothic"]
+        metrics[font] = m
+        positions[font] = [x for x, _reading in make_positions(text, tokens, font_size=56, metrics=m)]
+    if metrics["Hiragino Sans"] == metrics["YuGothic"]:
+        # neither font exists on this machine and both fell back to the same one, so
+        # the premise of the test — two *different* fonts — does not hold here
+        pytest.skip("this environment maps both fonts to the same one")
+    assert positions["Hiragino Sans"] != positions["YuGothic"]
 
 
 # ------------------------------------------------------------------------- hls
