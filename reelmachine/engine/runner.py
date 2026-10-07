@@ -55,6 +55,24 @@ def config_subset(config: Any) -> dict[str, Any]:
     return {key: getattr(config, key) for key in CONFIG_KEYS if hasattr(config, key)}
 
 
+def payload_field(source: Any, key: str) -> Any:
+    """One field of a cache payload — `"topic"`, or a dotted path like
+    `"inputs.language"`.
+
+    Stage outputs carry the request they were computed for (`inputs`), which is
+    refreshed on every cache hit; a cache key can therefore be narrowed to the
+    *request* fields a stage actually reads, without copying them onto every
+    intermediate output (a copy goes stale the moment a later job changes the
+    input it was copied from).
+    """
+    value: Any = source
+    for part in key.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
 @dataclass(slots=True)
 class StageRun:
     id: str
@@ -165,7 +183,7 @@ def run_stages(
             source = jsonable(stage_payload)
             fields = getattr(stage, "cache_fields", None)
             if fields and isinstance(source, dict):
-                cache_payload: Any = {key: source.get(key) for key in fields}
+                cache_payload: Any = {key: payload_field(source, key) for key in fields}
             else:
                 cache_payload = source
             pins = {role: providers.pin(role) for role in tuple(stage_spec.uses)}
@@ -181,12 +199,21 @@ def run_stages(
                 model = getattr(stage, "output_model", None)
                 run.output = model.model_validate(cached) if model is not None else cached
                 run.output = _restamp_inputs(run.output, stage_payload)
+                # Halting is a property of the request, not of the cached artifact: a
+                # stage whose stop condition depends on the inputs (storyreel's
+                # `mode="transcript"`) must stop the pipeline even when its output was
+                # produced by an earlier job that ran past it.
+                halt_for = getattr(stage, "halt_for", None)
+                if callable(halt_for) and hasattr(run.output, "halt_pipeline"):
+                    run.output.halt_pipeline = bool(halt_for(stage_payload))
                 run.cached = True
                 run.cache_key = cache_key
                 run.finished_ms = now_ms()
                 log.info("stage %s: cache hit", stage_id)
                 outputs[stage_id] = run.output
                 runs.append(run)
+                if getattr(run.output, "halt_pipeline", False):
+                    break
                 if stop_when is not None and stop_when(run, outputs):
                     break
                 continue

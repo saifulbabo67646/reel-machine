@@ -168,6 +168,45 @@ def input_args(
 
 # --------------------------------------------------------------------------- probe
 
+#: Subtitle codecs that are pictures, not text — they cannot become SRT without OCR.
+BITMAP_SUBTITLE_CODECS = {
+    "hdmv_pgs_subtitle",
+    "pgssub",
+    "dvd_subtitle",
+    "dvb_subtitle",
+    "xsub",
+}
+
+
+@dataclass(slots=True)
+class SubtitleTrack:
+    """One subtitle stream, enough to choose and extract it.
+
+    `index` is the absolute stream index (ffprobe's `-map 0:<index>`); `ordinal` is the
+    position among subtitle streams (`-map 0:s:<ordinal>`), which is what ffmpeg's
+    subtitle-relative specifier wants.
+    """
+
+    index: int
+    ordinal: int
+    codec: str = ""
+    language: str = ""
+    title: str = ""
+    forced: bool = False
+    default: bool = False
+
+    @property
+    def text(self) -> bool:
+        return self.codec not in BITMAP_SUBTITLE_CODECS
+
+    def __str__(self) -> str:  # pragma: no cover - display helper
+        bits = [f"#{self.ordinal}", self.codec or "?"]
+        if self.language:
+            bits.append(self.language)
+        if self.forced:
+            bits.append("forced")
+        return " ".join(bits)
+
 
 @dataclass(slots=True)
 class MediaInfo:
@@ -182,10 +221,15 @@ class MediaInfo:
     size_bytes: int = 0
     audio_tracks: int = 0
     audio_langs: list[str] = field(default_factory=list)  # language tag per audio stream
+    subtitle_tracks: list[SubtitleTrack] = field(default_factory=list)
 
     @property
     def aspect(self) -> float:
         return (self.width / self.height) if self.height else 0.0
+
+    def text_subtitles(self) -> list[SubtitleTrack]:
+        """Text subtitle tracks, in stream order."""
+        return [track for track in self.subtitle_tracks if track.text]
 
 
 def _ratio(value: str | None) -> float:
@@ -214,6 +258,7 @@ _FPS_RE = re.compile(r"([\d.]+)\s*fps")
 _HAS_VIDEO_RE = re.compile(r"Stream #\d+:\d+.*?:\s*Video:\s*(\w+)")
 _HAS_AUDIO_RE = re.compile(r"Stream #\d+:\d+.*?:\s*Audio:\s*(\w+)")
 _AUDIO_LANG_RE = re.compile(r"Stream #\d+:\d+(?:\((\w{3})\))?.*?:\s*Audio:")
+_SUBTITLE_RE = re.compile(r"Stream #\d+:(\d+)(?:\((\w{3})\))?.*?:\s*Subtitle:\s*([\w0-9_]+)")
 
 
 def _probe_via_ffmpeg(src: str | Path, *, headers: dict[str, str] | None = None) -> MediaInfo:
@@ -253,6 +298,17 @@ def _probe_via_ffmpeg(src: str | Path, *, headers: dict[str, str] | None = None)
             if not info.has_audio:
                 info.has_audio = True
                 info.acodec = audio.group(1)
+        elif subtitle := _SUBTITLE_RE.search(line):
+            info.subtitle_tracks.append(
+                SubtitleTrack(
+                    index=int(subtitle.group(1)),
+                    ordinal=len(info.subtitle_tracks),
+                    codec=subtitle.group(3),
+                    language=(subtitle.group(2) or "").lower(),
+                    forced="(forced)" in line.lower(),
+                    default="(default)" in line.lower(),
+                )
+            )
 
     if not info.has_video and not info.has_audio:
         raise FFmpegError(cmd, proc.returncode, output)
@@ -309,6 +365,20 @@ def probe(src: str | Path, *, headers: dict[str, str] | None = None) -> MediaInf
             if not info.has_audio:
                 info.has_audio = True
                 info.acodec = stream.get("codec_name") or ""
+        elif kind == "subtitle":
+            tags = stream.get("tags") or {}
+            disposition = stream.get("disposition") or {}
+            info.subtitle_tracks.append(
+                SubtitleTrack(
+                    index=int(stream.get("index") or 0),
+                    ordinal=len(info.subtitle_tracks),
+                    codec=stream.get("codec_name") or "",
+                    language=str(tags.get("language") or "").lower(),
+                    title=str(tags.get("title") or ""),
+                    forced=disposition.get("forced") == 1,
+                    default=disposition.get("default") == 1,
+                )
+            )
     return info
 
 
@@ -387,6 +457,8 @@ def cut_clip(
     headers: dict[str, str] | None = None,
     audio_track: int = 0,
     video: bool = True,
+    zoom: str = "none",
+    zoom_size: tuple[int, int] | None = None,
     cancel: Any = None,
 ) -> Path:
     """Cut `[start_s, start_s+duration_s]` from an episode into a normalised mp4.
@@ -401,10 +473,33 @@ def cut_clip(
     non-zero PTS (one real host reported `start: 0.083401`), and because an
     output `-t` is measured against those timestamps, every clip would come out
     short by exactly that offset — invisible per clip, cumulative across a reel.
+
+    `zoom` adds a slow ken-burns move (`"in"` or `"out"`); it needs the geometry
+    the clip has *after* `scale=-2:{height}`, which the caller knows from a probe —
+    zoompan cannot infer its output size.  `"none"` changes nothing.
     """
     settings = get_settings()
     dest.parent.mkdir(parents=True, exist_ok=True)
     pad_s = duration_s + 0.5
+    chain = f"setpts=PTS-STARTPTS,scale=-2:{height}:flags=lanczos,fps={fps},setsar=1"
+    if zoom and zoom != "none":
+        if zoom not in ("in", "out"):
+            raise ValueError(f"unknown zoom {zoom!r} (none | in | out)")
+        if not zoom_size:
+            raise ValueError(
+                "cut_clip(zoom=…) needs zoom_size=(width, height): the clip's "
+                "geometry after scale=-2:{height} (probe the source to compute it)"
+            )
+        frames = max(1, int(round(duration_s * fps)))
+        rate = 0.10 / frames
+        expression = (
+            f"min(1+{rate:.6f}*on,1.10)" if zoom == "in" else f"max(1.10-{rate:.6f}*on,1.0)"
+        )
+        chain += (
+            f",zoompan=z='{expression}':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+            f":s={int(zoom_size[0])}x{int(zoom_size[1])}:fps={fps}"
+        )
+    chain += f",tpad=stop_mode=clone:stop_duration={pad_s:.3f}"
     cmd = [settings.ffmpeg]
     cmd += input_args(src, headers=headers, seek_s=start_s)
     cmd += ["-map", f"0:a:{audio_track}"]
@@ -412,8 +507,7 @@ def cut_clip(
         cmd += ["-map", "0:v:0"]
         cmd += [
             "-vf",
-            f"setpts=PTS-STARTPTS,scale=-2:{height}:flags=lanczos,fps={fps},setsar=1,"
-            f"tpad=stop_mode=clone:stop_duration={pad_s:.3f}",
+            chain,
             "-c:v",
             "libx264",
             "-profile:v",

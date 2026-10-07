@@ -287,6 +287,41 @@ def test_japanese_audio_wins_over_a_bigger_dub() -> None:
     assert is_japanese(Stream(720, "MKV", 1, 0, "https://x", language="jpn"))
 
 
+def test_a_film_that_is_not_anime_is_not_refused_for_its_audio() -> None:
+    """storyreel passes `audio_pref=[]` or the film's language; `None` stays Japanese.
+
+    The legacy rule must keep working (nadeshiko's alignment needs Japanese audio),
+    while a Hollywood film — which has no Japanese rendition at all — must resolve
+    and prefer its original language over a dub.
+    """
+    english = Stream(720, "MP4", 1, 0, "https://x/eng", language="English")
+    hindi = Stream(1080, "MP4", 1, 0, "https://x/hin", language="Hindi")
+    untagged = Stream(720, "MP4", 1, 0, "https://x/plain")
+
+    # legacy rule: no Japanese → the ladder still answers (with a warning upstream)
+    assert pick_stream([hindi], quality="720").url == "https://x/hin"
+    # "anything goes": the bigger rendition wins again
+    assert pick_stream([english, hindi], quality="1080,720,480,360", audio_pref=[]).url == "https://x/hin"
+    # the film's own language beats a larger dub
+    assert pick_stream([hindi, english], quality="1080,720,480,360", audio_pref=["eng", "en"]).url == "https://x/eng"
+    # nothing matching the preference is still better than refusing to download
+    assert pick_stream([hindi], quality="720", audio_pref=["eng"]).url == "https://x/hin"
+
+    from reelmachine.sources.vidvault import audio_preferred, rank_streams
+
+    assert audio_preferred("japanese", None) and not audio_preferred("hindi", None)
+    assert audio_preferred("hindi", []) and audio_preferred("", ["eng"])
+    assert audio_preferred("eng", ["en"]) and audio_preferred("English", ["eng"])
+    # within one rung, unknown audio outranks a known wrong language
+    wrong_720 = Stream(720, "MP4", 1, 0, "https://x/hin720", language="Hindi")
+    ordered = rank_streams([wrong_720, untagged], quality="720", audio_pref=["eng"])
+    assert ordered[0].url == "https://x/plain"
+    # and a language match outranks a known wrong one
+    match_720 = Stream(720, "MP4", 1, 0, "https://x/eng720", language="English")
+    ordered = rank_streams([wrong_720, match_720], quality="720", audio_pref=["eng"])
+    assert ordered[0].url == "https://x/eng720"
+
+
 # ------------------------------------------------------------- segment planning
 
 

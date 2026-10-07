@@ -393,6 +393,23 @@ def _artifact(name: str, path: Path, kind: AssetKind) -> ArtifactRef:
     )
 
 
+#: Kind for artifacts a stage drops into `<workdir>/artifacts/` by extension.
+_ARTIFACT_KINDS = {
+    ".mp4": AssetKind.VIDEO,
+    ".mkv": AssetKind.VIDEO,
+    ".mov": AssetKind.VIDEO,
+    ".wav": AssetKind.NARRATION,
+    ".mp3": AssetKind.NARRATION,
+    ".m4a": AssetKind.NARRATION,
+    ".srt": AssetKind.SUBTITLE,
+    ".ass": AssetKind.SUBTITLE,
+    ".vtt": AssetKind.SUBTITLE,
+    ".json": AssetKind.REPORT,
+    ".txt": AssetKind.REPORT,
+    ".md": AssetKind.REPORT,
+}
+
+
 def _collect_artifacts(outputs: dict[str, Any], workdir: Path) -> list[ArtifactRef]:
     artifacts: list[ArtifactRef] = []
     render = outputs.get("render")
@@ -416,6 +433,30 @@ def _collect_artifacts(outputs: dict[str, Any], workdir: Path) -> list[ArtifactR
         path = artifact_dir / "timeline.json"
         path.write_text(timeline.model_dump_json(indent=2), encoding="utf-8")
         artifacts.append(_artifact("timeline.json", path, AssetKind.TIMELINE))
+
+    # Whatever a recipe deliberately wrote to an `artifacts/` directory is delivered
+    # too: the job's own, or any stage's (`<job>/run/stages/NN-id/artifacts/`) — the
+    # file names are the interface.
+    claimed = {artifact.name for artifact in artifacts}
+    artifact_dirs = [
+        workdir / "artifacts",
+        *sorted(workdir.glob("stages/*/artifacts")),
+        *sorted(workdir.glob("run/stages/*/artifacts")),
+    ]
+    for directory in artifact_dirs:
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.iterdir()):
+            if not path.is_file() or path.name in claimed:
+                continue
+            artifacts.append(
+                _artifact(
+                    path.name,
+                    path,
+                    _ARTIFACT_KINDS.get(path.suffix.lower(), AssetKind.OTHER),
+                )
+            )
+            claimed.add(path.name)
 
     manifest_path = workdir / "manifest.json"
     if manifest_path.is_file():

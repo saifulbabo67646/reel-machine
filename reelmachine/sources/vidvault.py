@@ -236,6 +236,43 @@ def is_japanese(stream: Stream) -> bool:
     return language in {"japanese", "ja", "jpn", "jp", "日本語"} or language.startswith("jap")
 
 
+def audio_preferred(language: str, prefer: Sequence[str] | None) -> bool:
+    """Whether a rendition's audio tag satisfies the caller's preference.
+
+    Three shapes, because two recipes want different things:
+
+    * `None` — the historical nadeshiko rule: only Japanese audio counts (the
+      dialogue alignment is measured against Nadeshiko's Japanese clips).
+    * `[]` — the storyreel rule: the reel mutes the film, so any audio will do and
+      the rendition must not be refused over its language.
+    * a tag list (`["eng", "en"]`) — that language wins, but an *untagged*
+      rendition is still acceptable: unknown is not wrong, and the caller probes
+      untagged files' audio before committing to a download.
+    """
+    if prefer is None:
+        legacy = language.strip().lower()
+        return legacy in JAPANESE_TAGS or legacy == "日本語" or legacy.startswith("jap")
+    if not prefer:
+        return True
+    tag = (language or "").strip().lower()
+    if not tag:
+        return True
+    wanted = {item.strip().lower() for item in prefer if item and item.strip()}
+    return any(tag == want or tag.startswith(want) or want.startswith(tag) for want in wanted)
+
+
+def _audio_rank(stream: Stream, prefer: Sequence[str] | None) -> int:
+    """0 for "preferable audio", 1 for "known to be something else"."""
+    if prefer is None:
+        return 0 if is_japanese(stream) else 1
+    if not prefer:
+        return 0
+    tag = (stream.language or "").strip()
+    if not tag:
+        return 0  # unknown; probed before download
+    return 0 if audio_preferred(tag, prefer) else 1
+
+
 def parse_ladder(quality: str | None) -> list[int]:
     """Turn a quality setting into a descending preference ladder.
 
@@ -257,23 +294,22 @@ def pick_stream(
     *,
     quality: str = "1080,720,480,360",
     max_age_s: float = 0.0,
+    audio_pref: Sequence[str] | None = None,
     now: float | None = None,
 ) -> Stream | None:
     """Best usable stream, walking the quality ladder from the top down.
 
     Hard filters: VIP-locked entries and empty urls are never usable.
 
-    **Japanese renditions win outright.**  The rest of the pipeline aligns against
-    Nadeshiko's *Japanese* dialogue audio, so a dub cannot be aligned at all — and
-    the CDN does serve dubs (one title here carried Hindi and English tracks and
-    no Japanese).  When any Japanese rendition exists the ladder is walked over
-    those only, even if that means dropping a resolution; a 1080p dub is worth
-    less than a 720p original.  Payloads that state no language fall through to
-    the old behaviour.
+    **A rendition whose audio the caller asked for wins outright.**  For
+    nadeshiko-cut (`audio_pref=None`, the legacy rule) that means Japanese: the
+    dialogue alignment works against Nadeshiko's *Japanese* clips, so a dub cannot
+    be aligned at all.  Storyreel passes the film's own original language (or `[]`
+    for "anything" — its reel mutes the film), so a Hollywood film is not refused
+    because no Japanese rendition exists.
 
     The ladder is walked in order, so `1080,720,480,360` means "1080 if it is
-    actually downloadable, else 720, else 480, else 360" — on the free tier 1080p
-    used to come back `vipLocked` with an empty url, so it fell through to 720p.
+    actually downloadable, else 720, else 480, else 360".
 
     `max_age_s` is a *preference*, not a veto.  `download-proxy` caches its
     responses, so a reply can carry links minted hours ago, but the signature's
@@ -285,8 +321,13 @@ def pick_stream(
     usable = [s for s in streams if s.url and not s.vip_locked]
     if not usable:
         return None
-    japanese = [s for s in usable if is_japanese(s)]
-    usable = japanese or usable
+    if audio_pref is None:
+        wanted = [s for s in usable if is_japanese(s)]
+    elif audio_pref:
+        wanted = [s for s in usable if s.language and audio_preferred(s.language, audio_pref)]
+    else:
+        wanted = []
+    usable = wanted or usable
 
     def age(stream: Stream) -> float:
         value = stream.age_s(now=now)
@@ -332,15 +373,17 @@ def rank_streams(
     quality: str = "1080,720,480,360",
     max_age_s: float = 0.0,
     prefer_hosts: Sequence[str] = (),
+    audio_pref: Sequence[str] | None = None,
     now: float | None = None,
 ) -> list[Stream]:
     """Every usable rendition, in the order they should be *tried*.
 
     The quality ladder stays in charge — a 1080p rendition is still offered
-    before a 720p one — but within a rung the preferred host wins, and a
-    Japanese tag after that.  Returning the whole order rather than one pick is
-    what lets the caller fall back: `pick_stream` answers "which is best", this
-    answers "and then what".
+    before a 720p one — but within a rung the preferred host wins, then the audio
+    the caller asked for (`audio_pref`, with the same three shapes as
+    `pick_stream`).  Returning the whole order rather than one pick is what lets
+    the caller fall back: `pick_stream` answers "which is best", this answers
+    "and then what".
 
     Nothing here guarantees a rendition's audio.  An untagged stream from the
     preferred host is tried first precisely because it is fast, and the caller
@@ -357,7 +400,7 @@ def rank_streams(
     def sort_key(stream: Stream) -> tuple:
         return (
             host_rank(stream, prefer_hosts),
-            0 if is_japanese(stream) else 1,
+            _audio_rank(stream, audio_pref),
             age(stream),
             -stream.size_bytes,
         )
@@ -555,6 +598,7 @@ class VidVaultProvider(SourceProvider):
         season: int | None = None,
         tmdb_id: int | None = None,
         media_type: str | None = None,
+        audio_pref: Sequence[str] | None = None,
         refresh: bool = False,
         verbose: bool = False,
         **_: Any,
@@ -563,6 +607,11 @@ class VidVaultProvider(SourceProvider):
 
         `download=False` answers "is this episode obtainable, and how big is it?"
         without spending bandwidth — `reel plan` uses it.
+
+        `audio_pref` selects which rendition's audio is acceptable: `None` is the
+        historical Japanese-only rule (nadeshiko-cut), `[]` accepts anything
+        (storyreel, whose reel mutes the film), and a tag list prefers that
+        language while still probing untagged renditions before downloading them.
         """
         settings = self.settings
         quality = quality or settings.vidvault_quality
@@ -596,7 +645,7 @@ class VidVaultProvider(SourceProvider):
         )
         streams = self.parse_streams(payload)
         max_age = settings.vidvault_max_link_age_s
-        chosen = pick_stream(streams, quality=quality, max_age_s=max_age)
+        chosen = pick_stream(streams, quality=quality, max_age_s=max_age, audio_pref=audio_pref)
 
         if chosen is None:
             stale = [s for s in streams if s.url and not s.vip_locked]
@@ -610,7 +659,7 @@ class VidVaultProvider(SourceProvider):
                     match.tmdb_id, media_type=match.media_type, season=target_season, episode=episode
                 )
                 streams = self.parse_streams(payload)
-                chosen = pick_stream(streams, quality=quality, max_age_s=max_age)
+                chosen = pick_stream(streams, quality=quality, max_age_s=max_age, audio_pref=audio_pref)
         if chosen is None:
             locked = [s.resolution for s in streams if s.vip_locked]
             if locked:
@@ -638,10 +687,15 @@ class VidVaultProvider(SourceProvider):
                 f"vidvault says {chosen.duration_s}s but Nadeshiko says {claimed}s — "
                 f"season/episode numbering may not line up"
             )
-        if chosen.language and not is_japanese(chosen):
+        if chosen.language and not audio_preferred(chosen.language, audio_pref):
             dub_warning = (
-                f"the only rendition available is tagged {chosen.language!r}, not Japanese — "
-                f"the dialogue alignment needs the original audio and will refuse"
+                f"the only rendition available is tagged {chosen.language!r}, not the audio "
+                f"this run wants"
+                + (
+                    " — the dialogue alignment needs the original audio and will refuse"
+                    if audio_pref is None
+                    else ""
+                )
             )
             length_warning = f"{length_warning}; {dub_warning}" if length_warning else dub_warning
 
@@ -659,6 +713,7 @@ class VidVaultProvider(SourceProvider):
                 "season": target_season,
                 "resolution": chosen.resolution,
                 "sizeBytes": chosen.size_bytes,
+                "audioLanguage": chosen.language,
                 "remoteUrl": chosen.url,
                 "allStreams": [
                     {"resolution": s.resolution, "size": s.size_bytes, "vip": s.vip_locked,
@@ -688,6 +743,7 @@ class VidVaultProvider(SourceProvider):
             quality=quality,
             max_age_s=max_age,
             prefer_hosts=list(getattr(settings, "vidvault_prefer_hosts", []) or []),
+            audio_pref=audio_pref,
         )
         if not candidates:
             raise UnresolvedEpisode(f"{match} ep{episode}: nothing usable to download")
@@ -695,9 +751,10 @@ class VidVaultProvider(SourceProvider):
         path: Path | None = None
         last_error: SourceError | None = None
         for candidate in candidates:
-            # A rendition the CDN itself labels as a dub is never worth trying:
-            # the alignment needs the original audio and would refuse it.
-            if candidate.language and not is_japanese(candidate):
+            # A rendition the CDN itself labels with the wrong audio is never
+            # worth trying: for nadeshiko the alignment would refuse it, and for
+            # storyreel it would put a dub in the reel.
+            if candidate.language and not audio_preferred(candidate.language, audio_pref):
                 if verbose:
                     print(f"    vidvault: skipping {candidate.language} rendition")
                 continue
@@ -706,12 +763,12 @@ class VidVaultProvider(SourceProvider):
             # left to discover the dub at the end.
             if not candidate.language:
                 languages = self.audio_languages(candidate.url, verbose=verbose)
-                if languages and not any(lang in JAPANESE_TAGS for lang in languages):
+                if languages and not any(audio_preferred(lang, audio_pref) for lang in languages):
                     if verbose:
                         print(
                             f"    vidvault: {candidate.resolution}p on "
                             f"{host_of(candidate)} carries {', '.join(languages)} audio, "
-                            f"not Japanese — trying the next rendition"
+                            f"not the audio this run wants — trying the next rendition"
                         )
                     continue
 
@@ -763,6 +820,7 @@ class VidVaultProvider(SourceProvider):
         asset.meta["resolution"] = stream.resolution
         asset.meta["remoteUrl"] = stream.url
         asset.meta["sizeBytes"] = stream.size_bytes
+        asset.meta["audioLanguage"] = stream.language
         if stream.duration_s:
             asset.duration_ms = stream.duration_s * 1000
         return asset
