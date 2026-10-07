@@ -170,6 +170,13 @@ def to_job_error(exc: BaseException) -> JobError:
                 hint="run `reel probe` to check the source configuration",
                 details={"type": name},
             )
+        if isinstance(exc, ffmpeg.MissingFilter):
+            return JobError(
+                code=ErrorCode.RENDER_FAILED,
+                message=str(exc),
+                hint="install an ffmpeg build with libass (Homebrew: `brew install ffmpeg-full`)",
+                details={"type": name},
+            )
         if isinstance(exc, ffmpeg.FFmpegError):
             return JobError(
                 code=ErrorCode.RENDER_FAILED,

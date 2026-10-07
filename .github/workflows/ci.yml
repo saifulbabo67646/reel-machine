@@ -23,8 +23,16 @@ jobs:
           if [ "$RUNNER_OS" = "Linux" ]; then
             sudo apt-get update && sudo apt-get install -y ffmpeg
           else
-            brew install ffmpeg
+            # Homebrew's `ffmpeg` dropped libass in 9.0, without which no render
+            # can burn captions; `ffmpeg-full` is the formula that carries it.
+            # It is keg-only, so the job puts its binaries on PATH itself.
+            brew install ffmpeg-full
+            echo "$(brew --prefix ffmpeg-full)/bin" >> "$GITHUB_PATH"
           fi
+      - name: The ffmpeg must be able to burn captions (libass)
+        run: |
+          ffmpeg -hide_banner -filters | awk '{print $2}' | grep -qx ass
+          ffprobe -version | head -1
       - name: Sync (dev group includes the mcp, stroke and program extras)
         run: uv sync --frozen
       - name: Tests

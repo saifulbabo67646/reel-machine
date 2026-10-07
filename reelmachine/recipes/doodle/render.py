@@ -95,6 +95,7 @@ def compose_doodle(
 ) -> Path:
     if not tracks:
         raise ValueError("no scene tracks to compose")
+    ffmpeg.require_filter("ass", what="burn the captions")
     dest.parent.mkdir(parents=True, exist_ok=True)
     cmd = [settings.ffmpeg, "-hide_banner", "-nostdin", "-y"]
     for track in tracks:

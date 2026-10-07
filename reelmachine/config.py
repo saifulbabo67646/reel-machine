@@ -230,6 +230,15 @@ class Settings:
                 f"ffprobe not found ({self.ffprobe!r}) — falling back to parsing `ffmpeg -i`, "
                 "which works but reports slightly less metadata"
             )
+        if shutil.which(self.ffmpeg):
+            from . import ffmpeg as ffmpeg_mod  # local import: ffmpeg imports this module
+
+            if not ffmpeg_mod.has_filter("ass"):
+                notes.append(
+                    f"ffmpeg has no 'ass' filter ({self.ffmpeg!r} was built without libass) — "
+                    "captions cannot be burned into any render; Homebrew's `ffmpeg` dropped it, "
+                    "install `ffmpeg-full` (or another build with libass)"
+                )
         return notes
 
 

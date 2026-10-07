@@ -12,7 +12,10 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from reelmachine import ffmpeg
+from reelmachine.core.errors import ErrorCode, to_job_error
 
 
 def test_probe_command_is_ffprobe_safe(monkeypatch) -> None:
@@ -45,3 +48,41 @@ def test_input_args_still_disables_stdin_for_ffmpeg() -> None:
     assert "-nostdin" not in ffmpeg.input_args("clip.mp4", nostdin=False)
     quiet = ffmpeg.input_args("clip.mp4", quiet=False)
     assert "-loglevel" not in quiet
+
+
+def test_has_filter_reads_the_filter_list(monkeypatch) -> None:
+    """Homebrew's ffmpeg (9.0) is built without libass — no `ass` filter at all."""
+    ffmpeg.has_filter.cache_clear()
+    listing = (
+        "Filters:\n"
+        " .. ass               V->V       Render ASS subtitles onto input video using libass.\n"
+        " .. scale             V->V       Scale the input video size and/or convert the image format.\n"
+    )
+    monkeypatch.setattr(
+        ffmpeg, "run", lambda cmd, **kwargs: SimpleNamespace(stdout=listing, stderr="", returncode=0)
+    )
+    assert ffmpeg.has_filter("ass")
+    assert ffmpeg.has_filter("scale")
+    assert not ffmpeg.has_filter("subtitles")
+    ffmpeg.has_filter.cache_clear()
+
+
+def test_require_filter_says_what_to_do(monkeypatch) -> None:
+    monkeypatch.setattr(ffmpeg, "has_filter", lambda name: False)
+    with pytest.raises(ffmpeg.MissingFilter) as failure:
+        ffmpeg.require_filter("ass", what="burn the captions")
+    message = str(failure.value)
+    assert "burn the captions" in message and "ffmpeg-full" in message
+    # a filter that is not libass-backed gets the plain message
+    monkeypatch.setattr(ffmpeg, "has_filter", lambda name: True)
+    ffmpeg.require_filter("ass", what="burn the captions")
+
+
+def test_a_missing_filter_is_an_actionable_job_error() -> None:
+    error = to_job_error(
+        ffmpeg.MissingFilter(
+            "this ffmpeg cannot burn the captions: the 'ass' filter is missing — install libass"
+        )
+    )
+    assert error.code == ErrorCode.RENDER_FAILED
+    assert "ffmpeg-full" in error.hint

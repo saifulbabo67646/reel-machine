@@ -22,9 +22,13 @@ cp .env.example .env                  # then edit
 uv run reel doctor --selftest -v      # proves the whole chain with synthetic media
 ```
 
-Requires **ffmpeg** on `PATH` (built and tested against ffmpeg 8.0). `ffprobe` is used
-when present; if your build does not ship one, the tool falls back to `ffmpeg -i` and says
-so in `reel doctor`.
+Requires **ffmpeg** on `PATH` (built and tested against ffmpeg 8.0), **with libass** —
+it is what burns the captions into every render. Homebrew's `ffmpeg` dropped libass in
+9.0, so on macOS install `ffmpeg-full` (`brew install ffmpeg-full` and use
+`$(brew --prefix ffmpeg-full)/bin`); `reel doctor` says so when the build on `PATH`
+cannot do it, and a render refuses with the same message instead of a cryptic filter
+error. `ffprobe` is used when present; if your build does not ship one, the tool falls
+back to `ffmpeg -i` and says so in `reel doctor`.
 
 ---
 

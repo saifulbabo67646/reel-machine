@@ -240,6 +240,43 @@ class MediaInfo:
         return [track for track in self.subtitle_tracks if track.text]
 
 
+class MissingFilter(RuntimeError):
+    """This ffmpeg build lacks a filter the render needs.
+
+    The motivating case: Homebrew's `ffmpeg` formula dropped libass in 9.0 (the
+    extra codecs moved to `ffmpeg-full`), so `ass` and `subtitles` are simply
+    absent on a default macOS install. Without this check the render dies with an
+    unintelligible filtergraph parse error ("No option name near '…'").
+    """
+
+
+@lru_cache(maxsize=None)
+def has_filter(name: str) -> bool:
+    """Whether this ffmpeg build carries a filter (checked once per process)."""
+    settings = get_settings()
+    try:
+        proc = run([settings.ffmpeg, "-hide_banner", "-filters"])
+    except (FFmpegError, OSError):
+        return False
+    for line in (proc.stdout or "").splitlines():
+        fields = line.split()
+        if len(fields) >= 2 and fields[1] == name:
+            return True
+    return False
+
+
+def require_filter(name: str, *, what: str) -> None:
+    """Fail with an actionable error before a filter-less ffmpeg ruins the graph."""
+    if has_filter(name):
+        return
+    hint = (
+        " — install an ffmpeg build with libass (Homebrew: `brew install ffmpeg-full`)"
+        if name in {"ass", "subtitles"}
+        else ""
+    )
+    raise MissingFilter(f"this ffmpeg cannot {what}: the {name!r} filter is missing{hint}")
+
+
 def _ratio(value: str | None) -> float:
     if not value or "/" not in value:
         try:
@@ -632,6 +669,7 @@ def build_reel_video(
 
     vout = "[vcat]"
     if ass_path is not None:
+        require_filter("ass", what="burn the captions")
         escaped = str(ass_path).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
         opts = f"ass='{escaped}'"
         if fonts_dir:

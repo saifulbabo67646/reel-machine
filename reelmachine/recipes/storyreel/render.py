@@ -117,6 +117,7 @@ def render_storyreel(
     """
     if not clips:
         raise ValueError("no clips to render")
+    ffmpeg.require_filter("ass", what="burn the captions")
     if settings is None:
         from ...config import get_settings
 
