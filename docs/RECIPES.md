@@ -97,9 +97,11 @@ deployment gating) and `describe()`. Register by group:
 
 | group | used by | notes |
 |---|---|---|
-| `reelmachine.sources` | `nadeshiko-cut` | `resolve(media, episode) -> EpisodeAsset`, `probe`, `reference_clips` |
+| `reelmachine.sources` | `nadeshiko-cut`, `storyreel` | `resolve(media, episode) -> EpisodeAsset`, `probe`, `reference_clips` |
 | `reelmachine.corpora` | `nadeshiko-cut` (`nadeshiko`), `quranic` (`quran_com`, `alquran_cloud`, `quran-fake`) | per-recipe protocols |
-| `reelmachine.narration` | `doodle` | `synthesize(text, voice=...) -> TimedSpeech` with word timings |
+| `reelmachine.narration` | `doodle`, `storyreel` | `synthesize(text, voice=...) -> TimedSpeech` with word timings |
+| `reelmachine.subtitles` | `storyreel` | `fetch(request) -> SubtitleFetch` — the film's script: embedded, SubDL, OpenSubtitles, or a chain |
+| `reelmachine.story` | `storyreel` | the storytelling brain: `concepts(...)`, `script(...)`; caller-supplied output always wins |
 | `reelmachine.renderers` | `doodle` | `render(scene, ...)` for `stroke` and `program` |
 | `reelmachine.storage` | engine | `local`, `memory`, S3-compatible `s3` |
 | `reelmachine.styles` | all recipes | a `StylePack`, a mapping of them, or a callable returning either |

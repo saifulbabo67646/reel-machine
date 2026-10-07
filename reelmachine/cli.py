@@ -5,6 +5,8 @@
     reel search 彼女             # what the corpus has, with timestamps
     reel plan   彼女             # search + select + align -> plan.json (quota only)
     reel build  彼女             # plan + cut + subtitle + render -> out/*.mp4
+    reel run storyreel -i '{…}'  # any recipe by id, with JSON inputs
+    reel discover --search …     # what to pick from: TMDB search or recent popular
     reel align  --media <id> --ep 3   # debug one episode's timestamp mapping
     reel quota                  # monthly API usage
 """
@@ -972,6 +974,134 @@ def cache(
     size = sum(p.stat().st_size for p in settings.cache_dir.rglob("*") if p.is_file())
     console.print(f"{total} cached file(s), {size / 1e6:.1f} MB in {settings.cache_dir}")
     console.print("re-running a plan/build with identical requests costs no API quota")
+
+
+@app.command()
+def run(
+    recipe: str = typer.Argument(..., help="Recipe id, e.g. storyreel (see `reel recipes`)."),
+    inputs_json: Optional[list[str]] = typer.Option(
+        None,
+        "--input",
+        "-i",
+        help="JSON object, or @file.json holding one; repeatable, later values win.",
+    ),
+    wait: bool = typer.Option(True, "--wait/--no-wait", help="Wait for the job to finish."),
+    json_out: bool = typer.Option(False, "--json", help="Print machine-readable output."),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Run any recipe by id with JSON inputs — the thin client over the engine."""
+    payload: dict = {}
+    for raw in inputs_json or []:
+        text = raw
+        if raw.startswith("@"):
+            path = Path(raw[1:]).expanduser()
+            if not path.is_file():
+                err.print(f"[red]input file not found:[/red] {path}")
+                sys.exit(1)
+            text = path.read_text(encoding="utf-8")
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError as exc:
+            err.print(f"[red]-i expects JSON[/red]: {exc}")
+            sys.exit(1)
+        if not isinstance(parsed, dict):
+            err.print("[red]-i expects a JSON object[/red]")
+            sys.exit(1)
+        payload.update(parsed)
+
+    engine = Engine(get_settings())
+    try:
+        job = engine.submit(JobRequest(recipe=recipe, inputs=payload), caller="local")
+    except ReelError as exc:
+        err.print(f"[red]{exc.message}[/red]" + (f"\n{exc.hint}" if getattr(exc, "hint", "") else ""))
+        sys.exit(1)
+
+    if not wait:
+        console.print(job.id)
+        return
+    finished = engine.wait(job.id, caller="local", on_progress=ConsoleJobProgress(verbose))
+    artifacts = [
+        {
+            "name": artifact.name,
+            "kind": str(artifact.kind),
+            "bytes": artifact.bytes,
+            "path": artifact.path,
+        }
+        for artifact in (finished.result.artifacts if finished.result else [])
+    ]
+    if json_out:
+        console.print_json(
+            json.dumps(
+                {
+                    "jobId": finished.id,
+                    "state": str(finished.state),
+                    "error": finished.error.model_dump() if finished.error else None,
+                    "artifacts": artifacts,
+                },
+                ensure_ascii=False,
+            )
+        )
+    else:
+        console.print(f"{recipe}: [bold]{finished.state}[/bold]  [dim]{finished.id}[/dim]")
+        if artifacts:
+            table = Table(header_style="bold")
+            table.add_column("artifact")
+            table.add_column("kind")
+            table.add_column("size", justify="right")
+            table.add_column("path")
+            for artifact in artifacts:
+                table.add_row(
+                    artifact["name"],
+                    artifact["kind"],
+                    f"{artifact['bytes'] / 1e6:.1f} MB" if artifact["bytes"] > 1e6 else f"{artifact['bytes']} B",
+                    artifact["path"],
+                )
+            console.print(table)
+    if str(finished.state) != "succeeded":
+        _job_failure(finished)
+
+
+@app.command()
+def discover(
+    search: Optional[str] = typer.Option(None, "--search", "-s", help="Search TMDB for a title."),
+    media_type: str = typer.Option("movie", "--type", help="movie | tv"),
+    months: int = typer.Option(12, "--months", help="How far back 'trending' looks."),
+    limit: int = typer.Option(15, "--limit", help="How many titles to list."),
+    json_out: bool = typer.Option(False, "--json", help="Print machine-readable output."),
+) -> None:
+    """What to pick from: popular titles from the last months, or a title search."""
+    from .tmdb import TmdbClient, TmdbError
+
+    client = TmdbClient(settings=get_settings())
+    try:
+        if search:
+            rows = client.find_title(search, media_type=media_type, limit=limit)
+        else:
+            rows = client.discover_recent(media_type=media_type, months=months, limit=limit)
+    except TmdbError as exc:
+        err.print(f"[red]{exc}[/red]")
+        sys.exit(1)
+    if json_out:
+        console.print_json(json.dumps([row.as_dict() for row in rows], ensure_ascii=False))
+        return
+    if not rows:
+        console.print("[yellow]nothing found[/yellow]")
+        return
+    table = Table(header_style="bold")
+    table.add_column("tmdb", justify="right")
+    table.add_column("type")
+    table.add_column("title")
+    table.add_column("year", justify="right")
+    table.add_column("popularity", justify="right")
+    for row in rows:
+        table.add_row(
+            str(row.tmdb_id),
+            row.media_type,
+            row.title,
+            str(row.year or ""),
+            f"{row.popularity:.0f}",
+        )
+    console.print(table)
 
 
 def main() -> None:

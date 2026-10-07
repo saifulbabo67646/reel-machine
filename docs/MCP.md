@@ -103,6 +103,20 @@ background behind 1:6, which art for a beat) before starting the job:
 {"recipeId": "quranic", "inputs": {"surah": 1, "ayah_start": 1, "ayah_end": 7}}
 ```
 
+For `storyreel` a bare `title` resolves through TMDB and reports the ranked candidates
+in `details.candidates` (with a 12-month trending list in `details.trending` when no
+title is given), then checks vidvault availability without downloading anything. The
+job's `mode` decides where it stops — `transcript` after the script is readable,
+`plan` after the top-5 concepts, `build` through the render — and the concept the
+viewer picked from `concepts.json` goes into the build job:
+
+```json
+{"recipeId": "storyreel", "inputs": {"title": "Inception", "mode": "plan"}}
+```
+
+The full agent playbook (the questions, the JSON shapes, the storytelling rules) is
+`docs/STORYREEL_AGENT.md`.
+
 ### `start_job`
 
 Start a render; returns a job id immediately. An `idempotencyKey` makes retries safe: the
