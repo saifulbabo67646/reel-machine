@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,7 @@ from reelmachine.sources.base import EpisodeAsset
 from reelmachine.sources.mock import MockProvider
 
 pytestmark = pytest.mark.slow
+
 
 def stream_dump(path: Path) -> str:
     """ffmpeg's stream listing, without raising on the expected exit code 1.
@@ -48,7 +50,11 @@ It must not survive the cut
 
 @pytest.fixture(scope="module")
 def source_episode(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    settings = get_settings()
+    # its own mock dir: the default one is a shared cache, and building a short
+    # episode into it once poisoned the alignment selftest in a later process
+    settings = replace(
+        get_settings(), mock_dir=tmp_path_factory.mktemp("mockmedia")
+    )
     provider = MockProvider(settings)
     provider.duration_s = 40
     return Path(provider.resolve(None, 1).url)
@@ -150,3 +156,21 @@ def test_embedded_subtitles_do_not_reach_the_reel(release_like: Path, tmp_path: 
     ass = re.sub(r"\{[^}]*\}", "", result.ass.read_text(encoding="utf-8"))
     assert segments[0].japanese in ass
     assert "embedded subtitle" not in ass
+
+
+def test_a_stale_mock_episode_is_rebuilt_not_reused(tmp_path, monkeypatch) -> None:
+    """The mock dir is a cache keyed by filename, so a leftover file must not drive a run.
+
+    Exactly this happened on CI: the fixture above built a 40 s episode into the
+    default mock dir from the test run, and `reel doctor --selftest` — a later
+    process that wants a 150 s episode — silently reused it and failed to align.
+    """
+    settings = replace(get_settings(), mock_dir=tmp_path / "mock")
+
+    monkeypatch.setenv("REEL_MOCK_DURATION", "8")
+    first = MockProvider(settings)
+    assert abs(ffmpeg.probe(first.resolve(None, 1).url).duration_s - 8) <= 1
+
+    monkeypatch.setenv("REEL_MOCK_DURATION", "14")
+    second = MockProvider(settings)
+    assert abs(ffmpeg.probe(second.resolve(None, 1).url).duration_s - 14) <= 1
