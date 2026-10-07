@@ -22,6 +22,7 @@ reel = "reelmachine.cli:main"
 nadeshiko-cut = "reelmachine.recipes.nadeshiko_cut.recipe:NadeshikoCutRecipe"
 quranic = "reelmachine.recipes.quranic.recipe:QuranicRecipe"
 doodle = "reelmachine.recipes.doodle.recipe:DoodleRecipe"
+storyreel = "reelmachine.recipes.storyreel.recipe:StoryReelRecipe"
 
 [project.entry-points."reelmachine.sources"]
 local = "reelmachine.sources.local:LocalLibraryProvider"
@@ -53,6 +54,17 @@ cartesia = "reelmachine.recipes.doodle.narration.cloud:CartesiaNarration"
 [project.entry-points."reelmachine.scripts"]
 template = "reelmachine.recipes.doodle.script:TemplateScriptProvider"
 llm = "reelmachine.recipes.doodle.script:LlmScriptProvider"
+
+[project.entry-points."reelmachine.subtitles"]
+embedded = "reelmachine.recipes.storyreel.subtitles.embedded:EmbeddedSubtitleProvider"
+subdl = "reelmachine.recipes.storyreel.subtitles.subdl:SubdlProvider"
+opensubtitles = "reelmachine.recipes.storyreel.subtitles.opensubtitles:OpenSubtitlesProvider"
+auto = "reelmachine.recipes.storyreel.subtitles.auto:AutoSubtitleProvider"
+fake = "reelmachine.recipes.storyreel.subtitles.fake:FakeSubtitleProvider"
+
+[project.entry-points."reelmachine.story"]
+llm = "reelmachine.recipes.storyreel.story.llm:LlmStoryBrain"
+fake = "reelmachine.recipes.storyreel.story.fake:FakeStoryBrain"
 
 [project.entry-points."reelmachine.backgrounds"]
 gradient = "reelmachine.recipes.quranic.backgrounds.gradient:GradientBackgroundProvider"

@@ -1,0 +1,35 @@
+{
+  "id": "storyreel.hi",
+  "title": "Storyteller (Hindi)",
+  "summary": "Hindi captions in Devanagari. Picks a Devanagari-capable system font (macOS ships Kohinoor Devanagari; on Linux point `fonts.caption` at a Devanagari font such as Noto Sans Devanagari). The font's own licence belongs to the system, not to this pack.",
+  "render_modes": ["story"],
+  "aspect": "vertical",
+  "palette": {
+    "caption": "#ffffff",
+    "highlight": "#ffd166",
+    "overlay": "#ffffff",
+    "shade": "#101010"
+  },
+  "fonts": {
+    "caption": "Kohinoor Devanagari",
+    "overlay": "Kohinoor Devanagari"
+  },
+  "params": {
+    "caption_size": 58,
+    "overlay_size": 62,
+    "outline": 2.6,
+    "shadow": 1.0,
+    "caption_margin": 300,
+    "overlay_margin": 250
+  },
+  "licence": {
+    "name": "CC0-1.0",
+    "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "reel-machine bundled style"
+  },
+  "provenance": {
+    "provider": "reelmachine",
+    "provider_version": "bundled",
+    "source": "data/styles/storyreel.hi.json"
+  }
+}
