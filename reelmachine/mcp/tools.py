@@ -16,8 +16,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from mcp.server.mcpserver.exceptions import ToolError
-
 from ..core.errors import ReelError
 from ..core.job import Job, JobRequest, JobState
 from ..engine import Engine
@@ -43,6 +41,10 @@ def _error_payload(exc: ReelError) -> dict[str, Any]:
 
 def _guard(fn: Callable[..., dict[str, Any]]) -> Callable[..., dict[str, Any]]:
     def wrapper(self: "McpTools", *args: Any, **kwargs: Any) -> dict[str, Any]:
+        # imported when a tool runs, not when the module loads: the `mcp` package is
+        # an optional extra, and `import reelmachine.mcp.server` must work without it
+        from mcp.server.mcpserver.exceptions import ToolError
+
         try:
             return fn(self, *args, **kwargs)
         except ReelError as exc:

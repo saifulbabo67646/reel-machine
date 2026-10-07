@@ -141,13 +141,21 @@ def input_args(
     duration_s: float | None = None,
     extra: list[str] | None = None,
     quiet: bool = True,
+    nostdin: bool = True,
 ) -> list[str]:
     """Input flags, including the reconnect/header handling remote HLS needs.
 
     `quiet=False` keeps ffmpeg's info-level output, which is what the
     no-ffprobe probe fallback has to parse.
+
+    `nostdin` is an ffmpeg-CLI flag; ffprobe does not take it (newer builds
+    parse it as an option that swallows the next token, failing with "Failed to
+    set value '-loglevel' for option 'nostdin'"), so the probe passes
+    `nostdin=False`.
     """
-    args: list[str] = ["-hide_banner", "-nostdin"]
+    args: list[str] = ["-hide_banner"]
+    if nostdin:
+        args += ["-nostdin"]
     if quiet:
         args += ["-loglevel", "error"]
     if is_remote(src):
@@ -335,8 +343,12 @@ def probe(src: str | Path, *, headers: dict[str, str] | None = None) -> MediaInf
         return _probe_via_ffmpeg(src, headers=headers)
 
     settings = get_settings()
-    cmd = [settings.ffprobe, "-hide_banner", "-loglevel", "error"]
-    cmd += input_args(src, headers=headers, extra=["-show_format", "-show_streams"])
+    # `input_args` supplies the quiet flags; ffprobe must not be handed `-nostdin`
+    # (see `input_args`), and repeating the globals confuses newer builds.
+    cmd = [settings.ffprobe]
+    cmd += input_args(
+        src, headers=headers, extra=["-show_format", "-show_streams"], nostdin=False
+    )
     cmd += ["-of", "json"]
     proc = run(cmd)
     payload = json.loads(proc.stdout or "{}")
