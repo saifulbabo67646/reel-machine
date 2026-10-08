@@ -62,6 +62,10 @@ def _default_name(role: str, req: ProviderReq, settings: Any) -> str:
     if req.group == "narration":
         # the deployment decides which voice provider it serves (REEL_TTS)
         return getattr(settings, "tts", "") or req.default or "fake"
+    if req.group == "scripts":
+        # likewise for the writer (REEL_SCRIPT: template | llm); empty leaves the
+        # recipe's own default alone
+        return getattr(settings, "script", "") or req.default or "template"
     if req.default:
         # a recipe that names a default source gets it (storyreel: vidvault, because
         # it downloads the whole film); REEL_SOURCE steers the recipes that declare

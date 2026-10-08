@@ -403,3 +403,20 @@ def test_a_recipes_declared_source_wins_over_reel_source(monkeypatch) -> None:
     monkeypatch.setenv("REEL_SOURCE", "local")
     assert _default_name("source", ProviderReq(group="sources", default="vidvault"), settings) == "vidvault"
     assert _default_name("source", ProviderReq(group="sources", default=""), settings) == "local"
+
+
+def test_reel_script_picks_the_script_writer() -> None:
+    """The doodle recipe's writer follows the deployment (REEL_SCRIPT), like REEL_TTS.
+
+    `.env.example` advertised this knob long before it reached the resolver, so an
+    unset value must leave the recipe's own `template` default exactly as it was.
+    """
+    import types
+
+    from reelmachine.core.recipe import ProviderReq
+    from reelmachine.engine.providers import _default_name
+
+    req = ProviderReq(group="scripts", default="template")
+    assert _default_name("script", req, types.SimpleNamespace(script="llm")) == "llm"
+    assert _default_name("script", req, types.SimpleNamespace(script="")) == "template"
+    assert _default_name("script", req, types.SimpleNamespace()) == "template"
