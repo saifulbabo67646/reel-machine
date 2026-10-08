@@ -139,6 +139,9 @@ class Settings:
     ledger_file: Path | None = None
     #: Which narration provider the doodle recipe binds (fake | elevenlabs | cartesia).
     tts: str = "fake"
+    #: Which script writer the deployment serves (template | llm).  Empty leaves
+    #: the recipe's own default alone, the way an unset REEL_SOURCE does.
+    script: str = ""
     aspect: str = "vertical"
     pre_roll_ms: int = 350
     post_roll_ms: int = 450
@@ -230,6 +233,15 @@ class Settings:
                 f"ffprobe not found ({self.ffprobe!r}) — falling back to parsing `ffmpeg -i`, "
                 "which works but reports slightly less metadata"
             )
+        if shutil.which(self.ffmpeg):
+            from . import ffmpeg as ffmpeg_mod  # local import: ffmpeg imports this module
+
+            if not ffmpeg_mod.has_filter("ass"):
+                notes.append(
+                    f"ffmpeg has no 'ass' filter ({self.ffmpeg!r} was built without libass) — "
+                    "captions cannot be burned into any render; Homebrew's `ffmpeg` dropped it, "
+                    "install `ffmpeg-full` (or another build with libass)"
+                )
         return notes
 
 
@@ -272,6 +284,7 @@ def get_settings() -> Settings:
         workdir=Path(_env("REEL_WORKDIR", str(PROJECT_ROOT / ".work"))).expanduser(),
         outdir=Path(_env("REEL_OUTDIR", str(PROJECT_ROOT / "out"))).expanduser(),
         tts=(_env("REEL_TTS", "fake") or "fake").strip().lower(),
+        script=(_env("REEL_SCRIPT", "") or "").strip().lower(),
         aspect=normalise_aspect(_env("REEL_ASPECT", "vertical")),
         pre_roll_ms=_env_int("REEL_PRE_ROLL_MS", 350),
         post_roll_ms=_env_int("REEL_POST_ROLL_MS", 450),

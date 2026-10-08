@@ -127,7 +127,7 @@ class MockProvider(SourceProvider):
     def resolve(self, media: Any = None, episode: int = 1, **_: Any) -> EpisodeAsset:
         media_public_id = getattr(media, "publicId", None) or "MOCKMEDIA001"
         path = self.episode_path(media_public_id, episode)
-        if not path.is_file():
+        if not path.is_file() or not self._matches(path):
             self._build_episode(media_public_id, episode, path)
         return EpisodeAsset(
             media_public_id=media_public_id,
@@ -138,6 +138,19 @@ class MockProvider(SourceProvider):
             local_path=path,
             meta={"mock_offset_ms": self.source_offset_ms},
         )
+
+    def _matches(self, path: Path) -> bool:
+        """Whether a cached episode is the one this run would build.
+
+        The mock directory is a cache keyed by filename, and a stale file — say one
+        a test built with a shorter `REEL_MOCK_DURATION` — would otherwise be reused
+        silently. A duration that does not match means rebuild, so a leftover file
+        can never drive a run (or the alignment selftest) with the wrong media.
+        """
+        try:
+            return abs(ffmpeg.probe(path).duration_s - self.duration_s) <= 1.0
+        except ffmpeg.FFmpegError:
+            return False
 
     def _build_episode(self, media_public_id: str, episode: int, dest: Path) -> Path:
         audio, _ = self.track(media_public_id, episode)

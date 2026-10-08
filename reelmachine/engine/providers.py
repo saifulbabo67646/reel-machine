@@ -62,7 +62,14 @@ def _default_name(role: str, req: ProviderReq, settings: Any) -> str:
     if req.group == "narration":
         # the deployment decides which voice provider it serves (REEL_TTS)
         return getattr(settings, "tts", "") or req.default or "fake"
+    if req.group == "scripts":
+        # likewise for the writer (REEL_SCRIPT: template | llm); empty leaves the
+        # recipe's own default alone
+        return getattr(settings, "script", "") or req.default or "template"
     if req.default:
+        # a recipe that names a default source gets it (storyreel: vidvault, because
+        # it downloads the whole film); REEL_SOURCE steers the recipes that declare
+        # none (nadeshiko-cut), so one deployment can serve both
         return req.default
     if req.group == "sources":
         return getattr(settings, "source", "") or "local"
@@ -101,10 +108,10 @@ def provider_health(registry: Registry | None = None, settings: Any = None) -> l
     """A row per discoverable provider: ok / missing / error / disabled.
 
     Providers whose requirements depend on the deployment (sources, corpora, narration,
-    renderers) are instantiated so `missing()` can be reported; storage and styles report
-    load status only.
+    subtitles, story, renderers) are instantiated so `missing()` can be reported; storage
+    and styles report load status only.
     """
-    INSPECTED = {"sources", "corpora", "narration", "renderers"}
+    INSPECTED = {"sources", "corpora", "narration", "subtitles", "story", "renderers"}
     registry = registry or Registry()
     rows: list[dict[str, Any]] = []
     for group in GROUPS:

@@ -1,7 +1,7 @@
 # reel-machine
 
 A modular reel production engine. A reel is a **Timeline plus Assets**; rendering is a
-separate step that turns `(timeline, assets, style)` into a video file. Three recipes ship
+separate step that turns `(timeline, assets, style)` into a video file. Four recipes ship
 with it:
 
 | recipe | what it makes | needs |
@@ -9,6 +9,7 @@ with it:
 | `nadeshiko-cut` | anime / J-Drama dialogue reels cut from **your own** copies of episodes, aligned by audio | a Nadeshiko key + a source (your library, your streaming server, or the download route) |
 | `quranic` | Surah/Ayah reels: recitation audio, Arabic text with word-level highlight sync, translation overlays, gradient or supplied background | nothing but ffmpeg (two free Quran corpora providers) |
 | `doodle` | hand-drawn explainer reels, **stroke** (whiteboard inking) or **program** (knowledge graphics), narrated by TTS with timings | ffmpeg; stroke mode adds `[stroke]`, program mode `[program]`, cloud voices need a key |
+| `storyreel` | viral movie storytelling: the whole film is downloaded, its subtitle script read for the moments that hold an audience, one of five story concepts chosen, a voiceover written with a micro-clip plan and SEO, spoken and cut into many short shots | ffmpeg + `REEL_TMDB_API_KEY` (vidvault); SubDL/OpenSubtitles keys widen the subtitle chain; cloud voices need a key |
 
 The engine is a library. The CLI (`reel`) and the MCP server are both thin clients of it;
 an agent over MCP is a first-class caller.
@@ -21,9 +22,13 @@ cp .env.example .env                  # then edit
 uv run reel doctor --selftest -v      # proves the whole chain with synthetic media
 ```
 
-Requires **ffmpeg** on `PATH` (built and tested against ffmpeg 8.0). `ffprobe` is used
-when present; if your build does not ship one, the tool falls back to `ffmpeg -i` and says
-so in `reel doctor`.
+Requires **ffmpeg** on `PATH` (built and tested against ffmpeg 8.0), **with libass** —
+it is what burns the captions into every render. Homebrew's `ffmpeg` dropped libass in
+9.0, so on macOS install `ffmpeg-full` (`brew install ffmpeg-full` and use
+`$(brew --prefix ffmpeg-full)/bin`); `reel doctor` says so when the build on `PATH`
+cannot do it, and a render refuses with the same message instead of a cryptic filter
+error. `ffprobe` is used when present; if your build does not ship one, the tool falls
+back to `ffmpeg -i` and says so in `reel doctor`.
 
 ---
 
@@ -44,11 +49,18 @@ uv run python -c "..."                    # or use the engine API / MCP server b
 
 # doodle
 uv run reel mcp serve --transport stdio   # then start_job {"recipe": "doodle", ...}
+
+# storyreel — a film becomes a vertical storytelling reel
+uv run reel discover --search "Inception"                        # pick a title (TMDB)
+uv run reel run storyreel -i '{"title": "Inception", "mode": "transcript"}'
+uv run reel run storyreel -i '{"title": "Inception", "mode": "plan"}'          # top 5 concepts
+uv run reel run storyreel -i '{"title": "Inception", "mode": "build", "concept": "c1"}'
 ```
 
 Every recipe is driven by the same engine API, so the CLI, a script and an agent use one
-code path. The three recipes' exact input schemas are in `reel recipes --json` /
-`describe_recipe` over MCP.
+code path. The recipes' exact input schemas are in `reel recipes --json` /
+`describe_recipe` over MCP. The agent playbook for the storytelling workflow — the
+questions to ask, the modes, the exact JSON — is `docs/STORYREEL_AGENT.md`.
 
 ## The engine
 
@@ -175,6 +187,8 @@ reelmachine/
     nadeshiko_cut/  select → acquire → compose (alignment) → prep → render
     quranic/        corpora (Quran Foundation · alquran.cloud · fake) → timeline
     doodle/         script → narration → scenes → prep → compose → render
+    storyreel/      acquire (vidvault) → subtitles → transcript → concepts → script
+                    → voiceover → prep → compose → render
   render/      the plain/karaoke ASS writer and the audio profiles
   mcp/         the MCP server (optional extra)
   align.py ffmpeg.py subtitles.py vocab.py …   the media machinery, moved not rewritten

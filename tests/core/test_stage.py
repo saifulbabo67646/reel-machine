@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from reelmachine.core.stage import StageCache
+from reelmachine.engine.runner import payload_field
 
 
 def test_cache_key_is_stable_for_identical_inputs() -> None:
@@ -32,3 +33,18 @@ def test_cache_round_trips_outputs(tmp_path) -> None:
 def test_cache_key_is_json_safe_for_non_json_payloads() -> None:
     key = StageCache.make_key("compose", 1, {"path": __import__("pathlib").Path("/tmp/x")})
     assert len(key) == 64
+
+
+def test_payload_field_reaches_into_the_request_on_the_payload() -> None:
+    """`cache_fields` may name `"inputs.language"` — the *refreshed* request field.
+
+    A stage output carries the request it was computed for; keying on a copy made at
+    run time would go stale the moment a later job asked for something else.
+    """
+    payload = {"media": {"tmdbId": 1}, "inputs": {"language": "hi", "story": {"sections": []}}}
+    assert payload_field(payload, "media") == {"tmdbId": 1}
+    assert payload_field(payload, "inputs.language") == "hi"
+    assert payload_field(payload, "inputs.story.sections") == []
+    assert payload_field(payload, "inputs.missing") is None
+    assert payload_field(payload, "inputs.language.deeper") is None
+    assert payload_field({"inputs": None}, "inputs.language") is None

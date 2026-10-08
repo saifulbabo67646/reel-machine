@@ -69,6 +69,7 @@ def render_quranic(
     cancel: Any = None,
 ) -> Path:
     """Mux background + recitation + burned captions into `dest`."""
+    ffmpeg.require_filter("ass", what="burn the verse captions")
     dest.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         settings.ffmpeg,

@@ -25,6 +25,7 @@ import unicodedata
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -92,6 +93,44 @@ class TmdbMatch:
         if self.media_type == "movie":
             return f"{self.title} ({self.year}) [movie] tmdb={self.tmdb_id}"
         return f"{self.title} ({self.year}) S{self.season} [tv] tmdb={self.tmdb_id}"
+
+
+@dataclass(slots=True)
+class TitleCandidate:
+    """One search/discover hit, in the shape a caller chooses from."""
+
+    tmdb_id: int
+    media_type: str          # "tv" | "movie"
+    title: str
+    year: int | None = None
+    popularity: float = 0.0
+    overview: str = ""
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "tmdbId": self.tmdb_id,
+            "mediaType": self.media_type,
+            "title": self.title,
+            "year": self.year,
+            "popularity": round(self.popularity, 1),
+            "overview": self.overview,
+        }
+
+
+@dataclass(slots=True)
+class TitleDetail:
+    """The facts about one title that the pipeline needs: language, runtime, seasons."""
+
+    tmdb_id: int
+    media_type: str
+    title: str
+    original_title: str = ""
+    year: int | None = None
+    original_language: str = ""
+    runtime_min: int = 0
+    genres: list[str] = field(default_factory=list)
+    overview: str = ""
+    seasons: int = 0
 
 
 @dataclass(slots=True)
@@ -170,6 +209,101 @@ class TmdbClient:
         except TmdbError:
             return 0
         return len(payload.get("episodes") or [])
+
+    # --------------------------------------------------------------- catalogue
+    def find_title(
+        self,
+        title: str,
+        *,
+        media_type: str = "movie",
+        year: int | None = None,
+        limit: int = 5,
+    ) -> list[TitleCandidate]:
+        """Ranked candidates for a free-text title.
+
+        The storyreel recipe lets a caller name a film instead of an id; the
+        plausibility ranking (`_score`) is what keeps the wrong remake out.
+        """
+        scored: list[tuple[float, dict[str, Any], str, int | None]] = []
+        for result in self.search(title, media_type):
+            score = _score(result, title, year, media_type)
+            if score is None:
+                continue
+            value, name, result_year = score
+            scored.append((value, result, name, result_year))
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [
+            self._candidate(result, media_type, name, result_year)
+            for _, result, name, result_year in scored[: max(1, limit)]
+        ]
+
+    def detail(self, tmdb_id: int, media_type: str = "movie") -> TitleDetail:
+        """Language, runtime and season count for one id."""
+        payload = self._get(f"/{media_type}/{int(tmdb_id)}")
+        is_tv = media_type == "tv"
+        runtime = 0
+        if is_tv:
+            runs = payload.get("episode_run_time") or []
+            runtime = int(runs[0]) if runs else int(payload.get("last_episode_to_air", {}).get("runtime") or 0)
+        else:
+            runtime = int(payload.get("runtime") or 0)
+        genres = [
+            str((genre or {}).get("name") or "")
+            for genre in payload.get("genres") or []
+        ]
+        return TitleDetail(
+            tmdb_id=int(payload.get("id") or tmdb_id),
+            media_type=media_type,
+            title=str(payload.get("name") or payload.get("title") or ""),
+            original_title=str(payload.get("original_name") or payload.get("original_title") or ""),
+            year=_year_of(payload.get("first_air_date") or payload.get("release_date")),
+            original_language=str(payload.get("original_language") or ""),
+            runtime_min=runtime,
+            genres=[genre for genre in genres if genre],
+            overview=str(payload.get("overview") or ""),
+            seasons=int(payload.get("number_of_seasons") or 0) if is_tv else 0,
+        )
+
+    def discover_recent(
+        self,
+        *,
+        media_type: str = "movie",
+        months: int = 12,
+        limit: int = 10,
+        min_votes: int = 80,
+    ) -> list[TitleCandidate]:
+        """Popular titles released in the last `months` — the workflow's "trending"."""
+        since = datetime.now(timezone.utc).date() - timedelta(days=int(months * 30.44))
+        date_key = "first_air_date.gte" if media_type == "tv" else "primary_release_date.gte"
+        payload = self._get(
+            f"/discover/{media_type}",
+            sort_by="popularity.desc",
+            **{date_key: since.isoformat()},
+            **{"vote_count.gte": int(min_votes)},
+        )
+        out: list[TitleCandidate] = []
+        for result in payload.get("results") or []:
+            name = result.get("name") or result.get("title") or ""
+            if not name:
+                continue
+            year = _year_of(result.get("first_air_date") or result.get("release_date"))
+            out.append(self._candidate(result, media_type, name, year))
+            if len(out) >= max(1, limit):
+                break
+        return out
+
+    @staticmethod
+    def _candidate(
+        result: dict[str, Any], media_type: str, title: str, year: int | None
+    ) -> TitleCandidate:
+        return TitleCandidate(
+            tmdb_id=int(result.get("id") or 0),
+            media_type=media_type,
+            title=title,
+            year=year,
+            popularity=float(result.get("popularity") or 0.0),
+            overview=str(result.get("overview") or "")[:280],
+        )
 
     # ------------------------------------------------------------------- match
     def match_media(self, media: Media) -> TmdbMatch | None:

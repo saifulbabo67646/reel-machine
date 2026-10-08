@@ -1,0 +1,35 @@
+{
+  "id": "storyreel.default",
+  "title": "Storyteller",
+  "summary": "Scroll-stopping captions over film footage: bold bottom karaoke, quiet top overlays. For Urdu, Arabic or Hindi voiceovers, point a style pack at a font that ships those glyphs.",
+  "render_modes": ["story"],
+  "aspect": "vertical",
+  "palette": {
+    "caption": "#ffffff",
+    "highlight": "#ffd166",
+    "overlay": "#ffffff",
+    "shade": "#101010"
+  },
+  "fonts": {
+    "caption": "Helvetica",
+    "overlay": "Helvetica"
+  },
+  "params": {
+    "caption_size": 54,
+    "overlay_size": 62,
+    "outline": 2.4,
+    "shadow": 1.0,
+    "caption_margin": 280,
+    "overlay_margin": 260
+  },
+  "licence": {
+    "name": "CC0-1.0",
+    "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "reel-machine bundled style"
+  },
+  "provenance": {
+    "provider": "reelmachine",
+    "provider_version": "bundled",
+    "source": "data/styles/storyreel.default.json"
+  }
+}
