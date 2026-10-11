@@ -394,6 +394,42 @@ def test_elevenlabs_synthesis_over_a_stubbed_transport(tmp_path, monkeypatch) ->
         provider.synthesize("hello", voice="elevenlabs:Definitely-Not-There")
 
 
+def test_cartesia_columnar_word_timestamps_are_parsed() -> None:
+    # what the live API sends when asked for timestamps: one object of parallel lists
+    stream = (
+        "event: timestamps\ndata: "
+        + json.dumps({"word_timestamps": {"words": ["Stale", "bread."], "start": [0.06, 0.5], "end": [0.4, 0.9]}})
+        + "\n\n"
+    )
+    _, spans = parse_cartesia_sse(stream)
+    assert [(s.text, s.start_ms, s.end_ms) for s in spans] == [("Stale", 60, 400), ("bread.", 500, 900)]
+
+
+def test_cartesia_asks_for_word_timestamps_and_finds_voices_past_the_first_page(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("CARTESIA_API_KEY", "test-key")
+    import base64
+
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/voices":
+            if request.url.params.get("starting_after") == "v-1":
+                return httpx.Response(200, json={"data": [{"id": "v-2", "name": "Tanner"}], "has_more": False})
+            return httpx.Response(200, json={"data": [{"id": "v-1", "name": "Skylar"}], "has_more": True})
+        seen.update(json.loads(request.content))
+        chunk = base64.b64encode(b"\x00\x00" * 440).decode()
+        words = {"words": ["hi"], "start": [0.0], "end": [0.2]}
+        return httpx.Response(200, text=(
+            f"event: chunk\ndata: {json.dumps({'data': chunk})}\n\n"
+            f"event: timestamps\ndata: {json.dumps({'word_timestamps': words})}\n\n"))
+
+    provider = CartesiaNarration(client=httpx.Client(transport=httpx.MockTransport(handler)),
+                                 base_url="https://api.example.test", workdir=tmp_path)
+    speech = provider.synthesize("hi", voice="cartesia:Tanner")
+    assert seen["add_timestamps"] is True and seen["voice"] == "v-2"
+    assert speech.voice == "cartesia:v-2" and speech.segments[0].words[0].end_ms == 200
+
+
 def test_cartesia_missing_key_is_reported(monkeypatch) -> None:
     monkeypatch.delenv("CARTESIA_API_KEY", raising=False)
     provider = CartesiaNarration()
