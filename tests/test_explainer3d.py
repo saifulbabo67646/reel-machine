@@ -96,3 +96,82 @@ def test_auto_layout_is_sequential_and_inside():
 def test_speech_estimates():
     assert estimate_speech_ms("one two three four five six", "en") > 1500
     assert estimate_speech_ms("駅[えき]はどこですか", "ja") == int(len("駅はどこですか") / 7.0 * 1000)
+
+
+import math  # noqa: E402
+
+from reelmachine.recipes.explainer3d.camera import CAMERA_MOVES, default_start, ease, pose  # noqa: E402
+from reelmachine.recipes.explainer3d.moves import MOVES  # noqa: E402
+from reelmachine.recipes.explainer3d.world import mix_hex  # noqa: E402
+
+CTX = {
+    "anchors": {"stage.center": [0.0, 0.9, 0.0], "sky": [0.0, 3.9, 0.0]},
+    "dims": {"bowl": [0.44, 0.2, 0.44], "potato": [0.12, 0.1, 0.12]},
+    "homes": {"bowl": [0.0, 0.9, 0.0], "potato": [0.3, 0.9, 0.0]},
+    "colours": {"bowl": "#8f877c", "potato": "#d9b44a"},
+}
+
+
+def _world():
+    return {
+        "bowl": {"position": [0.0, 0.9, 0.0], "visible": True, "rotationY": 0.0, "scale": 1.0,
+                 "fill": {"level": 0.0, "colour": "#d9d27a", "surface": "liquid"}},
+        "potato": {"position": [0.3, 0.9, 0.0], "visible": False, "rotationY": 0.0, "scale": 1.0, "fill": None},
+    }
+
+
+def test_mix_hex_endpoints():
+    assert mix_hex("#000000", "#FFFFFF", 0.0) == "#000000"
+    assert mix_hex("#000000", "#ffffff", 1.0) == "#ffffff"
+    assert mix_hex("#000000", "#ffffff", 0.5) == "#808080"
+
+
+def test_fly_in_lands_home_and_is_visible():
+    move = MOVES["fly_in"]
+    params = move.params.model_validate({}).model_dump(by_alias=True)
+    world = move.end(_world(), {"actor": "potato", "params": params}, CTX)
+    assert world["potato"]["position"] == [0.3, 0.9, 0.0]
+    assert world["potato"]["visible"] is True
+
+
+def test_drop_into_hides_actor_and_fills_container():
+    move = MOVES["drop_into"]
+    params = move.params.model_validate({"into": "bowl"}).model_dump(by_alias=True)
+    world = move.end(_world(), {"actor": "potato", "params": params}, CTX)
+    assert world["potato"]["visible"] is False and world["potato"]["scale"] == 0.0
+    assert world["bowl"]["fill"]["level"] == pytest.approx(0.15)
+    assert world["bowl"]["fill"]["colour"] == "#d9b44a"  # an empty bowl takes the colour
+
+
+def test_fill_clamps_at_full():
+    move = MOVES["pour"]
+    params = move.params.model_validate({"into": "bowl", "fill_add": 0.8}).model_dump(by_alias=True)
+    world = _world()
+    for _ in range(3):
+        world = move.end(world, {"actor": "potato", "params": params}, CTX)
+    assert world["bowl"]["fill"]["level"] == 1.0
+
+
+def test_every_move_has_an_example_that_validates():
+    for move in MOVES.values():
+        move.params.model_validate(move.example.get("params", {}))
+    for move in CAMERA_MOVES.values():
+        move.params.model_validate(move.example)
+
+
+def test_orbit_pose_keeps_radius_and_reaches_angle():
+    params = CAMERA_MOVES["orbit"].params.model_validate({"from": 0, "to": 90}).model_dump(by_alias=True)
+    target = [0.0, 1.0, 0.0]
+    start = default_start("orbit", params, target)
+    end = pose("orbit", params, start, target, 1.0)
+    assert end["position"][0] == pytest.approx(2.2) and end["position"][2] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_push_in_and_ease():
+    params = CAMERA_MOVES["push_in"].params.model_validate({"factor": 0.5}).model_dump(by_alias=True)
+    target = [0.0, 1.0, 0.0]
+    start = default_start("push_in", params, target)
+    end = pose("push_in", params, start, target, 1.0)
+    assert math.dist(end["position"], target) == pytest.approx(math.dist(start["position"], target) * 0.5)
+    assert ease(0.0, True, True) == 0.0 and ease(1.0, True, False) == pytest.approx(1.0)
+    assert ease(0.5, False, False) == 0.5
