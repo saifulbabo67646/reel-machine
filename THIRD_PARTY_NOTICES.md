@@ -95,4 +95,7 @@ under the same licence.
 explainer3d's cinematic sets and models download into the local cache when first used and
 record their licence in each reel's manifest: Poly Haven models, HDRIs and textures
 (https://polyhaven.com/license, CC0), the Khronos glTF sample BarramundiFish (CC0) and
-three.js's `waternormals.jpg` (MIT). Music and sound effects are synthesised by the recipe.
+three.js's `waternormals.jpg` (MIT). Characters are Quaternius's Universal Base Characters
+and Universal Animation Library (CC0, https://quaternius.com), downloaded once on first
+use; the packs' own licence files are kept beside the install. Music and sound effects are
+synthesised by the recipe.

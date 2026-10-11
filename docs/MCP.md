@@ -161,7 +161,10 @@ without a beat, no re-hook on reels over 40 s, no call to action, a length far f
 `describe_recipe("explainer3d")` carries a `guide`: the workflow, every move and camera
 with its parameters, the sets and anchors, the narration markup (`*hot*`,
 `[shown|spoken]`) and how many beats a 25 s or 55 s reel needs. Complete cinematic
-scripts: `examples/explainer3d/monster-fish-bait-25s.json` and `-55s.json`.
+scripts: `examples/explainer3d/monster-fish-bait-25s.json`, `-55s.json` and
+`pressure-cooker.json` (an indoor set, a character, and two components written as code —
+it needs `REEL_EXPLAINER3D_CUSTOM_CODE=1`). probe also reports `bigMoments` and a
+`suggestedLength`: decide the length from the material.
 
 ### `start_job`
 
@@ -225,6 +228,16 @@ a result in a cast member as `{"asset": {"model": "polyhaven:wooden_bowl_01", "s
 
 ```json
 {"query": "wooden bowl"}
+```
+
+### `find_assets`
+
+CC0 models, skies (360° photos of real places — kitchens, living rooms, workshops, streets
+— that light a set and form its backdrop) and textures for explainer3d, by `kind`
+(`model` | `sky` | `texture`). Read-only and free.
+
+```json
+{"query": "kitchen", "kind": "sky"}
 ```
 
 ### `find_examples`

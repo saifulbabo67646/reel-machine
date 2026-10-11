@@ -104,3 +104,14 @@ def test_missing_reports_instead_of_raising(tmp_path, monkeypatch):
     settings = dataclasses.replace(get_settings(), ffmpeg="ffmpeg", ffprobe="ffprobe")  # ignore REEL_FFPROBE
     problems = HyperframesRenderer(settings).missing()
     assert any("node" in p for p in problems) and any("ffprobe" in p for p in problems)
+
+
+def test_workers_can_be_pinned_for_a_low_disk_machine(tmp_path, fake_npx, monkeypatch):
+    project = tmp_path / "shot"
+    project.mkdir()
+    monkeypatch.setenv("REEL_HYPERFRAMES_WORKERS", "1")
+    _renderer(tmp_path).render(project, tmp_path / "out.mp4")
+    assert "--workers 1" in fake_npx.read_text().splitlines()[1]
+    monkeypatch.delenv("REEL_HYPERFRAMES_WORKERS")
+    _renderer(tmp_path).render(project, tmp_path / "out2.mp4")
+    assert "--workers" not in fake_npx.read_text().splitlines()[3]

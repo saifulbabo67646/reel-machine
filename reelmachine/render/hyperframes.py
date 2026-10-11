@@ -32,6 +32,13 @@ def _node_major(node: str) -> int:
         return 0
 
 
+def _workers() -> list[str]:
+    """REEL_HYPERFRAMES_WORKERS=1 streams frames straight into the encoder — slower, but no
+    temporary frame files, which matters on a nearly full disk. Unset: HyperFrames decides."""
+    value = os.environ.get("REEL_HYPERFRAMES_WORKERS", "").strip()
+    return ["--workers", value] if value.isdigit() and int(value) > 0 else []
+
+
 class HyperframesRenderer:
     name = "hyperframes"
     timeout_floor_s = 120
@@ -143,7 +150,7 @@ class HyperframesRenderer:
         dest.parent.mkdir(parents=True, exist_ok=True)
         timeout_s = max(self.timeout_floor_s, 20 * seconds)
         code, out = self._run(
-            ["render", "--output", str(dest), "--fps", str(fps), "--quality", "looks", "--strict"],
+            ["render", "--output", str(dest), "--fps", str(fps), "--quality", "looks", "--strict", *_workers()],
             project, timeout_s=timeout_s, cancel=cancel,
         )
         (project / "render.log").write_text(out, encoding="utf-8")

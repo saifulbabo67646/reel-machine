@@ -125,6 +125,7 @@ reelmachine = [
     "data/*.json",
     "data/styles/*.json",
     "recipes/explainer3d/looks/*.json",
+    "recipes/explainer3d/sets/*.json",
     "recipes/explainer3d/runtime/*.mjs",
     "recipes/explainer3d/runtime/tools/*.mjs",
     "recipes/explainer3d/runtime/vendor/*",
