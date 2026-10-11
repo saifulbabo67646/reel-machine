@@ -1,2 +1,1 @@
-{"sky": "polyhaven:carpentry_shop_02", "background": "blur", "stage": "table", "stage_texture": "polyhaven:old_wooden_floor_02",
- "floor": {"texture": "polyhaven:concrete_floor_02", "size": [8, 8], "repeat": 5}, "sun_angle": 30}
+{"sky": "polyhaven:carpentry_shop_02", "background": "blur", "stage": "table", "stage_texture": "polyhaven:old_wooden_floor_02", "floor": {"texture": "polyhaven:concrete_floor_02", "size": [8, 8], "repeat": 5}, "sun_angle": 30, "marks": {"front": [0, 0, 0.85], "left": [-1.4, 0, 0.85], "right": [1.4, 0, 0.85], "door": [-2.4, 0, 1.8]}}

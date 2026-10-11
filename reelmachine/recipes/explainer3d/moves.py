@@ -139,6 +139,42 @@ class SchoolParams(_Params):
     radius: float = Field(0.45, gt=0.1, le=5)
 
 
+# ---- characters
+class WalkToParams(_Params):
+    to: str  # an anchor, a mark, or an actor (they stop in front of it)
+    gait: Literal["walk", "jog", "sprint"] = "walk"
+    stop: float | None = Field(None, ge=0, le=3)  # metres short of `to`; 0.45 for an actor, 0 for a place
+
+
+class TurnToParams(_Params):
+    to: str
+
+
+class ActParams(_Params):
+    clip: str  # a friendly clip name (see the guide): dance, pick_up, push, fix, jump, punch, cast…
+
+    @field_validator("clip")
+    @classmethod
+    def check_clip(cls, value: str) -> str:
+        from .characters import CLIPS
+
+        if value not in CLIPS:
+            raise ValueError(f"unknown clip; one of {sorted(CLIPS)}")
+        return value
+
+
+class SitParams(_Params):
+    on: str | None = None  # a seat (an anchor, mark or actor); where they stand when omitted
+
+
+class PickUpParams(_Params):
+    item: str  # a cast member; it rides in their right hand until put_down
+
+
+class PutDownParams(_Params):
+    on: str  # an anchor, a mark or an actor's top
+
+
 EndFn = Callable[[World, dict[str, Any], Ctx], World]
 
 
@@ -157,6 +193,7 @@ class Move:
     actor_container: bool = False         # the actor itself must be a container
     extra_sfx: tuple[tuple[str, float], ...] = ()
     big: bool = False                     # counts as a hook / a beat in the retention lint
+    character: bool = False               # the actor must be a character
 
 
 def _appear(world, action, ctx):
@@ -279,6 +316,74 @@ def _sink(world, action, ctx):
     return set_actor(world, action["actor"], position=point(ctx, world, action["params"]["to"]), visible=True)
 
 
+HAND = 0.55  # a held prop rides at about this fraction of the holder's height, in Python's view
+STOP_AT_ACTOR = 0.45
+
+
+def _floor(p):
+    return [p[0], 0.0, p[2]]
+
+
+def _walk_to(world, action, ctx):
+    p, actor = action["params"], action["actor"]
+    to = p["to"]
+    start = world[actor]["position"]
+    dest = _floor(point(ctx, world, to))
+    stop = p["stop"] if p.get("stop") is not None else (0.0 if to in ctx["anchors"] else STOP_AT_ACTOR)
+    dx, dz = dest[0] - start[0], dest[2] - start[2]
+    dist = math.hypot(dx, dz)
+    heading = math.atan2(dx, dz) if dist > 1e-9 else world[actor]["rotationY"]
+    k = max(0.0, dist - stop) / dist if dist > 1e-9 else 0.0
+    end = [start[0] + dx * k, start[1], start[2] + dz * k]
+    world = set_actor(world, actor, position=end, rotationY=heading, visible=True)
+    return _carry(world, actor, ctx)
+
+
+def _turn_to(world, action, ctx):
+    actor = action["actor"]
+    pos, target = world[actor]["position"], point(ctx, world, action["params"]["to"])
+    return set_actor(world, actor, rotationY=math.atan2(target[0] - pos[0], target[2] - pos[2]))
+
+
+def _carry(world, actor, ctx):
+    held = world[actor].get("holding")
+    if not held:
+        return world
+    pos, h = world[actor]["position"], ctx["dims"][actor][1] * world[actor]["scale"]
+    return set_actor(world, held, position=[pos[0], pos[1] + h * HAND, pos[2]], visible=True)
+
+
+def _act(world, action, ctx):
+    return world
+
+
+def _sit(world, action, ctx):
+    actor, on = action["actor"], action["params"].get("on")
+    world = set_actor(world, actor, pose="sit")
+    if on is not None:
+        world = set_actor(world, actor, position=_floor(point(ctx, world, on)))
+    return _carry(world, actor, ctx)
+
+
+def _stand_up(world, action, ctx):
+    return set_actor(world, action["actor"], pose="stand")
+
+
+def _pick_up(world, action, ctx):
+    actor, item = action["actor"], action["params"]["item"]
+    world = set_actor(world, actor, holding=item)
+    return _carry(world, actor, ctx)
+
+
+def _put_down(world, action, ctx):
+    actor = action["actor"]
+    item = world[actor].get("holding")
+    world = set_actor(world, actor, holding=None)
+    if item:
+        world = set_actor(world, item, position=_dest(ctx, world, action["params"]["on"]), visible=True)
+    return world
+
+
 def _school(world, action, ctx):
     p = action["params"]
     world = set_actor(world, action["actor"], position=center(ctx, world, p["around"]), visible=True, scale=1.0)
@@ -357,5 +462,29 @@ MOVES: dict[str, Move] = {
              "`around`; with eat, the lead fish lunges and takes it.", SchoolParams,
              {"move": "school", "actor": "fish", "params": {"around": "ball", "eat": True}},
              ("bubbles", 0.1), "required", _school, refs=("around",), extra_sfx=(("gulp", 0.78),), big=True),
+        # ---- characters (cast members with {"character": ...})
+        Move("walk_to", "character", "Walk (or jog, sprint) to a place, a mark or someone; they arrive facing "
+             "the way they went and stop short of an actor.", WalkToParams,
+             {"move": "walk_to", "actor": "chef", "params": {"to": "front"}}, None, "required", _walk_to,
+             refs=("to",), character=True),
+        Move("turn_to", "character", "Turn to face a place or someone.", TurnToParams,
+             {"move": "turn_to", "actor": "chef", "params": {"to": "stage.center"}}, None, "required", _turn_to,
+             refs=("to",), character=True),
+        Move("act", "character", "Play one of the animation clips: dance, jump, pick_up, interact, push, fix, "
+             "crouch, punch, hit, roll, cast, fall…", ActParams,
+             {"move": "act", "actor": "chef", "params": {"clip": "dance"}}, None, "required", _act,
+             character=True, big=True),
+        Move("talk", "character", "Talk with their hands while the line plays (seated if sitting).", NoParams,
+             {"move": "talk", "actor": "chef"}, None, "required", _act, character=True),
+        Move("sit", "character", "Sit down (on a seat, if given) and stay seated.", SitParams,
+             {"move": "sit", "actor": "chef"}, None, "required", _sit, refs=("on",), character=True),
+        Move("stand_up", "character", "Stand up from sitting.", NoParams,
+             {"move": "stand_up", "actor": "chef"}, None, "required", _stand_up, character=True),
+        Move("pick_up", "character", "Reach for a cast member and hold it in the right hand.", PickUpParams,
+             {"move": "pick_up", "actor": "chef", "params": {"item": "cup"}}, ("pop", 0.55), "required", _pick_up,
+             refs=("item",), character=True),
+        Move("put_down", "character", "Put what they hold on a place or an actor's top.", PutDownParams,
+             {"move": "put_down", "actor": "chef", "params": {"on": "stage.center"}}, ("thud", 0.6), "required",
+             _put_down, refs=("on",), character=True),
     )
 }

@@ -102,7 +102,7 @@ class ScriptStage:
 
 def asset_cache(settings: Settings) -> Path:
     """CC0 models, sky images and textures: public, so shared by every caller."""
-    return settings.cache_dir / "explainer3d" / "assets"
+    return (settings.shared_cache or settings.cache_dir) / "explainer3d" / "assets"
 
 
 class AssetsStage:

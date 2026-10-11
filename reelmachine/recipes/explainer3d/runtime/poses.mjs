@@ -262,7 +262,106 @@ const MOVES = {
     if (P.eat && p >= eatAt && p < 1) fx.push({ type: "burstBubbles", at: c, age: (p - eatAt) * (a.t1 - a.t0), seed: a.seed });
     return { world, fx };
   },
+
+  // ---- characters: moves place the person; `anim` effects say which clip plays, at what
+  // time and weight. Clip names are the animation library's (see characters.py).
+  walk_to(w, a, ctx, p) {
+    const P = a.params, me = w[a.actor], start = me.position, dur = a.t1 - a.t0;
+    const dest = point(ctx, w, P.to); dest[1] = 0;
+    const stop = P.stop != null ? P.stop : P.to in ctx.anchors ? 0 : STOP_AT_ACTOR;
+    const dx = dest[0] - start[0], dz = dest[2] - start[2], dist = Math.hypot(dx, dz);
+    const heading = dist > 1e-9 ? Math.atan2(dx, dz) : me.rotationY;
+    const k = dist > 1e-9 ? Math.max(0, dist - stop) / dist : 0;
+    const end = [start[0] + dx * k, start[1], start[2] + dz * k];
+    const s = p >= 1 ? 1 : walkProgress(p, dur);
+    const position = p >= 1 ? end : lerp3(start, end, s);
+    const rotationY = p >= 1 ? heading : lerpAngle(me.rotationY, heading, clamp01((p * dur) / 0.3));
+    let world = carry(setActor(w, a.actor, { position, rotationY, visible: true }), a.actor, ctx);
+    const fx = p < 1 ? [anim(a.actor, GAIT_CLIP[P.gait], (s * dist * k) / GAIT_SPEED[P.gait], ramp(p, dur))] : [];
+    return { world, fx };
+  },
+  turn_to(w, a, ctx, p) {
+    const me = w[a.actor], target = point(ctx, w, a.params.to);
+    const heading = Math.atan2(target[0] - me.position[0], target[2] - me.position[2]);
+    const rotationY = p >= 1 ? heading : lerpAngle(me.rotationY, heading, easeInOutCubic(p));
+    return { world: setActor(w, a.actor, { rotationY }), fx: [] };
+  },
+  act(w, a, ctx, p) {
+    const dur = a.t1 - a.t0;
+    return { world: w, fx: p < 1 ? [anim(a.actor, CLIP[a.params.clip], p * dur, ramp(p, dur))] : [] };
+  },
+  talk(w, a, ctx, p) {
+    const dur = a.t1 - a.t0, clip = w[a.actor].pose === "sit" ? "Sitting_Talking_Loop" : "Idle_Talking_Loop";
+    return { world: w, fx: p < 1 ? [anim(a.actor, clip, p * dur, ramp(p, dur))] : [] };
+  },
+  sit(w, a, ctx, p) {
+    const on = a.params.on, dur = a.t1 - a.t0;
+    let world = w;
+    if (on != null) {
+      const seat = point(ctx, w, on); seat[1] = 0;
+      world = setActor(world, a.actor, { position: p >= 1 ? seat : lerp3(w[a.actor].position, seat, easeInOutCubic(clamp01(p / 0.4))) });
+    }
+    world = setActor(world, a.actor, { pose: p >= 1 ? "sit" : w[a.actor].pose });
+    world = carry(world, a.actor, ctx);
+    return { world, fx: p < 1 ? [anim(a.actor, "Sitting_Enter", p * dur, 1)] : [] };
+  },
+  stand_up(w, a, ctx, p) {
+    const dur = a.t1 - a.t0;
+    return { world: setActor(w, a.actor, { pose: p >= 1 ? "stand" : w[a.actor].pose }), fx: p < 1 ? [anim(a.actor, "Sitting_Exit", p * dur, 1)] : [] };
+  },
+  pick_up(w, a, ctx, p) {
+    const dur = a.t1 - a.t0, grab = 0.55;
+    let world = w;
+    if (p >= grab) world = carry(setActor(w, a.actor, { holding: a.params.item }), a.actor, ctx);
+    return { world, fx: p < 1 ? [anim(a.actor, "PickUp_Table", p * dur, ramp(p, dur))] : [] };
+  },
+  put_down(w, a, ctx, p) {
+    const dur = a.t1 - a.t0, let_go = 0.55, item = w[a.actor].holding;
+    let world = w;
+    if (p >= let_go) {
+      world = setActor(w, a.actor, { holding: null });
+      if (item) world = setActor(world, item, { position: dest(ctx, w, a.params.on), visible: true });
+    }
+    return { world, fx: p < 1 ? [anim(a.actor, "Interact", p * dur, ramp(p, dur))] : [] };
+  },
 };
+
+const STOP_AT_ACTOR = 0.45, HAND = 0.55;
+const GAIT_SPEED = { walk: 1.35, jog: 3.0, sprint: 5.5 };
+const GAIT_CLIP = { walk: "Walk_Loop", jog: "Jog_Fwd_Loop", sprint: "Sprint_Loop" };
+const CLIP = {
+  idle: "Idle_Loop", talk: "Idle_Talking_Loop", walk: "Walk_Loop", walk_formal: "Walk_Formal_Loop", jog: "Jog_Fwd_Loop",
+  sprint: "Sprint_Loop", crouch: "Crouch_Idle_Loop", crouch_walk: "Crouch_Fwd_Loop", dance: "Dance_Loop", jump: "Jump_Start",
+  land: "Jump_Land", pick_up: "PickUp_Table", interact: "Interact", push: "Push_Loop", fix: "Fixing_Kneeling",
+  sit_down: "Sitting_Enter", sit: "Sitting_Idle_Loop", sit_talk: "Sitting_Talking_Loop", stand_up: "Sitting_Exit",
+  punch: "Punch_Cross", jab: "Punch_Jab", hit: "Hit_Chest", roll: "Roll", swim: "Swim_Fwd_Loop", drive: "Driving_Loop",
+  fall: "Death01", cast: "Spell_Simple_Shoot", hold_torch: "Idle_Torch_Loop",
+};
+const anim = (actor, clip, time, weight) => ({ type: "anim", actor, clip, time, weight });
+// clips fade in and out over a quarter second so moves blend with the idle under them
+const ramp = (p, dur) => Math.min(1, (p * dur) / 0.25, ((1 - p) * dur) / 0.25);
+// walking speeds up and slows down over a fifth of a second at each end
+function walkProgress(p, dur) {
+  const e = Math.min(0.2, dur / 4) / dur;
+  const v = 1 / (1 - e); // cruise speed so the area under the speed curve is 1
+  if (p < e) return (v * p * p) / (2 * e);
+  if (p > 1 - e) return 1 - (v * (1 - p) * (1 - p)) / (2 * e);
+  return (v * e) / 2 + v * (p - e);
+}
+function lerpAngle(a, b, t) {
+  let d = ((b - a + Math.PI) % (2 * Math.PI)) - Math.PI;
+  if (d < -Math.PI) d += 2 * Math.PI;
+  return a + d * t;
+}
+function carry(w, actor, ctx) {
+  const held = w[actor].holding;
+  if (!held) return w;
+  const pos = w[actor].position, h = ctx.dims[actor][1] * w[actor].scale;
+  return setActor(w, held, { position: [pos[0], pos[1] + h * HAND, pos[2]], visible: true });
+}
+function dest(ctx, w, ref) {
+  return ref in ctx.anchors ? point(ctx, w, ref) : top(ctx, w, ref);
+}
 
 // slow motion: the middle of the arc (the apex) plays slower by `s`; u(p) is monotonic and
 // meets p at 0 and 1. The middle 64% of the time covers (1 - s) of its usual distance.

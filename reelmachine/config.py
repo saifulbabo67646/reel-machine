@@ -223,6 +223,11 @@ class Settings:
     ffmpeg: str = "ffmpeg"
     ffprobe: str = "ffprobe"
 
+    #: The deployment's cache for public, reusable downloads (CC0 models, sky images,
+    #: character packs). The engine sets it for each job, whose own `cache_dir` lives in
+    #: the job's folder and would otherwise download everything again.
+    shared_cache: Path | None = None
+
     # --- derived helpers -------------------------------------------------
     @property
     def cache_dir(self) -> Path:

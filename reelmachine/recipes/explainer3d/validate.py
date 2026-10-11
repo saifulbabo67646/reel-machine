@@ -11,7 +11,7 @@ from ...core.errors import InvalidInput
 from .camera import CAMERA_MOVES
 from .geometry import CONTAINERS
 from .models import (
-    Action, Explainer3DInputs, ModelSpec, ResolvedAction, ResolvedCamera, ResolvedShot, ShapeSpec,
+    Action, CharacterSpec, Explainer3DInputs, ModelSpec, ResolvedAction, ResolvedCamera, ResolvedShot, ShapeSpec,
 )
 from .compile import load_look
 from .moves import MOVES
@@ -129,6 +129,9 @@ def _resolve_action(
             raise _refuse(f"{path}.actor", f"{action.actor!r} is not a cast member")
         if move.actor_container and not is_container(action.actor):
             raise _refuse(f"{path}.actor", f"{move.name} needs a container actor")
+        if move.character and not isinstance(inputs.cast[action.actor].asset, CharacterSpec):
+            raise _refuse(f"{path}.actor", f"{move.name} needs a character",
+                          hint='cast a person: {"asset": {"character": "quaternius:female"}}')
     elif action.actor is not None:
         raise _refuse(f"{path}.actor", f"{move.name} takes no actor")
     params = _params(move.params, action.params(), path)

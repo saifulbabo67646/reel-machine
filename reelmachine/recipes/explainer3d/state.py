@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .assets import compound_dims
 from .camera import default_start, pose
 from .geometry import CONTAINERS, dims
-from .models import CompoundSpec, Explainer3DInputs, ResolvedShot, ShapeSpec
+from .models import CharacterSpec, CompoundSpec, Explainer3DInputs, ResolvedShot, ShapeSpec
 from .moves import MOVES
 from .sets import stage_anchors
 from .timing import ShotWindow
@@ -54,12 +54,16 @@ def actor_dims(inputs: Explainer3DInputs, key: str, models: dict[str, Any] | Non
         return list(dims(asset))
     if isinstance(asset, CompoundSpec):
         return list(compound_dims(asset))
+    if isinstance(asset, CharacterSpec):
+        return [round(0.35 * asset.height, 4), asset.height, round(0.2 * asset.height, 4)]
     side = asset.height if asset.height is not None else (asset.size or 0.3)
     return [side, side, side]
 
 
 def is_container(inputs: Explainer3DInputs, key: str) -> bool:
     asset = inputs.cast[key].asset
+    if isinstance(asset, CharacterSpec):
+        return False
     return asset.shape in CONTAINERS if isinstance(asset, ShapeSpec) else asset.container
 
 
@@ -67,6 +71,8 @@ def actor_colour(inputs: Explainer3DInputs, key: str) -> str:
     asset = inputs.cast[key].asset
     if isinstance(asset, ShapeSpec):
         return asset.colour or MATERIAL_COLOURS[asset.material]
+    if isinstance(asset, CharacterSpec):
+        return "#8a8f98"
     if isinstance(asset, CompoundSpec):
         first = asset.parts[0]
         return first.colour or MATERIAL_COLOURS[first.material]
@@ -95,6 +101,8 @@ def initial_world(inputs: Explainer3DInputs, models: dict[str, Any] | None = Non
             "fill": {"level": 0.0, "colour": DEFAULT_FILL, "surface": "liquid", "glaze": None}
             if is_container(inputs, key) else None,
         }
+        if isinstance(member.asset, CharacterSpec):  # people also have a pose and may hold something
+            world[key].update(pose="stand", holding=None)
     return world
 
 

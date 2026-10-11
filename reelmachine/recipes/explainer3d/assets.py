@@ -25,7 +25,7 @@ import httpx
 
 from ...core.assets import Licence, Provenance
 from ...core.errors import InvalidInput, ProviderUnavailable
-from .models import CompoundSpec, ModelSpec
+from .models import CharacterSpec, CompoundSpec, ModelSpec
 
 POLYHAVEN_API = "https://api.polyhaven.com"
 USER_AGENT = "reel-machine/explainer3d (+https://github.com/)"
@@ -335,6 +335,21 @@ def resolve_cast(inputs: Any, cache_root: Path) -> dict[str, Any]:
             out[key] = ResolvedModel(kind="compound", compound=asset, dims=compound_dims(asset),
                                      bounds=compound_bounds(asset), licence=generated,
                                      provenance=Provenance(provider="compound", source=f"{len(asset.parts)} parts"))
+            continue
+        if isinstance(asset, CharacterSpec):
+            from . import characters
+
+            root = characters.ensure_installed(Path(cache_root))
+            file = characters.character_file(asset.character, root)
+            lo, hi = gltf_bounds(read_gltf_json(file))
+            k = asset.height / max(hi[1] - lo[1], 1e-6)
+            folders = [file.parent, root / "hair"]
+            files = sorted(p.relative_to(root).as_posix() for d in folders if d.is_dir() for p in d.iterdir() if p.is_file())
+            out[key] = ResolvedModel(kind="character", character=asset, root=str(root),
+                                     main=str(file.relative_to(root)), files=files + ["animations.glb"], bounds=(lo, hi),
+                                     dims=(round((hi[0] - lo[0]) * k, 4), asset.height, round((hi[2] - lo[2]) * k, 4)),
+                                     licence=characters.LICENCE,
+                                     provenance=Provenance(provider="quaternius", source=asset.character))
             continue
         found = fetch_model(asset.model, Path(cache_root), path=f"cast.{key}.asset.model")
         lo, hi = found.bounds

@@ -176,6 +176,7 @@ def run_job(
         settings,
         workdir=workdir,
         outdir=workdir / "artifacts",
+        shared_cache=settings.shared_cache or settings.cache_dir,
         ledger_file=store.root() / job.caller / "quota" / "nadeshiko.json",
     )
 

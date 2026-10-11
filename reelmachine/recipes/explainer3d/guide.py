@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .camera import CAMERA_MOVES
+from .characters import CLIPS
 from .moves import MOVES
 
 
@@ -57,6 +58,14 @@ def build_guide() -> dict[str, Any]:
         "models": ("Cast members may be shapes or CC0 models: {\"model\": \"polyhaven:<id>\" | "
                    "\"khronos:BarramundiFish\", \"size\": metres (longest side) or \"height\", "
                    "\"container\": true for bowls, \"count\": n for a school or a row}. Search with find_models."),
+        "characters": ("People: a cast member {\"character\": \"quaternius:female\" | \"quaternius:male\" | "
+                       "\"mannequin\", \"height\": 1.7, \"outfit\": {\"top\", \"bottom\", \"shoes\": #rrggbb, "
+                       "\"sleeves\": long|short, \"skin\": #rrggbb tint}, \"hair\": long|buns|parted|buzzed|"
+                       "buzzed_female|none, \"hair_colour\", \"beard\": bool}. Stylised CC0 bodies with 43 animations. "
+                       "Moves: walk_to (gait walk|jog|sprint), turn_to, act (clip), talk, sit (on a chair prop's mark), "
+                       "stand_up, pick_up (item rides in the right hand), put_down. Indoor presets have marks front, "
+                       "left, right, door on the floor. People are ~1.7 m: frame them from 2.5-3.5 m (orbit radius, "
+                       f"track offset z). Clips for act: {sorted(CLIPS)}."),
         "moves": {name: {"category": m.category, "description": m.description, "actor": m.actor,
                          "params": _params(m.params), "example": m.example}
                   for name, m in MOVES.items()},

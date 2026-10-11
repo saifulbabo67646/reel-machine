@@ -228,3 +228,19 @@ def test_a_cinematic_reel_with_auto_music_and_an_underwater_beat_builds(tmp_path
     assert job.state == JobState.SUCCEEDED, job.error
     timeline = json.loads(Path(next(a for a in job.result.artifacts if a.name == "timeline.json").path).read_text())
     assert timeline["meta"]["joins"] == ["none", "cut", "cut"]  # cinematic: hard cuts only
+
+
+def test_jobs_share_one_asset_cache_instead_of_downloading_per_job(tmp_path, monkeypatch):
+    from reelmachine.recipes.explainer3d import assets
+
+    seen = []
+    real = assets.resolve_cast
+
+    def spy(inputs, cache_root):
+        seen.append(Path(cache_root))
+        return real(inputs, cache_root)
+
+    monkeypatch.setattr("reelmachine.recipes.explainer3d.stages.resolve_cast", spy)
+    for _ in range(2):
+        assert _run(tmp_path, {**SCRIPT, "mode": "storyboard"}).state == JobState.SUCCEEDED
+    assert len(seen) == 2 and seen[0] == seen[1] == _settings(tmp_path).cache_dir / "explainer3d" / "assets"

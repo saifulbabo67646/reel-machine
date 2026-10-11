@@ -19,7 +19,7 @@ from typing import Any
 from ...render.hyperframes import HYPERFRAMES_VERSION
 from .geometry import dims
 from .assets import compound_dims
-from .models import CompoundSpec, Explainer3DInputs, ShapeSpec
+from .models import CharacterSpec, CompoundSpec, Explainer3DInputs, ShapeSpec
 from .state import ShotPlan
 from .timing import ShotWindow
 from .world import Ctx
@@ -78,6 +78,18 @@ def shot_document(
         asset, resolved = member.asset, (models or {}).get(key)
         if isinstance(asset, ShapeSpec):
             actors[key] = {"shape": asset.model_dump(), "dims": list(dims(asset)), "count": asset.count}
+        elif isinstance(asset, CharacterSpec):
+            main = resolved.main if resolved else ""
+            from .characters import BEARD, BONE_REGIONS, HAIR
+
+            hair = HAIR.get(asset.hair or "none", "")
+            actors[key] = {"character": {"url": f"assets/characters/{main}", "animations": "assets/characters/animations.glb",
+                                         "outfit": asset.outfit.model_dump(), "hairColour": asset.hair_colour,
+                                         "hair": f"assets/characters/hair/{hair}" if hair else None,
+                                         "beard": f"assets/characters/hair/{BEARD}" if asset.beard else None,
+                                         "regions": {k: list(v) for k, v in BONE_REGIONS.items()}},
+                           "dims": list(resolved.dims) if resolved else [0.35 * asset.height, asset.height, 0.2 * asset.height],
+                           "count": 1}
         elif isinstance(asset, CompoundSpec):
             actors[key] = {"compound": asset.model_dump(mode="json"), "dims": list(compound_dims(asset)),
                            "count": asset.count}
@@ -126,6 +138,9 @@ def project_links(models: dict[str, Any] | None, set_key: str, env: Any) -> dict
     """Files a shot project needs from the asset cache: published path → cached file."""
     links: dict[str, Path] = {}
     for resolved in (models or {}).values():
+        if resolved.kind == "character":
+            for rel in resolved.files:
+                links[f"assets/characters/{rel}"] = Path(resolved.root) / rel
         if resolved.kind == "model":
             provider, _, ident = resolved.model.model.partition(":")
             for rel in resolved.files:

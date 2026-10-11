@@ -116,10 +116,50 @@ class CompoundSpec(BaseModel):
     count: int = Field(1, ge=1, le=12)
 
 
+class OutfitSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    top: str = "#3a6ea5"
+    bottom: str = "#2f3542"
+    shoes: str = "#1e1e1e"
+    sleeves: Literal["long", "short"] = "long"
+    skin: str | None = None  # tints the skin texture (a darker or lighter tone)
+
+    @field_validator("top", "bottom", "shoes", "skin")
+    @classmethod
+    def check_colour(cls, value: str | None) -> str | None:
+        return hex_colour(value)
+
+
+class CharacterSpec(BaseModel):
+    """A stylised CC0 person (Quaternius) who can walk, talk, sit and handle props,
+    dressed in an outfit of the script's colours."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    character: Literal["quaternius:male", "quaternius:female", "mannequin"]
+    height: float = Field(1.75, ge=0.3, le=3.0)
+    outfit: OutfitSpec = Field(default_factory=OutfitSpec)
+    hair: Literal["long", "buns", "parted", "buzzed", "buzzed_female", "none"] | None = None
+    hair_colour: str = "#3b2a20"
+    beard: bool = False
+
+    @field_validator("hair_colour")
+    @classmethod
+    def check_colour(cls, value: str) -> str:
+        return hex_colour(value)
+
+    @model_validator(mode="after")
+    def _default_hair(self) -> "CharacterSpec":
+        if self.hair is None:
+            self.hair = {"quaternius:female": "long", "quaternius:male": "parted"}.get(self.character, "none")
+        return self
+
+
 class CastMember(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    asset: ShapeSpec | ModelSpec | CompoundSpec
+    asset: ShapeSpec | ModelSpec | CompoundSpec | CharacterSpec
     at: str | None = None  # an anchor; None keeps the actor hidden until a move brings it
 
     @field_validator("asset", mode="before")
@@ -380,10 +420,11 @@ class ScriptOutput(StageOutput):
 class ResolvedModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["shape", "model", "compound"] = "shape"
+    kind: Literal["shape", "model", "compound", "character"] = "shape"
     shape: ShapeSpec | None = None
     model: ModelSpec | None = None
     compound: CompoundSpec | None = None
+    character: CharacterSpec | None = None
     root: str = ""  # the cached model folder (models only)
     main: str = ""  # the .gltf/.glb inside it
     files: list[str] = Field(default_factory=list)

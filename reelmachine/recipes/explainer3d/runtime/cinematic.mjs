@@ -2,6 +2,7 @@
 // post-processing. Like the classic renderer, every frame is a function of t alone.
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { BokehPass } from "three/addons/postprocessing/BokehPass.js";
@@ -34,6 +35,57 @@ function gradePass(post) {
         c *= mix(1.0, smoothstep(0.78, 0.2, length(d) * 1.3), uVig); c += (hash(vUv * 977.0) - 0.5) * uGrain;
         gl_FragColor = vec4(c, 1.0); }`,
   });
+}
+
+// The base bodies ship undressed. Dress the body by bone: each vertex takes the region of
+// the bone that moves it most (skin, top, sleeve, bottom, shoes) and each region a colour.
+const REGION_INDEX = { skin: 0, top: 1, sleeve: 2, bottom: 3, shoes: 4 };
+function dress(body, character) {
+  const o = character.outfit, regions = character.regions;
+  const regionOf = (name) => {
+    for (const [region, prefixes] of Object.entries(regions)) if (prefixes.some((p) => name.startsWith(p))) return region;
+    return "top";
+  };
+  let mesh = null;
+  body.traverse((x) => { if (x.isSkinnedMesh && (!mesh || x.geometry.attributes.position.count > mesh.geometry.attributes.position.count)) mesh = x; });
+  if (!mesh) return;
+  const table = new Array(80).fill(1);
+  mesh.skeleton.bones.forEach((b, i) => {
+    const region = regionOf(b.name);
+    table[i] = REGION_INDEX[region === "sleeve" && o.sleeves === "short" ? "skin" : region];
+  });
+  const uniforms = {
+    uRegionOf: { value: table }, uTop: { value: new THREE.Color(o.top) }, uSleeve: { value: new THREE.Color(o.top) },
+    uBottom: { value: new THREE.Color(o.bottom) }, uShoes: { value: new THREE.Color(o.shoes) },
+    uSkin: { value: o.skin ? new THREE.Color(o.skin).multiplyScalar(1.6) : new THREE.Color(1, 1, 1) },
+  };
+  const m = mesh.material.clone();
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, uniforms);
+    // every influence votes for its region by its weight; edges stay clean because the
+    // fragment sharpens the votes instead of picking one region per triangle
+    sh.vertexShader = "uniform float uRegionOf[80];\nvarying vec4 vCloth;\n" + sh.vertexShader.replace("#include <begin_vertex>",
+      `#include <begin_vertex>
+       vCloth = vec4(0.0);
+       for (int k = 0; k < 4; k++) {
+         float r = uRegionOf[int(skinIndex[k] + 0.5)], wk = skinWeight[k];
+         if (r > 0.5 && r < 1.5) vCloth.x += wk;
+         else if (r > 1.5 && r < 2.5) vCloth.y += wk;
+         else if (r > 2.5 && r < 3.5) vCloth.z += wk;
+         else if (r > 3.5) vCloth.w += wk;
+       }`);
+    sh.fragmentShader = "uniform vec3 uTop, uSleeve, uBottom, uShoes, uSkin;\nvarying vec4 vCloth;\n" + sh.fragmentShader
+      .replace("#include <map_fragment>", `#include <map_fragment>
+        vec4 c = pow(clamp(vCloth, 0.0, 1.0), vec4(8.0));
+        float sk = pow(clamp(1.0 - dot(vCloth, vec4(1.0)), 0.0, 1.0), 8.0);
+        float total = max(sk + c.x + c.y + c.z + c.w, 1e-5);
+        float cloth = 1.0 - sk / total;
+        diffuseColor.rgb = (sk * diffuseColor.rgb * uSkin + c.x * uTop + c.y * uSleeve + c.z * uBottom + c.w * uShoes) / total;`)
+      .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
+        roughnessFactor = mix(roughnessFactor, 0.85, cloth);`);
+  };
+  m.customProgramCacheKey = () => "e3d-dress";
+  mesh.material = m;
 }
 
 // a swimming body wave: displaces each vertex sideways, growing toward the tail
@@ -163,6 +215,37 @@ export async function startCinematic(shot) {
     if (!models.has(url)) models.set(url, loader.loadAsync(url).then((g) => g.scene));
     return models.get(url).then((s) => s.clone(true));
   };
+  // characters: one body per file, cloned with its skeleton; one animation library, shared
+  const bodies = new Map(), libraries = new Map();
+  const loadBody = (url) => {
+    if (!bodies.has(url)) bodies.set(url, loader.loadAsync(url).then((g) => g.scene));
+    return bodies.get(url).then((s) => SkeletonUtils.clone(s));
+  };
+  const loadClips = (url) => {
+    if (!libraries.has(url)) {
+      libraries.set(url, loader.loadAsync(url).then((g) => new Map(g.animations.map((clip) => {
+        clip.tracks = clip.tracks.filter((track) => track.name !== "root.position"); // the move walks them, not the clip
+        return [clip.name, clip];
+      }))));
+    }
+    return libraries.get(url);
+  };
+  // hair is rigged to the head bone of its own copy of the skeleton: bind it to this body's
+  const addHair = async (body, url, colour) => {
+    const hair = (await loader.loadAsync(url)).scene, bones = {};
+    body.traverse((o) => { if (o.isBone) bones[o.name] = o; });
+    const host = body.getObjectByProperty("isSkinnedMesh", true);
+    const meshes = [];
+    hair.traverse((o) => { if (o.isSkinnedMesh) meshes.push(o); });
+    for (const mesh of meshes) {
+      const skeleton = new THREE.Skeleton(mesh.skeleton.bones.map((b) => bones[b.name] || b), mesh.skeleton.boneInverses);
+      mesh.material = mesh.material.clone();
+      mesh.material.color.multiply(new THREE.Color(colour)).multiplyScalar(2.2);
+      mesh.castShadow = true;
+      (host ? host.parent : body).add(mesh);
+      mesh.bind(skeleton, mesh.bindMatrix);
+    }
+  };
   const fit = (obj, dims) => {
     const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3());
     obj.scale.multiplyScalar(dims[1] / Math.max(size.y, 1e-6));
@@ -183,8 +266,15 @@ export async function startCinematic(shot) {
   const effects = new Effects(THREE, scene);
   const actors = {};
   for (const [id, a] of Object.entries(shot.actors)) {
-    let base, innerR = null, wiggle = null, template = null;
-    if (a.compound) {
+    let base, innerR = null, wiggle = null, template = null, rig = null;
+    if (a.character) {
+      const body = await loadBody(a.character.url);
+      dress(body, a.character);
+      rig = { mixer: new THREE.AnimationMixer(body), clips: await loadClips(a.character.animations), actions: new Map(),
+              hand: body.getObjectByName("hand_r") };
+      base = fit(body, a.dims);
+      for (const url of [a.character.hair, a.character.beard]) if (url) await addHair(body, url, a.character.hairColour);
+    } else if (a.compound) {
       base = buildCompound(THREE, a.compound);
       if (a.compound.container) innerR = (y) => (a.dims[0] / 2) * (0.6 + 0.3 * clamp01(y / a.dims[1]));
     } else if (a.shape) {
@@ -222,7 +312,7 @@ export async function startCinematic(shot) {
         return { holder, u };
       });
     }
-    actors[id] = { group, pieces, fill, wiggle, school, spacing, dims: a.dims };
+    actors[id] = { group, pieces, fill, wiggle, school, spacing, dims: a.dims, rig };
   }
 
   const composer = new EffectComposer(renderer);
@@ -298,6 +388,40 @@ export async function startCinematic(shot) {
       }
       if (A.school && !mine.some((e) => e.type === "school")) A.school.forEach((f) => (f.holder.visible = false));
       if (A.fill && a.fill) A.fill.update(a.fill, coil[id] ?? 1, squashFill[id] || 0);
+    }
+
+    // people: the clips their moves ask for, over the idle (or seated idle) that fills the rest
+    const clock = t + shot.reel.startMs / 1000;
+    for (const [id, A] of Object.entries(actors)) {
+      if (!A.rig) continue;
+      const anims = (byActor[id] || []).filter((e) => e.type === "anim");
+      const rest = Math.max(0, 1 - anims.reduce((sum, e) => sum + e.weight, 0));
+      const want = [...anims, { clip: world[id].pose === "sit" ? "Sitting_Idle_Loop" : "Idle_Loop", time: clock, weight: rest }];
+      const weights = new Map();
+      for (const action of A.rig.actions.values()) action.setEffectiveWeight(0);
+      for (const e of want) {
+        const clip = A.rig.clips.get(e.clip);
+        if (!clip || e.weight <= 0) continue;
+        let action = A.rig.actions.get(e.clip);
+        if (!action) {
+          action = A.rig.mixer.clipAction(clip);
+          action.play();
+          A.rig.actions.set(e.clip, action);
+        }
+        const looping = /_Loop$/.test(e.clip);
+        action.time = looping ? e.time % clip.duration : Math.min(Math.max(0, e.time), clip.duration - 1e-3);
+        weights.set(e.clip, (weights.get(e.clip) || 0) + e.weight);
+        action.setEffectiveWeight(weights.get(e.clip));
+      }
+      A.rig.mixer.update(0);
+    }
+    scene.updateMatrixWorld(true);
+    for (const [id, A] of Object.entries(actors)) {
+      const held = A.rig && world[id].holding;
+      if (!held || !actors[held] || !A.rig.hand) continue;
+      const hand = A.rig.hand.getWorldPosition(new THREE.Vector3());
+      actors[held].group.position.set(hand.x, hand.y - actors[held].dims[1] * 0.5 * world[held].scale, hand.z);
+      actors[held].group.visible = true;
     }
 
     effects.begin();

@@ -1,2 +1,1 @@
-{"sky": "polyhaven:cyclorama_hard_light", "background": "#e9e6e1", "stage": "none",
- "floor": {"colour": "#e9e6e1", "size": [40, 40]}, "sun_angle": 45}
+{"sky": "polyhaven:cyclorama_hard_light", "background": "#e9e6e1", "stage": "none", "floor": {"colour": "#e9e6e1", "size": [40, 40]}, "sun_angle": 45, "marks": {"front": [0, 0, 0.85], "left": [-1.4, 0, 0.85], "right": [1.4, 0, 0.85], "door": [-2.4, 0, 1.8]}}
