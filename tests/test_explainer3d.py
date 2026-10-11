@@ -322,3 +322,71 @@ def test_shot_without_camera_holds_the_previous_pose():
     ]}, speech=(2000, 2000))
     assert plans[1].camera["move"] == "static"
     assert plans[1].camera["start"] == plans[0].camera["end"] and plans[1].join == "cut"
+
+
+import json  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+RUNTIME = Path(__file__).resolve().parents[1] / "reelmachine/recipes/explainer3d/runtime"
+node = pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+
+
+def _evaluate(cases):
+    proc = subprocess.run(["node", str(RUNTIME / "tools/evaluate.mjs")], input=json.dumps({"cases": cases}),
+                          capture_output=True, text=True, check=True)
+    return json.loads(proc.stdout)["results"]
+
+
+def _close(a, b, path="$"):
+    if isinstance(a, dict):
+        assert set(a) == set(b), path
+        for k in a:
+            _close(a[k], b[k], f"{path}.{k}")
+    elif isinstance(a, list):
+        assert len(a) == len(b), path
+        for i, (x, y) in enumerate(zip(a, b)):
+            _close(x, y, f"{path}[{i}]")
+    elif isinstance(a, float) or isinstance(b, float):
+        assert a == pytest.approx(b, abs=1e-6), path
+    else:
+        assert a == b, path
+
+
+@node
+def test_runtime_end_states_match_python():
+    world = _world()
+    world["bottle"] = {"position": [-0.4, 0.9, 0.0], "visible": True, "rotationY": 0.0, "scale": 1.0, "fill": None}
+    ctx = {**CTX, "dims": {**CTX["dims"], "bottle": [0.06, 0.2, 0.06]},
+           "homes": {**CTX["homes"], "bottle": [-0.4, 0.9, 0.0]}, "colours": {**CTX["colours"], "bottle": "#cfe8ef"}}
+    world["bowl"]["fill"]["level"] = 0.9  # pours past full must clamp
+    cases, expected = [], []
+    for name, actor, raw in [
+        ("appear", "potato", {}), ("scale_pop", "potato", {}), ("fly_in", "potato", {"from": "left"}),
+        ("fly_in", "potato", {"to": "bowl"}), ("drop_into", "potato", {"into": "bowl", "colour": "#ff0000"}),
+        ("place_on", "bottle", {"on": "bowl"}), ("spin_showcase", "bowl", {"turns": 1.5}),
+        ("exit", "bowl", {"to": "sky"}), ("pour", "bottle", {"into": "bowl", "fill_add": 0.5}),
+        ("sprinkle", None, {"into": "bowl"}), ("mash", "bowl", {"colour": "#aabbcc"}), ("steam", "bowl", {}),
+    ]:
+        move = MOVES[name]
+        action = {"move": name, "actor": actor, "params": move.params.model_validate(raw).model_dump(by_alias=True),
+                  "t0": 0.0, "t1": 1.0, "seed": 7, "index": 0}
+        cases.append({"kind": "action", "world": world, "action": action, "ctx": ctx, "p": 1.0})
+        expected.append(move.end(world, action, ctx))
+    for move, raw in [("static", {}), ("orbit", {"from": 10, "to": 80}), ("push_in", {"factor": 0.4}),
+                      ("dolly", {"offset": [0.5, 0.1, 0]})]:
+        params = CAMERA_MOVES[move].params.model_validate(raw).model_dump(by_alias=True)
+        target = [0.1, 1.0, 0.0]
+        start = default_start(move, params, target)
+        for p in (0.0, 0.3, 1.0):
+            cases.append({"kind": "camera", "move": move, "params": params, "start": start, "target": target, "p": p})
+            expected.append(pose(move, params, start, target, p))
+    for got, want in zip(_evaluate(cases), expected):
+        _close(got, want)
+
+
+@node
+def test_runtime_node_unit_tests_pass():
+    proc = subprocess.run(["node", "--test", str(RUNTIME / "tests" / "*.test.mjs")], capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
