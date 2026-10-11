@@ -124,7 +124,8 @@ def plan_shots(
                 cues.append({"at_ms": window.start_ms + int(round(at * 1000)), "sfx": sfx[0]})
 
         cam = shot.camera
-        target = center(ctx, world, cam.target)
+        aim = cam.params.get("aim") or (0.0, 0.0, 0.0)
+        target = [c + o for c, o in zip(center(ctx, world, cam.target), aim)]
         if cam.continues and previous_end is not None:
             start = previous_end
         else:
@@ -133,7 +134,8 @@ def plan_shots(
         for action in actions:
             end_world = MOVES[action["move"]].end(end_world, action, ctx)
         # a tracking camera ends on where its actor ends up
-        end_target = center(ctx, end_world, cam.target) if cam.move == "track" else target
+        end_target = ([c + o for c, o in zip(center(ctx, end_world, cam.target), aim)]
+                      if cam.move == "track" else target)
         end = pose(cam.move, cam.params, start, end_target, 1.0)
         plans.append(ShotPlan(
             shot_id=shot.id, index=shot.index, world=world, actions=actions,

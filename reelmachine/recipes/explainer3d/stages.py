@@ -21,7 +21,8 @@ from ...core.timeline import Caption, Clip, Timeline, TimedAudioRef, WordSpan
 from ...render.captions import write_srt
 from ..doodle.narration import provider_for
 from .audio import mix, pad_speech, silence, synth_sfx
-from .compile import FPS, look_timing, project_key, project_links, shot_document, write_project
+from .compile import FPS, load_look, look_timing, project_key, project_links, shot_document, write_project
+from .music import synth_music
 from .markup import display_text, display_words, parse_markup, spoken_text
 from .assets import environment_packs, resolve_cast
 from .models import (
@@ -209,6 +210,10 @@ class ShotsStage:
         windows = [ShotWindow(i, w.start_ms, w.duration_ms, w.speech_offset_ms, w.speech_ms)
                    for i, w in enumerate(payload.windows)]
         plans = plan_shots(inputs, payload.shots, windows, payload.models)
+        look = load_look(inputs.look)
+        if look.get("join") == "cut":  # the cinematic look cuts hard; no crossfades
+            for plan in plans[1:]:
+                plan.join = "cut"
         scene_ctx = build_ctx(inputs, payload.models)
         projects, cues = [], []
         for i, (plan, window) in enumerate(zip(plans, windows)):
@@ -227,6 +232,8 @@ class ShotsStage:
                                         nominal_ms=window.duration_ms, render_ms=window.duration_ms + tail,
                                         join=plan.join))
             cues.extend(plan.cues)
+            if i > 0 and look.get("cutWhoosh"):
+                cues.append({"at_ms": max(0, window.start_ms - 150), "sfx": "whoosh"})
         resolved = {
             "shots": [shot.model_dump() for shot in payload.shots],
             "plans": [plan.model_dump() for plan in plans],
@@ -354,14 +361,23 @@ class RenderStage:
         outdir.mkdir(parents=True, exist_ok=True)
         name = options["reel_name"]
 
-        music = Path(inputs.music).expanduser() if inputs.music else None  # validated by the script stage
+        look = load_look(inputs.look)
+        if inputs.music == "auto":
+            underwater = [(w.start_ms, w.start_ms + w.duration_ms)
+                          for shot, w in zip(narration.shots, narration.windows) if shot.environment == "underwater"]
+            music = synth_music(work / "music.wav", total_ms=timeline.duration_ms, underwater=underwater)
+        else:
+            music = Path(inputs.music).expanduser() if inputs.music else None  # validated by the script stage
         joined = join_shots([Path(t.path) for t in prep.tracks], [p.join for p in prep.shots.projects],
                             [p.nominal_ms for p in prep.shots.projects], work / "video.mp4",
                             settings=settings, fps=FPS, cancel=ctx.cancel)
-        cues = [(cue["at_ms"], synth_sfx(cue["sfx"], work / "sfx" / f"{cue['sfx']}.wav", settings=settings))
+        designed = look.get("renderer") == "cinematic"
+        cues = [(cue["at_ms"], synth_sfx(cue["sfx"], work / "sfx" / f"{cue['sfx']}.wav", settings=settings,
+                                         designed=designed))
                 for cue in prep.shots.cues]
+        profile = look.get("audioProfile", inputs.audio_profile) if inputs.audio_profile == "studio" else inputs.audio_profile
         audio = mix(ctx.assets.get(narration.audio_asset), cues, music, work / "audio.wav",
-                    total_ms=timeline.duration_ms, settings=settings, profile=inputs.audio_profile,
+                    total_ms=timeline.duration_ms, settings=settings, profile=profile,
                     cancel=ctx.cancel)
         video = mux(joined, audio, outdir / f"{name}.mp4", total_ms=timeline.duration_ms, settings=settings,
                     cancel=ctx.cancel)

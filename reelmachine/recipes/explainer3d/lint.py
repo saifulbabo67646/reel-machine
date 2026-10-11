@@ -42,6 +42,7 @@ def retention_warnings(
                 beats.append(t0 + span * frac)
             if move.big:
                 big_starts.append(t0)
+                beats.append(t0 + span / 2)  # the middle of a big move (a leap's apex) holds attention
     total = windows[-1].end_ms / 1000 if windows else 0.0
     beats = sorted(set(round(b, 3) for b in beats)) + [total]
 

@@ -43,9 +43,11 @@ def parse_markup(narration: str) -> list[Token]:
             tokens.append(Token(shown=shown, spoken=match.group(2).strip(), hot=hot))
             continue
         word = match.group(0)
-        opens, closes = word.startswith("*"), word.endswith("*") and len(word) > 1
-        clean = word.strip("*")
-        if not clean:
+        trail = re.search(r"[.,!?;:…]*$", word).group(0)  # `*potato*.` closes before its full stop
+        core = word[: len(word) - len(trail)] if trail else word
+        opens, closes = core.startswith("*"), core.endswith("*") and len(core) > 1
+        clean = core.strip("*") + trail
+        if not core.strip("*"):
             continue
         hot = hot_run or opens
         if opens and not closes:

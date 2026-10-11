@@ -156,7 +156,7 @@ def test_pop_out_throw_leap_sink_school():
     assert world["bowl"]["fill"]["level"] == pytest.approx(0.0)
     thrown = _end("throw", "potato", to="lake.far")["potato"]
     assert thrown["visible"] is False and thrown["position"][1] < 0
-    leapt = _end("leap", "fish", at="lake.near", span=1.6)["fish"]
+    leapt = _end("leap", "fish", spot="lake.near", span=1.6)["fish"]
     assert leapt["visible"] is False and leapt["position"][0] == pytest.approx(MARKS["lake.near"][0] + 0.8)
     assert _end("sink", "potato", to="underwater.center")["potato"]["position"] == MARKS["underwater.center"]
     eaten = _end("school", "fish", around="potato", eat=True)
@@ -170,7 +170,7 @@ def test_track_and_dive_cameras():
     assert end["position"] == pytest.approx([1.0, 0.8, 1.0]) and end["target"] == pytest.approx([1.0, 0.5, 0.0])
     params = CAMERA_MOVES["dive"].params.model_validate({}).model_dump(by_alias=True)
     start = default_start("dive", params, MARKS["lake.far"])
-    assert pose("dive", params, start, MARKS["lake.far"], 1.0)["position"][1] < 0.05
+    assert 0 < pose("dive", params, start, MARKS["lake.far"], 1.0)["position"][1] < 0.1  # skims the surface
     wide = CAMERA_MOVES["orbit"].params.model_validate({"fov": 60}).model_dump(by_alias=True)
     assert default_start("orbit", wide, [0, 1, 0])["fov"] == 60
 
@@ -224,3 +224,65 @@ def test_describe_carries_a_guide_and_probe_lints(tmp_path):
         engine.close()
     assert any(w.startswith("hook") for w in report.warnings)
     assert report.details["length"]["targetMs"] == 30000
+
+
+import json  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+RUNTIME = Path(__file__).resolve().parents[1] / "reelmachine/recipes/explainer3d/runtime"
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_runtime_end_states_match_python_for_cinematic_moves():
+    cases, expected = [], []
+    for name, actor, raw in [
+        ("leap", "fish", {"spot": "lake.near", "direction": "left"}), ("slam", "potato", {"on": "bowl"}),
+        ("burst", "potato", {"into": "bowl"}), ("drizzle", None, {"into": "bowl"}),
+        ("smash", "potato", {"into": "bowl", "colour": "#aa5500"}), ("pop_out", "balls", {"from": "bowl"}),
+        ("throw", "potato", {"to": "lake.far"}), ("splash", None, {"spot": "lake.left"}),
+        ("sink", "potato", {"to": "underwater.floor"}), ("school", "fish", {"around": "potato", "eat": True}),
+    ]:
+        move = MOVES[name]
+        action = {"move": name, "actor": actor, "params": move.params.model_validate(raw).model_dump(by_alias=True),
+                  "t0": 0.0, "t1": 2.0, "seed": 7, "index": 0}
+        cases.append({"kind": "action", "world": _w(), "action": action, "ctx": CTX, "p": 1.0})
+        expected.append(move.end(_w(), action, CTX))
+    for move, raw in [("track", {"offset": [0.2, 0.3, 1.0]}), ("dive", {"depth": 0.7})]:
+        params = CAMERA_MOVES[move].params.model_validate(raw).model_dump(by_alias=True)
+        start = default_start(move, params, MARKS["lake.far"])
+        for p in (0.0, 0.4, 1.0):
+            cases.append({"kind": "camera", "move": move, "params": params, "start": start, "target": MARKS["lake.far"], "p": p})
+            expected.append(pose(move, params, start, MARKS["lake.far"], p))
+    proc = subprocess.run(["node", str(RUNTIME / "tools/evaluate.mjs")], input=json.dumps({"cases": cases}),
+                          capture_output=True, text=True, check=True)
+    for (case, got), want in zip(zip(cases, json.loads(proc.stdout)["results"]), expected):
+        assert json.dumps(got, sort_keys=True) == json.dumps(want, sort_keys=True) or _close(got, want), case.get("action", case)
+
+
+def _close(a, b):
+    if isinstance(a, dict):
+        return set(a) == set(b) and all(_close(a[k], b[k]) for k in a)
+    if isinstance(a, list):
+        return len(a) == len(b) and all(_close(x, y) for x, y in zip(a, b))
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool):
+        return abs(a - b) < 1e-6
+    return a == b
+
+
+def test_hot_markup_survives_trailing_punctuation():
+    tokens = parse_markup("One boiled *sweet potato*. *Smash* it, *now*!")
+    assert [(t.shown, t.hot) for t in tokens] == [
+        ("One", False), ("boiled", False), ("sweet", True), ("potato.", True), ("Smash", True), ("it,", False), ("now!", True)]
+
+
+def test_camera_aim_shifts_the_point_a_camera_looks_at():
+    from reelmachine.recipes.explainer3d.state import plan_shots
+
+    inputs = Explainer3DInputs.model_validate(_script(shots=[
+        {"narration": "x", "camera": {"move": "orbit", "target": "bowl", "aim": [0, 0.8, 0]}}]))
+    shots = resolve_script(inputs)
+    plan = plan_shots(inputs, shots, shot_windows([1000]))[0]
+    plain = plan_shots(Explainer3DInputs.model_validate(_script()), resolve_script(Explainer3DInputs.model_validate(_script())), shot_windows([1000]))[0]
+    assert plan.camera["target"][1] == pytest.approx(plain.camera["target"][1] + 0.8)

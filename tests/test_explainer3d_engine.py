@@ -193,3 +193,38 @@ def test_beat_shots_markup_and_length_reach_the_reel(tmp_path):
     assert timeline["video"][1]["duration_ms"] >= 2000
     natural = 2000 + sum(c["end_ms"] - c["start_ms"] for c in timeline["captions"])
     assert natural < timeline["duration_ms"] <= 15000  # stretched toward the target
+
+
+def test_auto_music_is_the_reel_length_repeatable_and_muffled_underwater(tmp_path):
+    import numpy as np
+
+    from reelmachine.recipes.explainer3d.music import synth_music
+
+    settings = _settings(tmp_path)
+    a = synth_music(tmp_path / "a.wav", total_ms=6000, underwater=[(2000, 4000)], settings=settings)
+    b = synth_music(tmp_path / "b.wav", total_ms=6000, underwater=[(2000, 4000)], settings=settings)
+    assert a.read_bytes() == b.read_bytes()
+    assert ffmpeg.probe(a).duration_s == pytest.approx(6.0, abs=0.02)
+
+    import wave
+    with wave.open(str(a)) as w:
+        x = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).reshape(-1, 2)[:, 0].astype(float)
+    def bright(seg):
+        spectrum = np.abs(np.fft.rfft(seg))
+        freqs = np.fft.rfftfreq(len(seg), 1 / 48000)
+        return spectrum[freqs > 2000].sum() / max(spectrum.sum(), 1e-9)
+    assert bright(x[2200 * 48:3800 * 48]) < 0.5 * bright(x[200 * 48:1800 * 48])
+
+
+def test_a_cinematic_reel_with_auto_music_and_an_underwater_beat_builds(tmp_path):
+    script = {**SCRIPT, "look": "cinematic", "music": "auto", "shots": [
+        {"narration": "First, a potato.", "camera": {"move": "orbit", "target": "bowl"},
+         "actions": [{"move": "slam", "actor": "potato", "on": "stage.near_left", "at": [0, 0.4]}]},
+        {"duration": 1.5, "set": {"environment": "underwater"},
+         "camera": {"move": "orbit", "target": "underwater.center"}},
+        {"narration": "Save this.", "actions": [{"move": "mash", "actor": "bowl"}]},
+    ]}
+    job = _run(tmp_path, script)
+    assert job.state == JobState.SUCCEEDED, job.error
+    timeline = json.loads(Path(next(a for a in job.result.artifacts if a.name == "timeline.json").path).read_text())
+    assert timeline["meta"]["joins"] == ["none", "cut", "cut"]  # cinematic: hard cuts only

@@ -313,10 +313,11 @@ ENVIRONMENTS: dict[str, dict[str, Any]] = {
             {"source": "polyhaven:rock_moss_set_01", "size": 1.2, "at": [1.15, -0.32, -0.25], "yaw": 2.1},
             {"source": "polyhaven:grass_medium_01", "height": 0.5, "at": [-0.8, -0.02, 0.55], "yaw": 0.0},
             {"source": "polyhaven:grass_medium_01", "height": 0.45, "at": [0.85, -0.02, 0.5], "yaw": 1.5},
-            {"source": "polyhaven:shrub_01", "height": 0.9, "at": [-0.95, -0.05, -0.85], "yaw": 0.3},
+            {"source": "polyhaven:shrub_01", "height": 0.9, "at": [-1.55, -0.05, 0.3], "yaw": 0.3},
         ],
     },
     "underwater": {
+        "hdri": "small_harbour_sunset",  # light only: the underwater background is fog
         "textures": {"sand": "coast_sand_01"},
         "water_normals": True,
         "dressing": [],

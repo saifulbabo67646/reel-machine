@@ -28,6 +28,12 @@ export function cameraPose(move, params, start, target, p) {
       const o = params.offset;
       return { position: [0, 1, 2].map((i) => sp[i] + o[i] * p), target: [0, 1, 2].map((i) => st[i] + o[i] * p), fov: start.fov };
     }
+    case "track":
+      return { position: [0, 1, 2].map((i) => target[i] + params.offset[i]), target: [...target], fov: start.fov };
+    case "dive": {
+      const dest = [target[0], target[1] + 0.05, target[2] + 0.45], look = [target[0], target[1] - params.depth, target[2]];
+      return { position: lerp3(sp, dest, p), target: lerp3(st, look, p), fov: start.fov };
+    }
     default:
       throw new Error(`unknown camera move ${move}`);
   }

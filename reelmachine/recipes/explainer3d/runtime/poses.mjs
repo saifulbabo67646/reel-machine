@@ -127,12 +127,172 @@ const MOVES = {
     const fx = p < 1 ? [{ type: "steam", seed: a.seed, origin: top(ctx, w, a.actor), t: p * (a.t1 - a.t0), intensity: a.params.intensity }] : [];
     return { world: w, fx };
   },
+
+  // ---- cinematic. `over` is seconds past the action's end: lingering effects (a splash
+  // that is still falling, crumbs still settling) keep animating after p reaches 1.
+  leap(w, a, ctx, p, over) {
+    const P = a.params, c = point(ctx, w, P.spot), sign = P.direction === "right" ? 1 : -1, dur = a.t1 - a.t0;
+    const from = [c[0] - (sign * P.span) / 2, -0.5, c[2]], to = [c[0] + (sign * P.span) / 2, -0.6, c[2]];
+    const u = slowmo(p, P.slowmo);
+    const at = (k) => { const q = lerp3(from, to, k); q[1] += 4 * (P.height + 0.55) * k * (1 - k); return q; };
+    const pos = at(u), ahead = at(Math.min(1, u + 0.01)), back = at(Math.max(0, u - 0.01));
+    const fx = [];
+    const age = p * dur + over, landU = 0.97, landP = unslowmo(landU, P.slowmo);
+    fx.push({ type: "splash", at: [from[0], 0, from[2]], age, size: 1.3, linger: true, seed: a.seed });
+    if (p >= landP) fx.push({ type: "splash", at: [to[0], 0, to[2]], age: (p - landP) * dur + over, size: 1.1, linger: true, seed: a.seed + 1 });
+    if (p < 1) {
+      fx.push({ type: "orient", actor: a.actor, dir: [ahead[0] - back[0], ahead[1] - back[1], ahead[2] - back[2]] });
+      fx.push({ type: "wiggle", actor: a.actor, phase: age * 14, amp: 0.12 });
+      fx.push({ type: "drops", seed: a.seed, path: { from, to, height: P.height + 0.55 }, u, age });
+    }
+    const end = p >= 1;
+    return { world: setActor(w, a.actor, { position: end ? to : pos, visible: !end && pos[1] > -0.45 }), fx };
+  },
+  slam(w, a, ctx, p, over) {
+    const ref = a.params.on, dur = a.t1 - a.t0;
+    const dest = ref == null ? [...ctx.homes[a.actor]] : ref in ctx.anchors ? point(ctx, w, ref) : top(ctx, w, ref);
+    const hit = 0.45, from = add3(dest, [0, a.params.drop, 0]);
+    const position = p >= 1 ? dest : p < hit ? lerp3(from, dest, easeInCubic(p / hit)) : dest;
+    const fx = [];
+    if (p >= hit) {
+      const age = (p - hit) * dur + over;
+      fx.push({ type: "impact", age, strength: 0.012, linger: true }, { type: "dust", at: dest, age, size: 0.6, linger: true, seed: a.seed });
+      if (p < 1) fx.push({ type: "squash", actor: a.actor, k: Math.exp(-age * 10) * Math.sin(age * 40) * 0.25 });
+    }
+    return { world: setActor(w, a.actor, { position, visible: true, scale: 1 }), fx };
+  },
+  burst(w, a, ctx, p, over) {
+    const P = a.params, into = P.into, dur = a.t1 - a.t0, f = w[into].fill, level0 = f.level;
+    const above = add3(top(ctx, w, into), [0, 0.09, 0]), inside = interior(ctx, w, into, level0);
+    const pop = 0.55, colour = P.colour || ctx.colours[a.actor];
+    let world = w;
+    const fx = [];
+    if (p < pop) {
+      const position = p < 0.4 ? hop(w[a.actor].position, above, easeInOutCubic(p / 0.4), 0.18) : above;
+      const wob = p >= 0.4 ? 1 + 0.12 * Math.sin((p - 0.4) * dur * 30) : 1;
+      world = setActor(world, a.actor, { position, visible: true, scale: wob });
+    } else {
+      const age = (p - pop) * dur + over, q = p >= 1 ? 1 : clamp01((p - pop) / 0.3);
+      world = setFill(world, into, { level: Math.min(1, level0 + P.fill_add * q), surface: "crumbs", colour });
+      world = setActor(world, a.actor, { position: inside, visible: false, scale: 0 });
+      fx.push({ type: "impact", age, strength: 0.02, linger: true }, { type: "flash", age, amount: 0.35, linger: true });
+      if (age < 1.2) fx.push({ type: "crumbs", seed: a.seed, from: above, into, age, colour, linger: true });
+    }
+    if (p >= 1) world = setFill(world, into, { level: Math.min(1, level0 + P.fill_add), surface: "crumbs", colour });
+    return { world, fx };
+  },
+  drizzle(w, a, ctx, p) {
+    const P = a.params, into = P.into, f = w[into].fill, q = p >= 1 ? 1 : clamp01((p - 0.1) / 0.75);
+    const level = Math.min(1, f.level + P.fill_add * q);
+    let world = setFill(w, into, p >= 0.1 ? { level, glaze: P.colour } : { level });
+    const fx = [];
+    if (p > 0.05 && p < 0.92) {
+      const surface = interior(ctx, world, into, level);
+      fx.push({ type: "honey", from: add3(top(ctx, w, into), [0, 0.7, 0]), to: surface, into, colour: P.colour,
+                thin: clamp01((0.92 - p) / 0.1), grow: clamp01((p - 0.05) / 0.06), t: p * (a.t1 - a.t0) });
+    }
+    if (p < 1 && p >= 0.1) fx.push({ type: "coil", into, amount: q });
+    if (p >= 1) world = setFill(w, into, { level: Math.min(1, f.level + P.fill_add), glaze: P.colour });
+    return { world, fx };
+  },
+  smash(w, a, ctx, p, over) {
+    const P = a.params, into = P.into, dur = a.t1 - a.t0, f = w[into].fill, level0 = f.level;
+    const hover = add3(top(ctx, w, into), [0, 0.28, 0]), inside = interior(ctx, w, into, level0), hit = 0.62;
+    let world = w;
+    const fx = [];
+    if (p < hit) {
+      let position;
+      if (p < 0.35) position = lerp3(w[a.actor].position, hover, easeInOutCubic(p / 0.35));
+      else if (p < 0.55) position = add3(hover, [0, 0.03 * Math.sin((p - 0.35) * 30), 0]);
+      else if (p < 0.58) position = add3(hover, [0, 0.08 * easeOutCubic((p - 0.55) / 0.03), 0]);
+      else position = lerp3(add3(hover, [0, 0.08, 0]), inside, easeInCubic((p - 0.58) / 0.04));
+      world = setActor(world, a.actor, { position, visible: true, scale: 1 });
+      if (p >= 0.35) fx.push({ type: "spin", actor: a.actor, angle: (p - 0.35) * dur * 2.2 });
+    } else {
+      const age = (p - hit) * dur + over, q = p >= 1 ? 1 : clamp01((p - hit) / 0.12);
+      world = setActor(world, a.actor, { position: inside, visible: false, scale: 0 });
+      world = setFill(world, into, { level: Math.min(1, level0 + P.fill_add * q), surface: "paste", colour: P.colour, glaze: null });
+      fx.push({ type: "impact", age, strength: 0.03, linger: true }, { type: "flash", age, amount: 0.6, linger: true },
+              { type: "ring", at: top(ctx, w, into), age, linger: true },
+              { type: "chunks", seed: a.seed, at: add3(top(ctx, w, into), [0, 0.02, 0]), age, colour: P.colour, floorY: w[into].position[1], linger: true },
+              { type: "dust", at: w[into].position, age, size: 1.2, linger: true, seed: a.seed + 3 });
+      if (p < 1) fx.push({ type: "squashFill", into, k: Math.exp(-age * 6) * Math.sin(age * 30) * 0.15 });
+    }
+    if (p >= 1) world = setFill(setActor(w, a.actor, { position: inside, visible: false, scale: 0 }), into,
+      { level: Math.min(1, level0 + P.fill_add), surface: "paste", colour: P.colour, glaze: null });
+    return { world, fx };
+  },
+  pop_out(w, a, ctx, p) {
+    const P = a.params, from = P.from, f = w[from].fill, to = point(ctx, w, P.to);
+    let world = setFill(w, from, { level: p >= 1 ? Math.max(0, f.level - P.take) : Math.max(0, f.level - P.take * clamp01(p / 0.9)) });
+    world = setActor(world, a.actor, { position: to, visible: true, scale: 1 });
+    const fx = p < 1 ? [{ type: "popRow", actor: a.actor, from: interior(ctx, w, from, f.level), p, dur: a.t1 - a.t0 }] : [];
+    return { world, fx };
+  },
+  throw(w, a, ctx, p, over) {
+    const to = point(ctx, w, a.params.to), start = w[a.actor].position, dur = a.t1 - a.t0, land = 0.6;
+    const sunk = [to[0], -0.4, to[2]];
+    const fx = [];
+    let position, visible = true;
+    if (p < land) {
+      const k = p / land;
+      position = lerp3(start, [to[0], 0, to[2]], k);
+      position[1] = start[1] + (0 - start[1]) * k + 4 * 0.7 * k * (1 - k);
+    } else {
+      position = sunk; visible = false;
+      fx.push({ type: "splash", at: [to[0], 0, to[2]], age: (p - land) * dur + over, size: 0.6, linger: true, seed: a.seed });
+    }
+    if (p >= 1) { position = sunk; visible = false; }
+    return { world: setActor(w, a.actor, { position, visible }), fx };
+  },
+  splash(w, a, ctx, p, over) {
+    return { world: w, fx: [{ type: "splash", at: point(ctx, w, a.params.spot), age: p * (a.t1 - a.t0) + over, size: a.params.size, linger: true, seed: a.seed }] };
+  },
+  sink(w, a, ctx, p) {
+    const from = point(ctx, w, a.params.from), to = point(ctx, w, a.params.to);
+    const position = p >= 1 ? to : lerp3(from, to, easeOutCubic(p));
+    const fx = p < 1 ? [{ type: "bubbles", seed: a.seed, from, to, p, dur: a.t1 - a.t0 }] : [];
+    return { world: setActor(w, a.actor, { position, visible: true }), fx };
+  },
+  school(w, a, ctx, p) {
+    const P = a.params, c = center(ctx, w, P.around), eatAt = 0.78;
+    let world = setActor(w, a.actor, { position: c, visible: true, scale: 1 });
+    if (P.eat && P.around in w && p >= eatAt) world = setActor(world, P.around, { visible: false, scale: 0 });
+    const fx = p < 1 ? [{ type: "school", actor: a.actor, center: c, radius: P.radius, p, dur: a.t1 - a.t0, eat: P.eat, eatAt, seed: a.seed }] : [];
+    if (P.eat && p >= eatAt && p < 1) fx.push({ type: "burstBubbles", at: c, age: (p - eatAt) * (a.t1 - a.t0), seed: a.seed });
+    return { world, fx };
+  },
 };
 
-export function applyAction(world, action, ctx, p) {
+// slow motion: the middle of the arc (the apex) plays slower by `s`; u(p) is monotonic and
+// meets p at 0 and 1. The middle 64% of the time covers (1 - s) of its usual distance.
+const SM_A = 0.18, SM_B = 0.82;
+function smKnots(s) {
+  const width = (SM_B - SM_A) * (1 - s);
+  return [0.5 - width / 2, 0.5 + width / 2];
+}
+export function slowmo(p, s) {
+  const [ua, ub] = smKnots(s);
+  if (p < SM_A) return (p / SM_A) * ua;
+  if (p < SM_B) return ua + ((p - SM_A) / (SM_B - SM_A)) * (ub - ua);
+  return ub + ((p - SM_B) / (1 - SM_B)) * (1 - ub);
+}
+export function unslowmo(u, s) {
+  const [ua, ub] = smKnots(s);
+  if (u < ua) return (u / ua) * SM_A;
+  if (u < ub) return SM_A + ((u - ua) / (ub - ua)) * (SM_B - SM_A);
+  return SM_B + ((u - ub) / (1 - ub)) * (1 - SM_B);
+}
+function center(ctx, w, ref) {
+  if (ref in ctx.anchors) return [...ctx.anchors[ref]];
+  const a = w[ref];
+  return [a.position[0], a.position[1] + (ctx.dims[ref][1] * a.scale) / 2, a.position[2]];
+}
+
+export function applyAction(world, action, ctx, p, over = 0) {
   const move = MOVES[action.move];
   if (!move) throw new Error(`unknown move ${action.move}`);
-  return move(world, action, ctx, clamp01(p));
+  return move(world, action, ctx, clamp01(p), over);
 }
 
 // The scene at local time t: every started action applied in start order, each at its own progress.
@@ -141,9 +301,9 @@ export function stateAt(shot, t) {
   for (const action of shot.actions) {
     if (t < action.t0) continue;
     const p = action.t1 > action.t0 ? Math.min(1, (t - action.t0) / (action.t1 - action.t0)) : 1;
-    const out = applyAction(world, action, shot.ctx, p);
+    const out = applyAction(world, action, shot.ctx, p, Math.max(0, t - action.t1));
     world = out.world;
-    if (p < 1) fx = fx.concat(out.fx);
+    fx = fx.concat(p < 1 ? out.fx : out.fx.filter((f) => f.linger));
   }
   return { world, fx };
 }

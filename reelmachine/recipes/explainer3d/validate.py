@@ -16,7 +16,7 @@ from .models import (
 from .moves import MOVES
 from .timing import auto_layout
 
-LOOKS = frozenset({"diorama-day", "studio-clean"})
+LOOKS = frozenset(p.stem for p in (Path(__file__).resolve().parent / "looks").glob("*.json"))
 
 
 def _refuse(path: str, message: str, hint: str = "") -> InvalidInput:

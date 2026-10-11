@@ -128,6 +128,7 @@ reelmachine = [
     "recipes/explainer3d/runtime/*.mjs",
     "recipes/explainer3d/runtime/tools/*.mjs",
     "recipes/explainer3d/runtime/vendor/*",
+    "recipes/explainer3d/runtime/vendor/jsm/*/*.js",
     "vendor/srt-whiteboard-animation/LICENSE",
     "vendor/srt-whiteboard-animation/UPSTREAM.md",
     "vendor/srt-whiteboard-animation/assets/*",

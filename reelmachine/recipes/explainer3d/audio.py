@@ -31,7 +31,12 @@ SFX_NAMES = tuple(_SFX)
 _RATE = ["-ar", "48000", "-ac", "2"]
 
 
-def synth_sfx(name: str, dest: Path, *, settings: Settings) -> Path:
+def synth_sfx(name: str, dest: Path, *, settings: Settings, designed: bool = False) -> Path:
+    """A named effect. `designed` (the cinematic look) prefers the richer synthesised set."""
+    from .music import SOUND_DESIGN, synth_effect
+
+    if designed and name in SOUND_DESIGN:
+        return synth_effect(name, dest)
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-y", "-f", "lavfi", "-i", _SFX[name],

@@ -154,6 +154,17 @@ html,body{margin:0;background:#000}
 #label{display:none;position:absolute;left:6%;top:16%;padding:10px 24px;border-radius:999px;font-weight:700;font-size:40px}
 #captions{position:absolute;left:7%;right:7%;bottom:14%;text-align:center;font-weight:800;line-height:1.25}
 #captions span{display:inline-block;margin:0 0.12em}
+@font-face{font-family:"ReelBlack";src:local("Arial Black"),local("Arial-Black");font-weight:900}
+#overlay.cine{font-family:"ReelBlack",sans-serif;font-weight:900}
+.cine #title{left:50%;right:auto;top:150px;transform:translateX(-50%);background:#fff;color:#111;padding:18px 34px;border-radius:22px;font-size:54px;font-weight:900;white-space:nowrap;box-shadow:0 8px 30px rgba(0,0,0,.35)}
+.cine #title b{color:#e8261b}
+.cine #label{top:270px;left:50%;transform:translateX(-50%);background:#ffe14a;color:#111;font-size:44px;padding:8px 26px}
+.cine #captions{top:1180px;bottom:auto;left:40px;right:40px;line-height:1.05}
+.cine #captions span{text-transform:uppercase;margin:0 14px;font-size:104px;color:#fff;-webkit-text-stroke:14px #000;paint-order:stroke fill;text-shadow:0 10px 0 rgba(0,0,0,.55);transform-origin:50% 70%}
+.cine #captions span.hot{color:#ffe14a;font-size:128px}
+#card{position:absolute;left:0;right:0;top:330px;text-align:center;opacity:0;font-size:150px;color:#ffe14a;-webkit-text-stroke:16px #000;paint-order:stroke fill;text-shadow:0 12px 0 rgba(0,0,0,.5)}
+#flash{position:absolute;inset:0;background:#fff;opacity:0}
+#bar{position:absolute;left:0;bottom:0;height:12px;width:0}
 """
 
 
@@ -162,7 +173,7 @@ def write_project(doc: dict[str, Any], dest: Path, *, links: dict[str, Path] | N
     if dest.exists():
         shutil.rmtree(dest)
     (dest / "runtime").mkdir(parents=True)
-    for path in RUNTIME_DIR.glob("*.mjs"):
+    for path in RUNTIME_DIR.glob("*.mjs"):  # every runtime module, both renderers
         shutil.copy2(path, dest / "runtime" / path.name)
     shutil.copytree(RUNTIME_DIR / "vendor", dest / "vendor")
     for rel, src in (links or {}).items():
@@ -174,7 +185,8 @@ def write_project(doc: dict[str, Any], dest: Path, *, links: dict[str, Path] | N
 <meta charset="UTF-8" />
 <meta name="viewport" content="width={WIDTH}, height={HEIGHT}" />
 <style>{_CSS}</style>
-<script type="importmap">{{"imports": {{"three": "./vendor/three.module.js"}}}}</script>
+<script>window.__hf = window.__hf || {{}}; window.__e3dReady = new Promise((r) => {{ window.__e3dResolve = r; }}); window.__hf.buildReady = {{ explainer3d: window.__e3dReady }};</script>
+<script type="importmap">{{"imports": {{"three": "./vendor/three.module.js", "three/addons/": "./vendor/jsm/"}}}}</script>
 </head>
 <body>
 <div id="root" data-composition-id="shot" data-start="0" data-width="{WIDTH}" data-height="{HEIGHT}" data-duration="{doc['renderDuration']:.3f}" data-no-timeline>

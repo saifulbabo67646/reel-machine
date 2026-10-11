@@ -83,9 +83,9 @@ class SteamParams(_Params):
 
 # ---- cinematic moves
 class LeapParams(_Params):
-    at: str = "lake.near"  # where on the water the arc is centred
+    spot: str = "lake.near"  # where on the water the arc is centred
     span: float = Field(1.6, gt=0.2, le=6)
-    height: float = Field(1.2, gt=0.1, le=4)
+    height: float = Field(0.9, gt=0.1, le=4)
     slowmo: float = Field(0.6, ge=0, le=0.9)  # how much the apex is slowed
     direction: Literal["right", "left"] = "right"
 
@@ -124,7 +124,7 @@ class ThrowParams(_Params):
 
 
 class SplashParams(_Params):
-    at: str = "lake.near"
+    spot: str = "lake.near"
     size: float = Field(1.0, gt=0.1, le=3)
 
 
@@ -136,7 +136,7 @@ class SinkParams(_Params):
 class SchoolParams(_Params):
     around: str  # the bait: an actor or an anchor
     eat: bool = False  # the lead fish lunges and takes it
-    radius: float = Field(0.7, gt=0.1, le=5)
+    radius: float = Field(0.45, gt=0.1, le=5)
 
 
 EndFn = Callable[[World, dict[str, Any], Ctx], World]
@@ -225,7 +225,7 @@ def _dest(ctx, world, ref):
 
 def _leap(world, action, ctx):
     p = action["params"]
-    c = point(ctx, world, p["at"])
+    c = point(ctx, world, p["spot"])
     sign = 1.0 if p["direction"] == "right" else -1.0
     return set_actor(world, action["actor"], position=[c[0] + sign * p["span"] / 2, -0.6, c[2]], visible=False)
 
@@ -323,8 +323,8 @@ MOVES: dict[str, Move] = {
         # ---- cinematic: built for the lake/underwater sets and the cinematic look
         Move("leap", "cinematic", "A fish bursts out of the water in a slow-motion arc and dives back in, "
              "with splashes. The hook of a fishing reel.", LeapParams,
-             {"move": "leap", "actor": "fish", "params": {"at": "lake.near", "slowmo": 0.6}},
-             ("splash", 0.02), "required", _leap, refs=("at",), extra_sfx=(("whoosh", 0.25), ("splash", 0.92)), big=True),
+             {"move": "leap", "actor": "fish", "params": {"spot": "lake.near", "slowmo": 0.6}},
+             ("splash", 0.02), "required", _leap, refs=("spot",), extra_sfx=(("whoosh", 0.25), ("splash", 0.92)), big=True),
         Move("slam", "cinematic", "Drop an actor from above onto its spot: squash, dust, camera shake.", SlamParams,
              {"move": "slam", "actor": "potato"}, ("thud", 0.45), "required", _slam, refs=("on",), big=True),
         Move("burst", "cinematic", "Hop an actor into a container and explode it into crumbs that settle inside "
@@ -347,9 +347,9 @@ MOVES: dict[str, Move] = {
         Move("throw", "cinematic", "Throw an actor in an arc into the water at `to`: it splashes in and is gone.",
              ThrowParams, {"move": "throw", "actor": "ball", "params": {"to": "lake.far"}},
              ("whoosh", 0.15), "required", _throw, refs=("to",), extra_sfx=(("splash", 0.6),), big=True),
-        Move("splash", "cinematic", "A splash on the water at `at`: droplets, mist, ripples.", SplashParams,
-             {"move": "splash", "params": {"at": "lake.near"}}, ("splash", 0.0), "forbidden", _steam,
-             refs=("at",), big=True),
+        Move("splash", "cinematic", "A splash on the water at `spot`: droplets, mist, ripples.", SplashParams,
+             {"move": "splash", "params": {"spot": "lake.near"}}, ("splash", 0.0), "forbidden", _steam,
+             refs=("spot",), big=True),
         Move("sink", "cinematic", "Underwater: an actor sinks from `from` to `to`, trailing bubbles.", SinkParams,
              {"move": "sink", "actor": "ball", "params": {"to": "underwater.center"}},
              ("bubbles", 0.0), "required", _sink, refs=("from", "to")),

@@ -20,6 +20,7 @@ class _Params(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     fov: float | None = Field(None, ge=15, le=90)  # vertical degrees; wider for big scenes
+    aim: tuple[float, float, float] = (0.0, 0.0, 0.0)  # look this far from the target (up at a leap's apex)
 
 
 class StaticParams(_Params):
@@ -132,7 +133,7 @@ def pose(move: str, params: dict[str, Any], start: dict[str, Any], target, p: fl
         o = params["offset"]
         return {"position": [target[i] + o[i] for i in range(3)], "target": list(target), "fov": start["fov"]}
     if move == "dive":
-        dest = [target[0], target[1] - 0.06, target[2] + 0.45]
+        dest = [target[0], target[1] + 0.05, target[2] + 0.45]  # just above the splash; cut underwater next
         look = [target[0], target[1] - params["depth"], target[2]]
         return {"position": lerp3(sp, dest, p), "target": lerp3(st, look, p), "fov": start["fov"]}
     raise KeyError(move)

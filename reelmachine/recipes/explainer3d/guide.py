@@ -46,7 +46,8 @@ def build_guide() -> dict[str, Any]:
                           "underwater.center, underwater.floor. Switch per shot with shot.set.",
             "meadow-day": "plan-1 diorama meadow", "studio": "plain backdrop",
         },
-        "anchors": ["stage.center", "stage.left", "stage.right", "stage.front", "stage.back", "ground", "sky",
+        "anchors": ["stage.center", "stage.near_left", "stage.near_right", "stage.front", "stage.back",
+                    "stage.left", "stage.right", "ground", "sky",
                     "lake.near", "lake.far", "lake.left", "lake.right",
                     "underwater.surface", "underwater.center", "underwater.floor"],
         "models": ("Cast members may be shapes or CC0 models: {\"model\": \"polyhaven:<id>\" | "
