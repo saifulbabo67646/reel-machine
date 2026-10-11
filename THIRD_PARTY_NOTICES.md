@@ -86,4 +86,13 @@ Optional extras: `mcp` (the MCP server), `stroke` (`opencv-python-headless`, `Pi
 `reelmachine/recipes/explainer3d/runtime/vendor/three.module.js` and `three.core.js` are
 the unmodified build files of three.js 0.181.2 (https://github.com/mrdoob/three.js),
 copyright © 2010–2025 three.js authors, MIT licence (`vendor/LICENSE`). They are shipped
-so a shot renders with no network access.
+so a shot renders with no network access. `vendor/jsm/` holds unmodified add-ons from the
+same release (loaders, Water, RoundedBoxGeometry, post-processing passes and shaders),
+under the same licence.
+
+## Cinematic assets (CC0, fetched at build time — not shipped)
+
+explainer3d's cinematic sets and models download into the local cache when first used and
+record their licence in each reel's manifest: Poly Haven models, HDRIs and textures
+(https://polyhaven.com/license, CC0), the Khronos glTF sample BarramundiFish (CC0) and
+three.js's `waternormals.jpg` (MIT). Music and sound effects are synthesised by the recipe.

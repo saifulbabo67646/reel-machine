@@ -8,6 +8,8 @@ from __future__ import annotations
 import re
 from typing import Sequence
 
+from .camera import default_start
+from .geometry import anchors
 from .markup import display_text, parse_markup
 from .models import Explainer3DInputs, ResolvedShot
 from .moves import MOVES
@@ -17,6 +19,7 @@ HOOK_S = 0.5          # something big must start this early
 MAX_GAP_S = 2.8       # longest stretch with no beat (a cut, a move, an impact)
 REHOOK_FROM_S, REHOOK_TO_S = 20.0, 35.0
 REHOOK_OVER_S = 40.0  # reels longer than this need a second hook
+SLAB_HALF = (0.8, 0.5)  # the stone slab, metres either side of the stage centre (x, z)
 CTA = re.compile(r"\b(save|follow|share|comment|subscribe|try|like)\b", re.I)
 
 
@@ -62,8 +65,34 @@ def retention_warnings(
     if last is not None and not CTA.search(f"{display_text(parse_markup(last.narration))} {last.card or ''}"):
         warnings.append("call to action: end with one (\"Save this…\", \"Follow for part 2\") in the last "
                         "shot's narration or card")
+    warnings.extend(_cameras_in_the_stage(inputs, shots))
     if inputs.length and total and not _length_ok(total, inputs.length):
         verb = "add" if total < inputs.length else "cut"
         warnings.append(f"length: about {total:.0f}s against a target of {inputs.length}s — {verb} shots or "
                         "narration (tails stretch at most 1.6x)")
     return warnings
+
+
+def _cameras_in_the_stage(inputs: Explainer3DInputs, shots: Sequence[ResolvedShot]) -> list[str]:
+    """A fresh camera aimed at an anchor past the stone slab, from the other side of it,
+    sees only rock: its line of sight runs through the slab."""
+    if inputs.set.stage == "none":
+        return []
+    marks = anchors(inputs.set.stage)
+    top = marks["stage.center"][1]
+
+    def inside(p: list[float]) -> bool:
+        return abs(p[0]) < SLAB_HALF[0] and abs(p[2]) < SLAB_HALF[1] and p[1] < top
+
+    out = []
+    for shot in shots:
+        cam = shot.camera
+        if cam.continues or cam.target not in marks or shot.environment == "underwater":
+            continue
+        aim = cam.params.get("aim") or (0.0, 0.0, 0.0)
+        target = [c + o for c, o in zip(marks[cam.target], aim)]
+        eye = default_start(cam.move, cam.params, target)["position"]
+        if any(inside([e + (t - e) * k / 20 for e, t in zip(eye, target)]) for k in range(1, 20)):
+            out.append(f"camera: {shot.id} looks through the stone slab — move it (another `from`, radius, "
+                       "height or target) so the stage is not between the camera and the action")
+    return out

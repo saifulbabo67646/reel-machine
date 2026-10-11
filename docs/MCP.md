@@ -155,6 +155,14 @@ estimated length per shot and the voice characters it will spend:
 {"recipeId": "explainer3d", "inputs": {"mode": "storyboard", "cast": {"bowl": {"asset": {"shape": "bowl"}, "at": "stage.center"}}, "shots": [{"narration": "A bowl.", "camera": {"move": "orbit", "target": "bowl"}}]}}
 ```
 
+It also returns retention `warnings` — no hook in the first half second, more than 2.8 s
+without a beat, no re-hook on reels over 40 s, no call to action, a length far from the
+`length` target, a camera looking through the stage — each saying what to change.
+`describe_recipe("explainer3d")` carries a `guide`: the workflow, every move and camera
+with its parameters, the sets and anchors, the narration markup (`*hot*`,
+`[shown|spoken]`) and how many beats a 25 s or 55 s reel needs. Complete cinematic
+scripts: `examples/explainer3d/monster-fish-bait-25s.json` and `-55s.json`.
+
 ### `start_job`
 
 Start a render; returns a job id immediately. An `idempotencyKey` makes retries safe: the
@@ -206,6 +214,17 @@ each one is known to have examples behind it.
 
 ```json
 {"recipe": "wordreel", "limit": 12}
+```
+
+### `find_models`
+
+CC0 3D models for an explainer3d cast (Poly Haven, and the Khronos photoreal fish),
+searched by name and tags. Read-only and free; the first call fetches the catalogue. Put
+a result in a cast member as `{"asset": {"model": "polyhaven:wooden_bowl_01", "size": 0.3,
+"container": true}}`.
+
+```json
+{"query": "wooden bowl"}
 ```
 
 ### `find_examples`

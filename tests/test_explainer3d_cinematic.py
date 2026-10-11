@@ -286,3 +286,13 @@ def test_camera_aim_shifts_the_point_a_camera_looks_at():
     plan = plan_shots(inputs, shots, shot_windows([1000]))[0]
     plain = plan_shots(Explainer3DInputs.model_validate(_script()), resolve_script(Explainer3DInputs.model_validate(_script())), shot_windows([1000]))[0]
     assert plan.camera["target"][1] == pytest.approx(plain.camera["target"][1] + 0.8)
+
+
+def test_lint_warns_when_the_stage_blocks_the_camera():
+    shots = [{"narration": "Watch this.", "camera": {"move": "orbit", "target": "lake.near", "from": 0, "to": 10, "radius": 2.3, "height": 0.3},
+              "actions": [{"move": "leap", "actor": "fish", "at": [0.0, 0.6]}]},
+             {"narration": "Save this.", "actions": [{"move": "slam", "actor": "fish"}]}]
+    inputs = Explainer3DInputs.model_validate(_script(cast=FISH_CAST, shots=shots, set={"environment": "lake"}))
+    shots = resolve_script(inputs)
+    warnings = retention_warnings(inputs, shots, shot_windows([2400, 2400]))
+    assert any(w.startswith("camera") and "shot-1" in w for w in warnings)
