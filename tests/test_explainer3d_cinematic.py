@@ -296,3 +296,17 @@ def test_lint_warns_when_the_stage_blocks_the_camera():
     shots = resolve_script(inputs)
     warnings = retention_warnings(inputs, shots, shot_windows([2400, 2400]))
     assert any(w.startswith("camera") and "shot-1" in w for w in warnings)
+
+
+def test_probe_suggests_a_length_from_the_big_moments_and_warns_about_padding():
+    from reelmachine.recipes.explainer3d.lint import length_advice
+
+    shots = [{"narration": "Watch this.", "actions": [{"move": "leap", "actor": "fish", "at": [0.0, 0.6]}]},
+             {"narration": "Save this.", "actions": [{"move": "slam", "actor": "fish"}]}]
+    inputs = Explainer3DInputs.model_validate(_script(cast=FISH_CAST, shots=shots, length=60))
+    resolved = resolve_script(inputs)
+    windows = shot_windows([2400, 2400])
+    big, suggested = length_advice(resolved, windows)
+    assert big == 2 and suggested == 15  # never under 15 s, and never under the narration
+    warnings = retention_warnings(inputs, resolved, windows)
+    assert any(w.startswith("padding") and "2 big moments" in w for w in warnings)

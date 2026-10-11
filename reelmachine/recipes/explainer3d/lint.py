@@ -19,6 +19,8 @@ HOOK_S = 0.5          # something big must start this early
 MAX_GAP_S = 2.8       # longest stretch with no beat (a cut, a move, an impact)
 REHOOK_FROM_S, REHOOK_TO_S = 20.0, 35.0
 REHOOK_OVER_S = 40.0  # reels longer than this need a second hook
+SECONDS_PER_MOMENT = 2.7  # what one big moment can hold a viewer for
+PADDING = 1.3            # a target this far past what the material supports feels slow
 SLAB_HALF = (0.8, 0.5)  # the stone slab, metres either side of the stage centre (x, z)
 CTA = re.compile(r"\b(save|follow|share|comment|subscribe|try|like)\b", re.I)
 
@@ -66,11 +68,24 @@ def retention_warnings(
         warnings.append("call to action: end with one (\"Save this…\", \"Follow for part 2\") in the last "
                         "shot's narration or card")
     warnings.extend(_cameras_in_the_stage(inputs, shots))
+    big, suggested = length_advice(shots, windows)
+    if inputs.length and inputs.length > suggested * PADDING:
+        warnings.append(f"padding: {big} big moments support about {suggested}s; stretching to {inputs.length}s "
+                        "will feel slow — add big moments, or choose a shorter length")
     if inputs.length and total and not _length_ok(total, inputs.length):
         verb = "add" if total < inputs.length else "cut"
         warnings.append(f"length: about {total:.0f}s against a target of {inputs.length}s — {verb} shots or "
                         "narration (tails stretch at most 1.6x)")
     return warnings
+
+
+def length_advice(shots: Sequence[ResolvedShot], windows: Sequence[ShotWindow]) -> tuple[int, int]:
+    """(big moments, a length in seconds the material supports): ~2.7 s a moment, never
+    under the spoken narration, rounded to 5 s, between 15 and 90."""
+    big = sum(1 for shot in shots for a in shot.actions if MOVES[a.move].big)
+    spoken = sum(w.speech_ms + w.speech_offset_ms for w in windows) / 1000
+    raw = max(big * SECONDS_PER_MOMENT, spoken)
+    return big, int(min(90, max(15, 5 * round(raw / 5))))
 
 
 def _cameras_in_the_stage(inputs: Explainer3DInputs, shots: Sequence[ResolvedShot]) -> list[str]:

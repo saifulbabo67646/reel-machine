@@ -29,9 +29,11 @@ def build_guide() -> dict[str, Any]:
             "4. probe: fix every warning (hook, beat gaps, length); then start_job with mode 'storyboard', "
             "look at storyboard.jpg, then mode 'build'.",
         ],
-        "length": ("`length` (15-90 s) is the target: probe estimates and lints it; the build stretches "
-                   "shot tails up to 1.6x to reach it. Plan ~1 big beat per 2-3 s: 25 s ≈ 9-10 shots, "
-                   "55 s ≈ 18-22 shots. Shorter reels usually finish better — choose the length per topic."),
+        "length": ("Decide the length from the material, not the other way round: each big moment holds a "
+                   "viewer ~2.7 s, so count yours — probe reports bigMoments and suggestedLength and warns "
+                   "when a target means padding. 9-10 big moments ≈ 25 s; a minute needs ~20 genuinely new "
+                   "ones. `length` (15-90 s) is optional; when given, the build stretches shot tails up to "
+                   "1.6x to land on it. Shorter usually finishes better."),
         "narration": ("Markup: *word* highlights a caption word; [shown|spoken] shows one thing while the "
                       "voice says another — [$1|one dollar], [WATCH 👀|watch]. A shot with no narration "
                       "needs a duration (0.8-8 s): a beat for the visuals alone. `card` puts a big line on "

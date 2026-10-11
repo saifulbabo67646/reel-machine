@@ -17,7 +17,7 @@ from .timing import estimate_speech_ms, fit_windows, shot_windows
 from .validate import resolve_script
 from .verify import verify_explainer3d
 from .guide import build_guide
-from .lint import retention_warnings
+from .lint import length_advice, retention_warnings
 
 
 class Explainer3DRecipe:
@@ -81,6 +81,8 @@ class Explainer3DRecipe:
             details["shots"] = [{"id": s.id, "estimatedMs": w.duration_ms} for s, w in zip(shots, windows)]
             details["estimatedMs"] = windows[-1].end_ms
             warnings = retention_warnings(inputs, shots, windows)
+            big, suggested = length_advice(shots, windows)
+            details["bigMoments"], details["suggestedLength"] = big, suggested
             if inputs.length:
                 details["length"] = {"targetMs": inputs.length * 1000, "narrationMs": natural,
                                      "estimatedMs": windows[-1].end_ms}
