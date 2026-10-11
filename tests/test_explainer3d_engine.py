@@ -127,3 +127,24 @@ def test_a_bad_script_fails_with_the_field(tmp_path):
     job = _run(tmp_path, bad)
     assert job.state == JobState.FAILED
     assert job.error.code == "INVALID_INPUT" and job.error.details["path"] == "shots[0].actions[0].move"
+
+
+from reelmachine.recipes.explainer3d.verify import MOTION_MIN, motion_score  # noqa: E402
+
+
+def test_motion_score_tells_a_frozen_clip_from_a_moving_one(tmp_path):
+    settings = _settings(tmp_path)
+    moving = _clip(settings, tmp_path / "m.mp4", 2.0)
+    frozen = tmp_path / "f.mp4"
+    ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-y", "-f", "lavfi", "-i",
+                "color=c=gray:size=1080x1920:rate=30:duration=2", "-pix_fmt", "yuv420p", str(frozen)])
+    assert motion_score(moving, 0.0, 2.0, settings=settings) >= MOTION_MIN
+    assert motion_score(frozen, 0.0, 2.0, settings=settings) < MOTION_MIN
+
+
+def test_build_is_verified(tmp_path):
+    job = _run(tmp_path, SCRIPT)
+    manifest = next(a for a in job.result.artifacts if a.name == "manifest.json")
+    verification = json.loads(Path(manifest.path).read_text())["verification"]
+    assert verification["ok"], verification
+    assert {c["name"] for c in verification["checks"]} >= {"format", "duration", "motion", "licences", "renderer"}

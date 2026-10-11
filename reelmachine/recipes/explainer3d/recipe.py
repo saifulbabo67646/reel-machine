@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from ...core.manifest import VerificationReport
+from ...core.errors import InvalidInput
+from ...core.manifest import CheckResult, VerificationReport
 from ...core.recipe import CostNote, ProbeContext, ProbeReport, ProviderReq, RecipeSpec, StageSpec
 from ...core.stage import StageContext
+from ..doodle.narration import provider_for
 from .models import Explainer3DInputs
 from .stages import AssetsStage, ComposeStage, NarrationStage, PrepStage, RenderStage, ScriptStage, ShotsStage
+from .timing import estimate_speech_ms, shot_windows
+from .validate import resolve_script
+from .verify import verify_explainer3d
 
 
 class Explainer3DRecipe:
@@ -56,7 +61,30 @@ class Explainer3DRecipe:
     )
 
     def probe(self, inputs: Explainer3DInputs, ctx: ProbeContext) -> ProbeReport:
-        return ProbeReport(ok=True)
+        checks: list[CheckResult] = []
+        details: dict[str, Any] = {}
+        try:
+            shots = resolve_script(inputs)
+            checks.append(CheckResult(name="script", ok=True, detail=f"{len(shots)} shots"))
+            windows = shot_windows([estimate_speech_ms(s.narration, inputs.language) for s in shots])
+            details["shots"] = [{"id": s.id, "estimatedMs": w.duration_ms} for s, w in zip(shots, windows)]
+            details["estimatedMs"] = windows[-1].end_ms
+        except InvalidInput as exc:
+            path = exc.details.get("path", "")
+            checks.append(CheckResult(name="script", ok=False, detail=f"{path}: {exc.message}"))
+            details["error"] = {"path": path, "message": exc.message, "hint": exc.hint}
+        details["cost"] = {"ttsCharacters": sum(len(s.narration) for s in inputs.shots), "voice": inputs.voice}
+
+        providers = ctx.providers
+        renderer = providers.get("renderer") if providers else None
+        problems = renderer.missing() if renderer is not None else ["no renderer bound"]
+        checks.append(CheckResult(name="renderer", ok=not problems,
+                                  detail="; ".join(problems) or getattr(renderer, "name", "")))
+        voice = providers.get("narration") if providers else None
+        bound = getattr(voice, "name", "")
+        checks.append(CheckResult(name="voice", ok=provider_for(inputs.voice) == bound,
+                                  detail=f"requested {provider_for(inputs.voice)!r}, deployment serves {bound!r}"))
+        return ProbeReport(ok=all(c.ok for c in checks), checks=checks, details=details)
 
     def verify(self, ctx: StageContext, result: dict[str, Any]) -> VerificationReport | None:
-        return None
+        return verify_explainer3d(ctx, result)

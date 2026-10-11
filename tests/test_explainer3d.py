@@ -426,3 +426,45 @@ def test_write_project_is_self_contained(tmp_path):
 
 def test_looks_load():
     assert load_look("studio-clean")["id"] == "studio-clean"
+
+
+from reelmachine.core.recipe import ProbeContext  # noqa: E402
+from reelmachine.core.stage import StaticProviders  # noqa: E402
+from reelmachine.recipes.explainer3d.recipe import Explainer3DRecipe  # noqa: E402
+
+
+class _Voice:
+    name = "fake"
+
+
+class _Renderer:
+    name = "hyperframes"
+
+    def __init__(self, problems):
+        self.problems = problems
+
+    def missing(self):
+        return self.problems
+
+
+def _probe(inputs, problems=()):
+    ctx = ProbeContext(providers=StaticProviders({"narration": _Voice(), "renderer": _Renderer(list(problems))}))
+    return Explainer3DRecipe().probe(Explainer3DInputs.model_validate(inputs), ctx)
+
+
+def test_probe_estimates_length_and_cost():
+    report = _probe(_script(shots=[{"narration": "one two three four five", "camera": {"move": "orbit"}}]))
+    assert report.ok and report.details["estimatedMs"] >= 1500
+    assert report.details["cost"]["ttsCharacters"] == len("one two three four five")
+
+
+def test_probe_reports_script_errors_with_the_path():
+    report = _probe(_script(look="neon"))
+    check = next(c for c in report.checks if c.name == "script")
+    assert not report.ok and not check.ok and "look" in check.detail
+    assert report.details["error"]["path"] == "look"
+
+
+def test_probe_reports_a_missing_renderer():
+    report = _probe(_script(), problems=["node is not on PATH"])
+    assert not report.ok and "node" in next(c for c in report.checks if c.name == "renderer").detail
