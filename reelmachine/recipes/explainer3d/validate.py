@@ -35,7 +35,7 @@ def _params(model, raw: dict[str, Any], path: str) -> dict[str, Any]:
 def resolve_script(inputs: Explainer3DInputs) -> list[ResolvedShot]:
     if inputs.look not in LOOKS:
         raise _refuse("look", f"unknown look {inputs.look!r}", hint=f"one of {sorted(LOOKS)}")
-    if inputs.music and not Path(inputs.music).expanduser().is_file():
+    if inputs.music and inputs.music != "auto" and not Path(inputs.music).expanduser().is_file():
         raise _refuse("music", f"music file not found: {inputs.music}",
                       hint="give a local audio file, or leave music out")
     marks = anchors(inputs.set.stage)
@@ -107,8 +107,10 @@ def resolve_script(inputs: Explainer3DInputs) -> list[ResolvedShot]:
 
         if not actions and cam.move == "static":
             raise _refuse(base, "this shot does not move", hint="give it an action or a camera move")
-        resolved.append(ResolvedShot(id=shot.id, index=index, narration=shot.narration,
-                                     label=shot.label, actions=actions, camera=cam))
+        resolved.append(ResolvedShot(
+            id=shot.id, index=index, narration=shot.narration, label=shot.label, actions=actions, camera=cam,
+            duration_ms=int(shot.duration * 1000) if shot.duration is not None else None, card=shot.card,
+            environment=shot.set.environment if shot.set else inputs.set.environment))
     return resolved
 
 

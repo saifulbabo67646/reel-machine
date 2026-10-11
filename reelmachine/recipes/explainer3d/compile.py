@@ -45,6 +45,12 @@ def load_look(name: str) -> dict[str, Any]:
     return json.loads((LOOKS_DIR / f"{name}.json").read_text(encoding="utf-8"))
 
 
+def look_timing(name: str) -> dict[str, int]:
+    """Narration padding for a look: tight for cinematic cuts, roomy for diorama."""
+    timing = load_look(name).get("timing") or {}
+    return {k: int(timing[k]) for k in ("lead_ms", "tail_ms", "min_ms") if k in timing}
+
+
 def shot_document(
     inputs: Explainer3DInputs,
     plan: ShotPlan,

@@ -21,11 +21,12 @@ ShapeKind = Literal["bowl", "cup", "pot", "jar", "bottle", "ball", "box", "sack"
 Material = Literal[
     "stone", "wood", "ceramic", "metal", "glass", "dough", "salt", "grain", "water", "cloth"
 ]
-Environment = Literal["meadow-day", "studio"]
+Environment = Literal["meadow-day", "studio", "lake", "underwater"]
 StageKind = Literal["stone-slab", "table", "none"]
 
 CAST_ID = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+MODEL_SOURCE = re.compile(r"^(polyhaven|khronos):[A-Za-z0-9_\-]{1,80}$")
 
 
 def hex_colour(value: str | None) -> str | None:
@@ -44,6 +45,32 @@ class ShapeSpec(BaseModel):
     width: float | None = Field(None, gt=0, le=5)
     material: Material = "ceramic"
     colour: str | None = None
+    count: int = Field(1, ge=1, le=12)  # >1: a row of identical pieces (bait balls)
+
+    @field_validator("colour")
+    @classmethod
+    def check_colour(cls, value: str | None) -> str | None:
+        return hex_colour(value)
+
+
+class ModelSpec(BaseModel):
+    """A CC0 model from the catalogue (`find_models`), scaled to `height` or `size`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: str
+    height: float | None = Field(None, gt=0, le=20)
+    size: float | None = Field(None, gt=0, le=20)  # the longest side; used when height is not given
+    container: bool = False  # things can be dropped into it (a bowl, a bucket)
+    count: int = Field(1, ge=1, le=12)  # >1: a school of fish, a row of buns
+    colour: str | None = None  # tints a container's fill default and its crumbs
+
+    @field_validator("model")
+    @classmethod
+    def check_source(cls, value: str) -> str:
+        if not MODEL_SOURCE.match(value):
+            raise ValueError("models are 'polyhaven:<id>' or 'khronos:<name>' (see find_models)")
+        return value
 
     @field_validator("colour")
     @classmethod
@@ -54,8 +81,13 @@ class ShapeSpec(BaseModel):
 class CastMember(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    asset: ShapeSpec | str
+    asset: ShapeSpec | ModelSpec
     at: str | None = None  # an anchor; None keeps the actor hidden until a move brings it
+
+    @field_validator("asset", mode="before")
+    @classmethod
+    def _shorthand(cls, value: Any) -> Any:
+        return {"model": value} if isinstance(value, str) else value
 
 
 class Action(BaseModel):
@@ -92,11 +124,20 @@ class Shot(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str = ""
-    narration: str = Field(min_length=1, max_length=240)
+    narration: str = Field("", max_length=240)  # markup: *hot* words, [shown|spoken]
+    duration: float | None = Field(None, ge=0.8, le=8.0)  # seconds; required without narration
     label: str | None = Field(None, max_length=40)
+    card: str | None = Field(None, max_length=40)  # a big end-card line ("SAVE THIS 📌")
+    set: "ShotSet | None" = None  # switch environment for this shot (dive underwater)
     camera: Camera | None = None
     actions: list[Action] | Literal["auto"] = Field(default_factory=list)
     auto: list[Action] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _has_time(self) -> "Shot":
+        if not self.narration.strip() and self.duration is None:
+            raise ValueError("a shot needs narration, or a duration for a beat with no voice")
+        return self
 
 
 class SetSpec(BaseModel):
@@ -104,6 +145,15 @@ class SetSpec(BaseModel):
 
     environment: Environment = "meadow-day"
     stage: StageKind = "stone-slab"
+
+
+class ShotSet(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    environment: Environment
+
+
+Shot.model_rebuild()
 
 
 class Explainer3DInputs(BaseModel):
@@ -114,7 +164,8 @@ class Explainer3DInputs(BaseModel):
     language: str = "en"
     voice: str = "fake:default"
     look: str = "diorama-day"
-    music: str | None = None  # a local audio file; pack loops arrive with plan 2
+    music: str | None = None  # "auto" (a synthesised bed) or a local audio file
+    length: int | None = Field(None, ge=15, le=90)  # target seconds; probe lints, build fits
     set: SetSpec = Field(default_factory=SetSpec)
     cast: dict[str, CastMember] = Field(default_factory=dict)
     shots: list[Shot] = Field(min_length=1, max_length=40)
@@ -166,6 +217,9 @@ class ResolvedShot(BaseModel):
     index: int
     narration: str
     label: str | None = None
+    duration_ms: int | None = None
+    card: str | None = None
+    environment: str = "meadow-day"
     actions: list[ResolvedAction] = Field(default_factory=list)
     camera: ResolvedCamera = Field(default_factory=ResolvedCamera)
 
@@ -207,7 +261,8 @@ class NarrationOutput(StageOutput):
     audio_asset: str
     duration_ms: int
     windows: list[Window]
-    words: list[list[WordSpan]]  # absolute ms, one list per shot
+    words: list[list[WordSpan]]  # absolute ms, one list per shot: the words shown
+    hot: list[list[bool]] = Field(default_factory=list)  # which shown words are highlighted
     voice: str
     provider: str
     licence: Licence | None = None

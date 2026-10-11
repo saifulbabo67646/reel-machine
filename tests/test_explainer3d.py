@@ -220,7 +220,6 @@ def test_auto_actions():
 @pytest.mark.parametrize(
     "over, path",
     [
-        ({"cast": {"bowl": {"asset": "pack:stone-bowl"}}}, "cast.bowl.asset"),
         ({"cast": {"bowl": {"asset": {"shape": "bowl"}, "at": "moon"}}}, "cast.bowl.at"),
         ({"look": "neon"}, "look"),
         ({"shots": [{"narration": "x", "actions": [{"move": "teleport", "actor": "bowl"}]}]},

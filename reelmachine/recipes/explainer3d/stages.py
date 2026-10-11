@@ -18,18 +18,18 @@ from ...core.assets import AssetKind, Licence, Provenance
 from ...core.errors import InvalidInput, RendererUnavailable, VoiceUnavailable
 from ...core.stage import StageContext
 from ...core.timeline import Caption, Clip, Timeline, TimedAudioRef, WordSpan
-from ...core.timing import proportional_word_spans
 from ...render.captions import write_srt
 from ..doodle.narration import provider_for
-from .audio import mix, pad_speech, synth_sfx
-from .compile import FPS, project_key, shot_document, write_project
+from .audio import mix, pad_speech, silence, synth_sfx
+from .compile import FPS, look_timing, project_key, shot_document, write_project
+from .markup import display_text, display_words, parse_markup, spoken_text
 from .geometry import dims
 from .models import (
     AssetsOutput, ComposeOutput, Explainer3DInputs, NarrationOutput, PrepOutput, RenderOutput,
     ResolvedModel, ScriptOutput, ShapeSpec, ShotProject, ShotsOutput, Track, Window,
 )
 from .state import build_ctx, plan_shots
-from .timing import XFADE_MS, ShotWindow, shot_windows
+from .timing import XFADE_MS, ShotWindow, fit_windows, shot_windows
 from .validate import resolve_script
 from .video import join_shots, mux
 
@@ -139,21 +139,34 @@ class NarrationStage:
         speeches, licence = [], None
         for shot in payload.shots:
             ctx.cancel.raise_if_cancelled()
-            spoken, ms, words, line_licence = _speak(ctx, provider, shot.narration, inputs.voice, inputs.language)
+            tokens = parse_markup(shot.narration)
+            said = spoken_text(tokens)
+            if not said:  # a beat shot: no voice, its own duration
+                speeches.append((None, 0, [], tokens))
+                continue
+            spoken, ms, words, line_licence = _speak(ctx, provider, said, inputs.voice, inputs.language)
             local = work / f"{shot.id}.wav"
             shutil.copy2(spoken, local)
-            speeches.append((local, ms, words, shot.narration))
+            speeches.append((local, ms, words, tokens))
             licence = line_licence or licence
 
-        windows = shot_windows([ms for _, ms, _, _ in speeches])
-        padded, all_words = [], []
-        for (path, ms, words, text), window in zip(speeches, windows):
-            padded.append(pad_speech(path, work / f"{path.stem}.padded.wav", lead_ms=window.speech_offset_ms,
-                                     total_ms=window.duration_ms, settings=settings, cancel=ctx.cancel))
+        timing = look_timing(inputs.look)
+        windows = shot_windows([ms for _, ms, _, _ in speeches], durations=[s.duration_ms for s in payload.shots],
+                               **timing)
+        if inputs.length:
+            windows = fit_windows(windows, inputs.length * 1000)
+        padded, all_words, all_hot = [], [], []
+        for shot, (path, ms, words, tokens), window in zip(payload.shots, speeches, windows):
+            target = work / f"{shot.id}.padded.wav"
+            if path is None:
+                padded.append(silence(target, total_ms=window.duration_ms, settings=settings, cancel=ctx.cancel))
+            else:
+                padded.append(pad_speech(path, target, lead_ms=window.speech_offset_ms,
+                                         total_ms=window.duration_ms, settings=settings, cancel=ctx.cancel))
             base = window.start_ms + window.speech_offset_ms
-            if not words:
-                words = proportional_word_spans(text.split(), 0, ms)
-            all_words.append([WordSpan(text=w.text, start_ms=base + w.start_ms, end_ms=base + w.end_ms) for w in words])
+            shown = display_words(tokens, words, total_ms=ms)
+            all_words.append([WordSpan(text=w.text, start_ms=base + w.start_ms, end_ms=base + w.end_ms) for w in shown])
+            all_hot.append([w.hot for w in shown])
         joined = ctx.workdir / "narration.wav"
         if len(padded) == 1:
             shutil.copy2(padded[0], joined)
@@ -166,7 +179,7 @@ class NarrationStage:
             inputs=inputs, shots=payload.shots, models=payload.models, audio_asset=asset.id, duration_ms=total,
             windows=[Window(start_ms=w.start_ms, duration_ms=w.duration_ms, speech_offset_ms=w.speech_offset_ms,
                             speech_ms=w.speech_ms) for w in windows],
-            words=all_words, voice=inputs.voice, provider=name, licence=licence,
+            words=all_words, hot=all_hot, voice=inputs.voice, provider=name, licence=licence,
         )
 
 
@@ -283,11 +296,11 @@ class ComposeStage:
         video = [Clip(element_id=t.shot_id, asset=t.path, start_ms=w.start_ms, duration_ms=w.duration_ms,
                       origin="scene") for t, w in zip(payload.tracks, narration.windows)]
         captions = [
-            Caption(start_ms=words[0].start_ms if words else w.start_ms,
-                    end_ms=words[-1].end_ms if words else w.start_ms + w.duration_ms,
-                    text=shot.narration, lang=inputs.language, style_ref="explainer3d.caption", words=words,
-                    meta={"source": shot.id})
-            for shot, words, w in zip(narration.shots, narration.words, narration.windows)
+            Caption(start_ms=words[0].start_ms, end_ms=words[-1].end_ms,
+                    text=display_text(parse_markup(shot.narration)), lang=inputs.language,
+                    style_ref="explainer3d.caption", words=words, meta={"source": shot.id})
+            for shot, words in zip(narration.shots, narration.words)
+            if words  # a beat shot says nothing
         ]
         timeline = Timeline(
             duration_ms=narration.duration_ms, aspect="vertical", render_mode="hyperframes", style=inputs.look,

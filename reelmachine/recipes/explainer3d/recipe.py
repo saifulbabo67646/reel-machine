@@ -11,7 +11,9 @@ from ...core.stage import StageContext
 from ..doodle.narration import provider_for
 from .models import Explainer3DInputs
 from .stages import AssetsStage, ComposeStage, NarrationStage, PrepStage, RenderStage, ScriptStage, ShotsStage
-from .timing import estimate_speech_ms, shot_windows
+from .compile import look_timing
+from .markup import parse_markup, spoken_text
+from .timing import estimate_speech_ms, fit_windows, shot_windows
 from .validate import resolve_script
 from .verify import verify_explainer3d
 
@@ -66,14 +68,23 @@ class Explainer3DRecipe:
         try:
             shots = resolve_script(inputs)
             checks.append(CheckResult(name="script", ok=True, detail=f"{len(shots)} shots"))
-            windows = shot_windows([estimate_speech_ms(s.narration, inputs.language) for s in shots])
+            windows = shot_windows(
+                [estimate_speech_ms(spoken_text(parse_markup(s.narration)), inputs.language) for s in shots],
+                durations=[s.duration_ms for s in shots], **look_timing(inputs.look))
+            natural = windows[-1].end_ms
+            if inputs.length:
+                windows = fit_windows(windows, inputs.length * 1000)
             details["shots"] = [{"id": s.id, "estimatedMs": w.duration_ms} for s, w in zip(shots, windows)]
             details["estimatedMs"] = windows[-1].end_ms
+            if inputs.length:
+                details["length"] = {"targetMs": inputs.length * 1000, "narrationMs": natural,
+                                     "estimatedMs": windows[-1].end_ms}
         except InvalidInput as exc:
             path = exc.details.get("path", "")
             checks.append(CheckResult(name="script", ok=False, detail=f"{path}: {exc.message}"))
             details["error"] = {"path": path, "message": exc.message, "hint": exc.hint}
-        details["cost"] = {"ttsCharacters": sum(len(s.narration) for s in inputs.shots), "voice": inputs.voice}
+        details["cost"] = {"ttsCharacters": sum(len(spoken_text(parse_markup(s.narration))) for s in inputs.shots),
+                           "voice": inputs.voice}
 
         providers = ctx.providers
         renderer = providers.get("renderer") if providers else None

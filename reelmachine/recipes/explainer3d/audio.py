@@ -47,6 +47,15 @@ def pad_speech(src: Path, dest: Path, *, lead_ms: int, total_ms: int, settings: 
     return dest
 
 
+def silence(dest: Path, *, total_ms: int, settings: Settings, cancel: Any = None) -> Path:
+    """A beat shot's stretch of the narration track: no voice, exactly `total_ms`."""
+    dest = Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-y", "-f", "lavfi",
+                "-i", "anullsrc=r=48000:cl=stereo", "-t", f"{total_ms / 1000:.3f}", *_RATE, str(dest)], cancel=cancel)
+    return dest
+
+
 def mix(
     narration: Path,
     cues: Sequence[tuple[int, Path]],

@@ -178,3 +178,18 @@ def test_a_build_after_a_storyboard_does_not_pay_for_the_voice_twice(tmp_path, m
     job = _run(tmp_path, SCRIPT)
     assert job.state == JobState.SUCCEEDED, job.error
     assert len(calls) == 2  # the build reused both lines
+
+
+def test_beat_shots_markup_and_length_reach_the_reel(tmp_path):
+    script = {**SCRIPT, "length": 15, "shots": [
+        {"narration": "This [*$1*|one dollar] bait.", "camera": {"move": "orbit", "target": "bowl"}},
+        {"duration": 2.0, "camera": {"move": "push_in", "target": "bowl"}},  # a beat: no voice
+        {"narration": "Then we mash it.", "actions": [{"move": "mash", "actor": "bowl"}]},
+    ]}
+    job = _run(tmp_path, script)
+    assert job.state == JobState.SUCCEEDED, job.error
+    timeline = json.loads(Path(next(a for a in job.result.artifacts if a.name == "timeline.json").path).read_text())
+    assert [c["text"] for c in timeline["captions"]] == ["This $1 bait.", "Then we mash it."]
+    assert timeline["video"][1]["duration_ms"] >= 2000
+    natural = 2000 + sum(c["end_ms"] - c["start_ms"] for c in timeline["captions"])
+    assert natural < timeline["duration_ms"] <= 15000  # stretched toward the target
