@@ -472,3 +472,8 @@ def test_probe_reports_a_missing_renderer():
 
 def test_a_missing_music_file_is_refused_before_any_render(tmp_path):
     assert _path(music=str(tmp_path / "nope.mp3")) == "music"
+
+
+def test_long_captions_can_wrap(tmp_path):
+    html = (write_project(_doc(), tmp_path / "shot") / "index.html").read_text()
+    assert "#captions span{display:inline-block" in html  # inline spans with no spaces never break

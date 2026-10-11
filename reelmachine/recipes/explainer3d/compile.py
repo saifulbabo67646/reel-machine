@@ -89,7 +89,7 @@ html,body{margin:0;background:#000}
 #title{display:none;position:absolute;left:8%;right:8%;top:6%;padding:16px 24px;text-align:center;font-weight:800;font-size:52px;line-height:1.15}
 #label{display:none;position:absolute;left:6%;top:16%;padding:10px 24px;border-radius:999px;font-weight:700;font-size:40px}
 #captions{position:absolute;left:7%;right:7%;bottom:14%;text-align:center;font-weight:800;line-height:1.25}
-#captions span{margin:0 0.12em}
+#captions span{display:inline-block;margin:0 0.12em}
 """
 
 

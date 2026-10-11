@@ -36,6 +36,7 @@ pestle.visible = false;
 scene.add(pestle);
 const drops = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), new THREE.MeshStandardMaterial({ roughness: 0.3 }), 400);
 drops.count = 0;
+drops.frustumCulled = false; // its bounds are computed once, while empty, and would cull it forever
 scene.add(drops);
 const puffs = new THREE.InstancedMesh(
   new THREE.SphereGeometry(1, 10, 8),
@@ -43,6 +44,7 @@ const puffs = new THREE.InstancedMesh(
   200,
 );
 puffs.count = 0;
+puffs.frustumCulled = false;
 scene.add(puffs);
 const m4 = new THREE.Matrix4(), tint = new THREE.Color();
 

@@ -62,3 +62,15 @@ test("captions follow the words", () => {
   assert.equal(captionState(words, 0.7).active, 1);
   assert.equal(captionState(words, 2.0).speaking, false);
 });
+
+test("a pour tips the vessel toward the container and streams from above it", () => {
+  const w = world();
+  w.bottle = { position: [-0.45, 0.9, 0], visible: true, rotationY: 0, scale: 1, fill: null };
+  const c = { ...ctx, dims: { ...ctx.dims, bottle: [0.09, 0.28, 0.09] } };
+  const out = applyAction(w, { move: "pour", actor: "bottle", params: { into: "bowl", fill_add: 0.2, colour: "#f2efe6" }, t0: 0, t1: 2, seed: 3 }, c, 0.5);
+  const tilt = out.fx.find((e) => e.type === "tilt");
+  const stream = out.fx.find((e) => e.type === "stream");
+  assert.ok(tilt.angle < 0, "a vessel left of the bowl must tip clockwise (neck toward +x)");
+  assert.ok(Math.abs(stream.from[0] - 0) < 0.22, `stream starts over the bowl, not at x=${stream.from[0]}`);
+  assert.ok(stream.from[1] > 0.9 + 0.2, "and above its rim");
+});

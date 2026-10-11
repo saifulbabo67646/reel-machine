@@ -6,7 +6,7 @@ export function stream(seed, from, to, t, count = 90) {
   for (let i = 0; i < count; i++) {
     const phase = rnd(), jx = (rnd() - 0.5) * 0.025, jz = (rnd() - 0.5) * 0.025;
     const age = (t / 0.45 + phase) % 1;
-    out.push([from[0] + (to[0] - from[0]) * age + jx, from[1] + (to[1] - from[1]) * age * age, from[2] + (to[2] - from[2]) * age + jz, 0.012, 1]);
+    out.push([from[0] + (to[0] - from[0]) * age + jx, from[1] + (to[1] - from[1]) * age * age, from[2] + (to[2] - from[2]) * age + jz, 0.02, 1]);
   }
   return out;
 }
@@ -16,7 +16,7 @@ export function grains(seed, origin, floorY, t, count = 70) {
   for (let i = 0; i < count; i++) {
     const phase = rnd(), r = rnd() * 0.12, a = rnd() * Math.PI * 2;
     const age = (t / 0.7 + phase) % 1;
-    out.push([origin[0] + Math.cos(a) * r * age, origin[1] - (origin[1] - floorY) * age * age, origin[2] + Math.sin(a) * r * age, 0.008, 1]);
+    out.push([origin[0] + Math.cos(a) * r * age, origin[1] - (origin[1] - floorY) * age * age, origin[2] + Math.sin(a) * r * age, 0.014, 1]);
   }
   return out;
 }

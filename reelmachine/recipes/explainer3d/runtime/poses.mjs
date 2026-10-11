@@ -87,7 +87,10 @@ const MOVES = {
     } else if (p < 0.75) {
       position = spot; tilt = TILT;
       const level = Math.min(1, w[into].fill.level + a.params.fill_add * clamp01((p - 0.3) / 0.45));
-      fx.push({ type: "stream", seed: a.seed, from: add3(spot, [0.08, 0.02, 0]), to: interior(ctx, w, into, level),
+      // the vessel pivots on its base, so its neck ends up over the container
+      const h = ctx.dims[a.actor][1] * w[a.actor].scale;
+      const neck = add3(spot, [h * Math.sin(TILT), h * Math.cos(TILT), 0]);
+      fx.push({ type: "stream", seed: a.seed, from: neck, to: interior(ctx, w, into, level),
                 t: (p - 0.25) * (a.t1 - a.t0), colour: a.params.colour });
     } else {
       const q = easeInOutCubic((p - 0.75) / 0.25);
@@ -96,7 +99,8 @@ const MOVES = {
     if (p >= 1) { position = [...home]; tilt = 0; }
     let world = pourFill(w, into, a.params.fill_add, a.params.colour, clamp01((p - 0.3) / 0.45));
     world = setActor(world, a.actor, { position });
-    if (tilt > 0) fx.push({ type: "tilt", actor: a.actor, angle: tilt });
+    // negative about Z tips the neck toward +x, where the container is
+    if (tilt > 0) fx.push({ type: "tilt", actor: a.actor, angle: -tilt });
     return { world, fx };
   },
   sprinkle(w, a, ctx, p) {
