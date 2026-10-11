@@ -1,0 +1,28 @@
+{
+  "id": "cinematic",
+  "renderer": "cinematic",
+  "sky": {"top": "#4f93dc", "bottom": "#cfe6f5"},
+  "fog": {"colour": "#cfe6f5", "near": 9, "far": 32},
+  "ground": {"colour": "#b9a35a"},
+  "lights": {
+    "hemi": {"sky": "#ffffff", "ground": "#5b6b3a", "intensity": 1.1},
+    "key": {"colour": "#fff3df", "intensity": 2.6, "position": [3, 5, 2.5]},
+    "fill": {"colour": "#cfe0ff", "intensity": 0.5, "position": [-3, 2, -2]}
+  },
+  "exposure": 1.0,
+  "timing": {"lead_ms": 120, "tail_ms": 220, "min_ms": 1000},
+  "post": {
+    "bloom": [0.3, 0.5, 2.0], "bloomUnder": [0.5, 0.55, 0.9], "aperture": 0.0018, "maxblur": 0.012,
+    "saturation": 1.28, "contrast": 1.08, "warmth": [1.06, 1.0, 0.9], "vignette": 0.55, "grain": 0.03
+  },
+  "punch": 0.1,
+  "shake": 1.0,
+  "sunAngle": 80,
+  "join": "cut",
+  "progress": "#ffe14a",
+  "audioProfile": "youtube",
+  "cutWhoosh": true,
+  "banner": {"background": "#ffffff", "text": "#111111", "border": "#ffffff"},
+  "label": {"background": "#ffe14a", "text": "#111111"},
+  "caption": {"text": "#ffffff", "active": "#ffe14a", "shadow": "rgba(0,0,0,0.85)", "size": 104, "style": "punch"}
+}

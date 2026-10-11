@@ -56,6 +56,8 @@ TOOL_NAMES = {
     "get_artifact",
     "suggest_words",
     "find_examples",
+    "find_models",
+    "find_assets",
 }
 
 FIXTURE_ENTRY = EntryPoint(

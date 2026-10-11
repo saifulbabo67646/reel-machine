@@ -147,6 +147,25 @@ viewer picked from `concepts.json` goes into the build job:
 The full agent playbook (the questions, the JSON shapes, the storytelling rules) is
 `docs/STORYREEL_AGENT.md`.
 
+For `explainer3d`, probe validates the whole scene script without rendering — a refusal
+names the field (`details.error.path`, e.g. `shots[2].actions[0].into`) — and returns the
+estimated length per shot and the voice characters it will spend:
+
+```json
+{"recipeId": "explainer3d", "inputs": {"mode": "storyboard", "cast": {"bowl": {"asset": {"shape": "bowl"}, "at": "stage.center"}}, "shots": [{"narration": "A bowl.", "camera": {"move": "orbit", "target": "bowl"}}]}}
+```
+
+It also returns retention `warnings` — no hook in the first half second, more than 2.8 s
+without a beat, no re-hook on reels over 40 s, no call to action, a length far from the
+`length` target, a camera looking through the stage — each saying what to change.
+`describe_recipe("explainer3d")` carries a `guide`: the workflow, every move and camera
+with its parameters, the sets and anchors, the narration markup (`*hot*`,
+`[shown|spoken]`) and how many beats a 25 s or 55 s reel needs. Complete cinematic
+scripts: `examples/explainer3d/monster-fish-bait-25s.json`, `-55s.json` and
+`pressure-cooker.json` (an indoor set, a character, and two components written as code —
+it needs `REEL_EXPLAINER3D_CUSTOM_CODE=1`). probe also reports `bigMoments` and a
+`suggestedLength`: decide the length from the material.
+
 ### `start_job`
 
 Start a render; returns a job id immediately. An `idempotencyKey` makes retries safe: the
@@ -198,6 +217,27 @@ each one is known to have examples behind it.
 
 ```json
 {"recipe": "wordreel", "limit": 12}
+```
+
+### `find_models`
+
+CC0 3D models for an explainer3d cast (Poly Haven, and the Khronos photoreal fish),
+searched by name and tags. Read-only and free; the first call fetches the catalogue. Put
+a result in a cast member as `{"asset": {"model": "polyhaven:wooden_bowl_01", "size": 0.3,
+"container": true}}`.
+
+```json
+{"query": "wooden bowl"}
+```
+
+### `find_assets`
+
+CC0 models, skies (360° photos of real places — kitchens, living rooms, workshops, streets
+— that light a set and form its backdrop) and textures for explainer3d, by `kind`
+(`model` | `sky` | `texture`). Read-only and free.
+
+```json
+{"query": "kitchen", "kind": "sky"}
 ```
 
 ### `find_examples`

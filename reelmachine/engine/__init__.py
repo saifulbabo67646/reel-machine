@@ -147,6 +147,7 @@ class Engine:
             },
             "renderModes": list(spec.render_modes),
             "artifacts": list(spec.artifacts),
+            **({"guide": dict(spec.guide)} if spec.guide else {}),
         }
 
     def _inputs_for(self, recipe: Any, raw: dict[str, Any]) -> Any:

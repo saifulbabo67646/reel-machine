@@ -99,7 +99,11 @@ def parse_cartesia_sse(text: str) -> tuple[bytes, list[WordSpan]]:
             continue
         if event == "chunk" and isinstance(payload.get("data"), str):
             audio.extend(base64.b64decode(payload["data"]))
-        for entry in payload.get("word_timestamps") or []:
+        stamps = payload.get("word_timestamps") or []
+        if isinstance(stamps, dict):  # the live API: parallel lists, in seconds
+            stamps = [{"word": w, "start": s, "end": e}
+                      for w, s, e in zip(stamps.get("words") or [], stamps.get("start") or [], stamps.get("end") or [])]
+        for entry in stamps:
             spans.append(
                 WordSpan(
                     text=str(entry.get("word") or ""),
@@ -265,6 +269,21 @@ class ElevenLabsNarration(CloudNarration):
         return audio, spans, voice, ".mp3"
 
 
+def _refuse_account_errors(response: httpx.Response, vendor: str, voice: str) -> None:
+    """Out of credits, a bad key, a voice the plan lacks: no other route will help, so say
+    so plainly instead of falling back or surfacing an HTTP error."""
+    if response.status_code not in (401, 402, 403):
+        return
+    try:
+        message = str(response.json().get("message") or response.text)
+    except (json.JSONDecodeError, ValueError):
+        message = response.text
+    hint = {401: f"check the {vendor} API key", 402: f"top up the {vendor} account, or use another voice provider",
+            403: f"this {vendor} plan cannot use that voice"}[response.status_code]
+    raise VoiceUnavailable(f"{vendor} refused the request: {message[:300]}", hint=hint,
+                           details={"vendor": vendor, "voice": voice, "status": response.status_code})
+
+
 class CartesiaNarration(CloudNarration):
     """Cartesia's Sonic voices.
 
@@ -290,15 +309,20 @@ class CartesiaNarration(CloudNarration):
     def voices(self) -> list[Voice] | None:
         if self._voices is not None:
             return self._voices
-        try:
-            response = self._http().get(
-                f"{self.base_url}/voices", headers=self._headers(), params={"limit": 100}
-            )
-            response.raise_for_status()
-            payload = response.json()
-        except (httpx.HTTPError, json.JSONDecodeError):
-            return None
-        entries = payload if isinstance(payload, list) else payload.get("data") or []
+        entries: list[dict[str, Any]] = []
+        params: dict[str, Any] = {"limit": 100}
+        for _ in range(20):  # the catalogue is paged; a voice may sit past the first page
+            try:
+                response = self._http().get(f"{self.base_url}/voices", headers=self._headers(), params=params)
+                response.raise_for_status()
+                payload = response.json()
+            except (httpx.HTTPError, json.JSONDecodeError):
+                return None
+            page = payload if isinstance(payload, list) else payload.get("data") or []
+            entries.extend(page)
+            if isinstance(payload, list) or not payload.get("has_more") or not page:
+                break
+            params = {"limit": 100, "starting_after": page[-1].get("id")}
         self._voices = [
             Voice(
                 id=str(entry.get("id") or ""),
@@ -311,9 +335,8 @@ class CartesiaNarration(CloudNarration):
         return self._voices
 
     def _body(self, text: str, voice: str, language: str, container: str) -> dict[str, Any]:
-        output: dict[str, Any] = {"container": container, "sample_rate": self.sample_rate}
-        if container == "raw":
-            output["encoding"] = "pcm_s16le"
+        # raw and wav both carry 16-bit PCM; the API refuses a wav without an encoding
+        output: dict[str, Any] = {"container": container, "sample_rate": self.sample_rate, "encoding": "pcm_s16le"}
         body: dict[str, Any] = {
             "model_id": os.environ.get("REEL_CARTESIA_MODEL", "sonic-3.6"),
             "transcript": text,
@@ -322,6 +345,8 @@ class CartesiaNarration(CloudNarration):
         }
         if language:
             body["language"] = language
+        if container == "raw":
+            body["add_timestamps"] = True  # word timings, so captions follow the voice
         return body
 
     def _synthesize(
@@ -333,6 +358,7 @@ class CartesiaNarration(CloudNarration):
                 headers=self._headers(),
                 json=self._body(text, voice, language, "raw"),
             )
+            _refuse_account_errors(response, self.vendor, voice)
             response.raise_for_status()
             pcm, spans = parse_cartesia_sse(response.text)
             if pcm:

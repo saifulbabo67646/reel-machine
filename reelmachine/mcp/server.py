@@ -107,6 +107,20 @@ DESCRIPTIONS: dict[str, str] = {
         "up\") unless allowInflected is false. Read-only: no job, no render.\n"
         "Example: {\"word\": \"give up\", \"inputs\": {\"library\": [\"/media/films\"]}}"
     ),
+    "find_assets": (
+        "Search the CC0 catalogue for an explainer3d set or cast: kind \"model\" (props, food, "
+        "furniture, a photoreal fish), \"sky\" (360° photos of real places — kitchens, living "
+        "rooms, workshops, streets, lakes — that light a set and form its backdrop) or "
+        "\"texture\" (floors, walls, counters). Read-only and free.\n"
+        "Example: {\"query\": \"kitchen\", \"kind\": \"sky\"}"
+    ),
+    "find_models": (
+        "Search the CC0 3D model catalogue (Poly Haven, Khronos samples) for an explainer3d "
+        "cast: bowls, food, rocks, plants, tools, a photoreal fish. Returns model sources "
+        "to put in a cast member. Read-only and free; the first call fetches the "
+        "catalogue.\n"
+        "Example: {\"query\": \"wooden bowl\"}"
+    ),
 }
 
 
@@ -204,6 +218,14 @@ def build_server(
         limit: int = 20,
     ) -> dict[str, Any]:
         return tools.find_examples(ctx, word, recipe, inputs, limit)
+
+    @server.tool(name="find_assets", description=DESCRIPTIONS["find_assets"])
+    def find_assets(ctx: Context, query: str, kind: str = "model", limit: int = 12) -> dict[str, Any]:
+        return tools.find_assets(ctx, query, kind, limit)
+
+    @server.tool(name="find_models", description=DESCRIPTIONS["find_models"])
+    def find_models(ctx: Context, query: str, limit: int = 12) -> dict[str, Any]:
+        return tools.find_models(ctx, query, limit)
 
     @server.custom_route("/artifacts/{caller}/{job}/{name}", methods=["GET"], name="artifact")
     async def artifact_route(request: Any) -> Any:  # pragma: no cover - exercised over HTTP

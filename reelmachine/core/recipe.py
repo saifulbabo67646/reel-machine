@@ -55,6 +55,7 @@ class RecipeSpec:
     artifacts: tuple[str, ...] = ()
     render_modes: tuple[str, ...] = ()
     example: Mapping[str, Any] = field(default_factory=dict)
+    guide: Mapping[str, Any] = field(default_factory=dict)  # how to author inputs well (agents read it)
 
     def schema(self) -> dict[str, Any]:
         return self.input_model.model_json_schema()

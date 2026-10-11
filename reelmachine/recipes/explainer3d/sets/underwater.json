@@ -1,0 +1,3 @@
+{"mode": "underwater", "sky": "polyhaven:small_harbour_sunset", "background": "#0b4652", "stage": "none",
+ "floor": {"texture": "polyhaven:coast_sand_01", "size": [80, 80], "repeat": 40},
+ "fog": {"colour": "#0e5a66", "density": 0.16}}

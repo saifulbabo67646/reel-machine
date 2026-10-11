@@ -24,6 +24,7 @@ quranic = "reelmachine.recipes.quranic.recipe:QuranicRecipe"
 doodle = "reelmachine.recipes.doodle.recipe:DoodleRecipe"
 storyreel = "reelmachine.recipes.storyreel.recipe:StoryReelRecipe"
 wordreel = "reelmachine.recipes.wordreel.recipe:WordReelRecipe"
+explainer3d = "reelmachine.recipes.explainer3d.recipe:Explainer3DRecipe"
 
 [project.entry-points."reelmachine.clips"]
 library = "reelmachine.recipes.wordreel.library:LibraryClipSource"
@@ -50,6 +51,8 @@ s3 = "reelmachine.storage.s3:S3Storage"
 [project.entry-points."reelmachine.renderers"]
 stroke = "reelmachine.recipes.doodle.scenes.stroke:StrokeRenderer"
 program = "reelmachine.recipes.doodle.scenes.program:ProgramRenderer"
+hyperframes = "reelmachine.render.hyperframes:HyperframesRenderer"
+explainer3d-fake = "reelmachine.recipes.explainer3d.fake:FakeShotRenderer"
 
 [project.entry-points."reelmachine.narration"]
 fake = "reelmachine.recipes.doodle.narration.fake:FakeNarration"
@@ -121,6 +124,12 @@ include = ["reelmachine*"]
 reelmachine = [
     "data/*.json",
     "data/styles/*.json",
+    "recipes/explainer3d/looks/*.json",
+    "recipes/explainer3d/sets/*.json",
+    "recipes/explainer3d/runtime/*.mjs",
+    "recipes/explainer3d/runtime/tools/*.mjs",
+    "recipes/explainer3d/runtime/vendor/*",
+    "recipes/explainer3d/runtime/vendor/jsm/*/*.js",
     "vendor/srt-whiteboard-animation/LICENSE",
     "vendor/srt-whiteboard-animation/UPSTREAM.md",
     "vendor/srt-whiteboard-animation/assets/*",

@@ -1,0 +1,15 @@
+{
+  "id": "studio-clean",
+  "sky": {"top": "#dfe6ee", "bottom": "#f7f8fa"},
+  "fog": {"colour": "#f7f8fa", "near": 12, "far": 40},
+  "ground": {"colour": "#e3e7ec"},
+  "lights": {
+    "hemi": {"sky": "#ffffff", "ground": "#9aa3ad", "intensity": 1.3},
+    "key": {"colour": "#ffffff", "intensity": 2.2, "position": [2.5, 5, 3]},
+    "fill": {"colour": "#e8f0ff", "intensity": 0.7, "position": [-3, 2.5, 1]}
+  },
+  "exposure": 1.0,
+  "banner": {"background": "#1c2b4a", "text": "#ffffff", "border": "#1c2b4a"},
+  "label": {"background": "#1c2b4a", "text": "#ffffff"},
+  "caption": {"text": "#16202f", "active": "#d94f30", "shadow": "rgba(255,255,255,0.9)", "size": 62}
+}
