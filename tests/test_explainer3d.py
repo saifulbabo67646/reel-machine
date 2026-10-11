@@ -54,3 +54,45 @@ def test_camera_continue_alias_and_extra_params():
 def test_inputs_reject_bad_shapes(bad):
     with pytest.raises(ValidationError):
         Explainer3DInputs.model_validate(_script(**bad))
+
+
+from reelmachine.recipes.explainer3d.geometry import anchors, dims, fill_y  # noqa: E402
+from reelmachine.recipes.explainer3d.models import ShapeSpec  # noqa: E402
+from reelmachine.recipes.explainer3d.timing import (  # noqa: E402
+    LEAD_MS, MIN_SHOT_MS, TAIL_MS, auto_layout, estimate_speech_ms, shot_windows,
+)
+
+
+def test_dims_follow_kind_ratio_unless_width_given():
+    assert dims(ShapeSpec(shape="bowl", height=0.2)) == (0.44, 0.2, 0.44)
+    assert dims(ShapeSpec(shape="bowl", height=0.2, width=0.3)) == (0.3, 0.2, 0.3)
+
+
+def test_anchors_sit_on_the_stage_top():
+    a = anchors("stone-slab")
+    assert a["stage.center"] == (0.0, 0.9, 0.0)
+    assert a["sky"][1] > a["stage.center"][1]
+    assert anchors("none")["stage.center"][1] == 0.0
+
+
+def test_fill_rises_inside_the_rim():
+    assert fill_y(1.0, 0.0) == pytest.approx(0.15)
+    assert fill_y(1.0, 1.0) < 1.0
+
+
+def test_shot_windows_pad_and_floor():
+    windows = shot_windows([2000, 100])
+    assert windows[0].duration_ms == LEAD_MS + 2000 + TAIL_MS
+    assert windows[1].start_ms == windows[0].end_ms
+    assert windows[1].duration_ms == MIN_SHOT_MS
+
+
+def test_auto_layout_is_sequential_and_inside():
+    spans = auto_layout(3)
+    assert spans[0][0] == pytest.approx(0.1) and spans[-1][1] == pytest.approx(0.95)
+    assert all(a[1] == pytest.approx(b[0]) for a, b in zip(spans, spans[1:]))
+
+
+def test_speech_estimates():
+    assert estimate_speech_ms("one two three four five six", "en") > 1500
+    assert estimate_speech_ms("駅[えき]はどこですか", "ja") == int(len("駅はどこですか") / 7.0 * 1000)
