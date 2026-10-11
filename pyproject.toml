@@ -23,6 +23,11 @@ nadeshiko-cut = "reelmachine.recipes.nadeshiko_cut.recipe:NadeshikoCutRecipe"
 quranic = "reelmachine.recipes.quranic.recipe:QuranicRecipe"
 doodle = "reelmachine.recipes.doodle.recipe:DoodleRecipe"
 storyreel = "reelmachine.recipes.storyreel.recipe:StoryReelRecipe"
+wordreel = "reelmachine.recipes.wordreel.recipe:WordReelRecipe"
+
+[project.entry-points."reelmachine.clips"]
+library = "reelmachine.recipes.wordreel.library:LibraryClipSource"
+wordreel-fake = "reelmachine.recipes.wordreel.fake:FakeClipSource"
 
 [project.entry-points."reelmachine.sources"]
 local = "reelmachine.sources.local:LocalLibraryProvider"
@@ -74,6 +79,14 @@ pexels = "reelmachine.recipes.quranic.backgrounds.pexels:PexelsBackgroundProvide
 [project.entry-points."reelmachine.styles"]
 bundled = "reelmachine.core.style:bundled_style_map"
 
+# Pages and files behind Cloudflare Turnstile. `patchright` is preferred because it can
+# click inside the widget's cross-origin frame; `agent-browser` fetches through a gate a
+# session has already cleared and needs a Node binary rather than a Python package.
+[project.entry-points."reelmachine.browser"]
+patchright = "reelmachine.browser.patchright:PatchrightBrowser"
+agent-browser = "reelmachine.browser.agent_browser:AgentBrowserBackend"
+fake = "reelmachine.browser.fake:FakeBrowser"
+
 [project.optional-dependencies]
 # Every optional capability lives behind an extra; the default install is local-first
 # and needs no browser, no Node and no GPU.
@@ -81,6 +94,10 @@ mcp = ["mcp>=2,<3"]
 stroke = ["opencv-python-headless>=4.9", "Pillow>=10", "av>=12"]
 program = ["Pillow>=10"]
 s3 = ["boto3>=1.34"]
+# The stealth browser itself is downloaded on first use: `patchright install chromium`.
+browser = ["patchright>=1.63"]
+# Bytes from hosts that gate on the TLS fingerprint (a clip's .mp4) — no browser needed.
+impersonate = ["curl-cffi>=0.16"]
 
 [dependency-groups]
 dev = [
@@ -89,6 +106,8 @@ dev = [
     "opencv-python-headless>=4.9",
     "Pillow>=10",
     "av>=12",
+    "patchright>=1.63",
+    "curl-cffi>=0.16",
 ]
 
 [build-system]

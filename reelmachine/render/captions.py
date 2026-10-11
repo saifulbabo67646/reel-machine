@@ -2,17 +2,31 @@
 
 `subtitles.py` stays what it is: the furigana-and-vocabulary-card machinery for
 nadeshiko-cut. Recipes whose captions are "a line of text, with word timings" (quranic,
-doodle) use this instead — one style per `style_ref`, word spans rendered as ASS
-karaoke so a highlight follows the audio.
+doodle, wordreel) use this instead — one style per `style_ref`, word spans rendered as
+ASS karaoke so a highlight follows the audio.
+
+A caption may also name an `emphasis` in its `meta`: a word or phrase to colour inside
+the line. That is how a teaching reel shows *which* word a clip is about while the
+karaoke fill tracks the voice — the two compose, because the colour is applied to the
+emphasised word's own karaoke run rather than to the line as a whole.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from ..core.timeline import Caption
+from ..core.timeline import Caption, WordSpan
+
+#: `caption.meta` key naming the word or phrase to highlight inside the line.
+EMPHASIS_KEY = "emphasis"
+
+#: What a token is, for the purpose of matching an emphasis against word spans:
+#: letters, digits and internal apostrophes, with surrounding punctuation dropped so
+#: `light,` and `light` are the same word.
+_BARE = re.compile(r"^[^0-9a-z']+|[^0-9a-z']+$", re.IGNORECASE)
 
 ASS_HEADER = """[Script Info]
 ScriptType: v4.00+
@@ -80,14 +94,70 @@ def _escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}").replace("\n", "\\N")
 
 
-def _karaoke(caption: Caption, style: CaptionStyle) -> str:
-    """Word spans become ASS karaoke; the plain text is the fallback."""
-    if not style.karaoke or not caption.words:
-        return _escape(caption.text)
+def _bare(text: str) -> str:
+    return _BARE.sub("", (text or "").lower())
+
+
+def _emphasis_run(words: Sequence[WordSpan], needle: str) -> set[int]:
+    """Which word spans an emphasis covers — one word, or a run forming a phrase.
+
+    Matched against the spans rather than against the rendered text so the colour
+    lands on exactly the characters the karaoke tags wrap, and never straddles a tag.
+    """
+    wanted = [part for part in (_bare(piece) for piece in (needle or "").split()) if part]
+    if not wanted:
+        return set()
+    surfaces = [_bare(word.text) for word in words]
+    width = len(wanted)
+    covered: set[int] = set()
+    for start in range(len(surfaces) - width + 1):
+        if surfaces[start : start + width] == wanted:
+            covered.update(range(start, start + width))
+    return covered
+
+
+def _decorate(text: str, emphasised: bool, style: CaptionStyle) -> str:
+    """Escaped text, wrapped in the highlight colour when it carries the emphasis."""
+    escaped = _escape(text)
+    if not emphasised:
+        return escaped
+    return f"{{\\c{style.highlight}\\b1}}{escaped}{{\\c{style.primary}\\b0}}"
+
+
+def _emphasis_text(text: str, needle: str, style: CaptionStyle) -> str:
+    """Colour every occurrence of `needle` in a plain caption, escaping the rest."""
+    target = (needle or "").lower()
+    if not target:
+        return _escape(text)
+    lowered = (text or "").lower()
     parts: list[str] = []
-    for word in caption.words:
+    cursor = 0
+    while True:
+        found = lowered.find(target, cursor)
+        if found < 0:
+            break
+        parts.append(_escape(text[cursor:found]))
+        parts.append(_decorate(text[found : found + len(target)], True, style))
+        cursor = found + len(target)
+    parts.append(_escape(text[cursor:]))
+    return "".join(parts)
+
+
+def _karaoke(caption: Caption, style: CaptionStyle) -> str:
+    """Word spans become ASS karaoke; the plain text is the fallback.
+
+    An emphasis composes with karaoke instead of replacing it: the highlighted word
+    keeps its own `\\k` run, so it still fills with the voice while staying a
+    different colour from the rest of the line.
+    """
+    needle = str(caption.meta.get(EMPHASIS_KEY) or "")
+    if not style.karaoke or not caption.words:
+        return _emphasis_text(caption.text, needle, style)
+    marked = _emphasis_run(caption.words, needle)
+    parts: list[str] = []
+    for index, word in enumerate(caption.words):
         centis = max(1, int(round((word.end_ms - word.start_ms) / 10)))
-        parts.append(f"{{\\k{centis}}}{_escape(word.text)}")
+        parts.append(f"{{\\k{centis}}}{_decorate(word.text, index in marked, style)}")
     return " ".join(parts)
 
 

@@ -108,10 +108,10 @@ def provider_health(registry: Registry | None = None, settings: Any = None) -> l
     """A row per discoverable provider: ok / missing / error / disabled.
 
     Providers whose requirements depend on the deployment (sources, corpora, narration,
-    subtitles, story, renderers) are instantiated so `missing()` can be reported; storage
-    and styles report load status only.
+    subtitles, story, renderers, browser) are instantiated so `missing()` can be reported;
+    storage and styles report load status only.
     """
-    INSPECTED = {"sources", "corpora", "narration", "subtitles", "story", "renderers"}
+    INSPECTED = {"sources", "corpora", "narration", "subtitles", "story", "renderers", "browser"}
     registry = registry or Registry()
     rows: list[dict[str, Any]] = []
     for group in GROUPS:

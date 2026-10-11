@@ -1,6 +1,6 @@
 # MCP reference
 
-reel-machine exposes its engine to agents through one MCP server with eight tools, over
+reel-machine exposes its engine to agents through one MCP server with eleven tools, over
 two transports: `stdio` (a local agent) and `streamable-http` (a hosted deployment).
 
 ```
@@ -76,6 +76,36 @@ List what this deployment can make (id, title, render modes, cost).
 
 ```json
 {}
+```
+
+### `browser_status`
+
+The backends available for fetching pages behind Cloudflare Turnstile: which is selected
+(`patchright` preferred — it can click the widget inside its cross-origin frame — with
+`agent-browser` as the fallback), whether it is installed, the persistent profile, and the
+hosts that profile has already cleared. Read-only and instant: it never launches a browser,
+because a solve takes seconds and no tool call here may wait. Call it when a source or page
+is gated; the fetch itself happens inside the engine, not in a tool call.
+
+```json
+{}
+```
+
+The result names the backends and their state:
+
+```json
+{
+  "schemaVersion": 1,
+  "selected": "patchright",
+  "configured": "auto",
+  "backends": [
+    {"name": "patchright", "status": "ok", "detail": ""},
+    {"name": "agent-browser", "status": "missing", "detail": "agent-browser is not on PATH (npm i -g agent-browser && agent-browser install)"}
+  ],
+  "profile": ".work/browser/profile",
+  "headless": false,
+  "clearedHosts": {"getyarn.io": 1791690876}
+}
 ```
 
 ### `describe_recipe`
@@ -157,6 +187,28 @@ A signed, expiring URL for one artifact, plus its size, hash, provenance and lic
 
 ```json
 {"jobId": "9f2c1ab34d5e", "name": "reel.mp4"}
+```
+
+### `suggest_words`
+
+Words the corpus can actually teach, best first — for choosing what a reel should be
+about (`wordreel`). Reads the subtitles on disk, so it is fast and read-only: no job, no
+render. Words come back because they recur in real dialogue, not from a word list, so
+each one is known to have examples behind it.
+
+```json
+{"recipe": "wordreel", "limit": 12}
+```
+
+### `find_examples`
+
+The lines of dialogue that use a word or phrase, each with its file, timestamp and the
+form that matched. Call it before `start_job` to see exactly what a reel would be built
+from. Inflected forms match too (`gave up` for `"give up"`) unless `allowInflected` is
+false. Read-only: no job, no render.
+
+```json
+{"word": "give up", "inputs": {"library": ["/media/films"]}}
 ```
 
 ## Errors

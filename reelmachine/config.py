@@ -132,6 +132,36 @@ class Settings:
     user_agent: str = "Mozilla/5.0"
     cookie: str = ""
 
+    # Browser-backed fetching (pages and files behind Cloudflare Turnstile)
+    #: Which browser fetches a gated URL: `auto` (prefer patchright, fall back to
+    #: agent-browser), or one of those two by name.  The preference is about
+    #: capability, not taste — only a Playwright-family driver can click the
+    #: checkbox inside Turnstile's cross-origin frame, which is what a widget
+    #: that will not clear on its own needs.
+    browser: str = "auto"
+    #: The persistent browser profile.  Clearance belongs to a session, not to a
+    #: cookie you can copy, so this directory is the durable part: a warmed
+    #: profile sails through while a fresh one can be refused outright.
+    browser_profile: Path = field(default_factory=lambda: PROJECT_ROOT / ".work" / "browser" / "profile")
+    #: Headed by default, because that is the mode the widget actually cleared in:
+    #: with a cold profile and a real Turnstile widget, headless sat on the
+    #: interstitial for the full timeout twice while headed cleared it (33.6 s, and
+    #: 7.7 s in the probe that first proved the frame click).  A server with no
+    #: display sets this back to true — headless still passes a gate that clears
+    #: itself, it just cannot click a checkbox.
+    browser_headless: bool = False
+    #: Seconds allowed for the page to load and its challenge to clear.
+    browser_timeout_s: float = 45.0
+    #: The agent-browser session name (ignored by patchright, which uses the
+    #: profile above).  Its clearance lives in that session, so the name is worth
+    #: reusing across runs.
+    browser_session: str = "reelmachine"
+    #: Which browser a download is impersonated as, for hosts that judge the TLS
+    #: fingerprint rather than the headers (`reelmachine/impersonate.py`).  Measured
+    #: on getyarn's media host: a plain client is 403, impersonating Chrome is 200
+    #: with no cookies at all.  Change it when a host prefers another browser.
+    impersonate: str = "chrome"
+
     # Pipeline
     workdir: Path = field(default_factory=lambda: PROJECT_ROOT / ".work")
     outdir: Path = field(default_factory=lambda: PROJECT_ROOT / "out")
@@ -175,6 +205,19 @@ class Settings:
     font_card: str = "Times New Roman"   # the vocabulary card's romaji heading
     #: Skip the jisho.org meaning lookup (the bundled JLPT list still works).
     dictionary_offline: bool = False
+
+    # wordreel: English word/phrase learning reels.  Unlike nadeshiko-cut there is
+    # no API to search — the corpus is the subtitles you already have, so the
+    # library is configuration rather than part of every request.
+    #: Directories scanned for media + subtitles (colon/comma separated).
+    wordreel_library: list[str] = field(default_factory=list)
+    #: Read the subtitle tracks inside the video when no sidecar file sits next to it.
+    #: Off makes a scan sidecar-only, which is much faster on a large library.
+    wordreel_embedded: bool = True
+    #: Stop after this many media files, so a stray mount cannot stall a scan.
+    wordreel_max_media: int = 400
+    #: Override the video extensions the library scan accepts.
+    wordreel_media_suffixes: list[str] = field(default_factory=list)
 
     # Binaries
     ffmpeg: str = "ffmpeg"
@@ -281,6 +324,14 @@ def get_settings() -> Settings:
         origin=_env("REEL_SOURCE_ORIGIN"),
         user_agent=_env("REEL_SOURCE_USER_AGENT", "Mozilla/5.0"),
         cookie=_env("REEL_SOURCE_COOKIE"),
+        browser=(_env("REEL_BROWSER", "auto") or "auto").strip().lower(),
+        browser_profile=Path(
+            _env("REEL_BROWSER_PROFILE", str(PROJECT_ROOT / ".work" / "browser" / "profile"))
+        ).expanduser(),
+        browser_headless=_env("REEL_BROWSER_HEADLESS", "false").lower() in {"1", "true", "yes"},
+        browser_timeout_s=float(_env("REEL_BROWSER_TIMEOUT_S", "45") or 45),
+        browser_session=(_env("REEL_BROWSER_SESSION", "reelmachine") or "reelmachine").strip(),
+        impersonate=(_env("REEL_IMPERSONATE", "chrome") or "chrome").strip().lower(),
         workdir=Path(_env("REEL_WORKDIR", str(PROJECT_ROOT / ".work"))).expanduser(),
         outdir=Path(_env("REEL_OUTDIR", str(PROJECT_ROOT / "out"))).expanduser(),
         tts=(_env("REEL_TTS", "fake") or "fake").strip().lower(),
@@ -307,6 +358,10 @@ def get_settings() -> Settings:
         font_en=_env("REEL_FONT_EN", "Helvetica"),
         font_card=_env("REEL_FONT_CARD", "Times New Roman"),
         dictionary_offline=_env("REEL_DICTIONARY_OFFLINE", "false").lower() in {"1", "true", "yes"},
+        wordreel_library=_csv("REEL_WORDREEL_LIBRARY", ""),
+        wordreel_embedded=_env("REEL_WORDREEL_EMBEDDED", "true").lower() in {"1", "true", "yes"},
+        wordreel_max_media=_env_int("REEL_WORDREEL_MAX_MEDIA", 400),
+        wordreel_media_suffixes=_csv("REEL_WORDREEL_MEDIA_SUFFIXES", ""),
         ffmpeg=_env("REEL_FFMPEG", "ffmpeg"),
         ffprobe=_env("REEL_FFPROBE", "ffprobe"),
     )

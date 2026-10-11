@@ -1,0 +1,56 @@
+{
+  "phrase": "raining cats and dogs",
+  "gloss": "raining very heavily",
+  "search": {
+    "site": "getyarn.io",
+    "url": "https://getyarn.io/yarn-find?text=raining%20cats%20and%20dogs",
+    "searched_for": "raining cats and dogs"
+  },
+  "source": {
+    "site": "getyarn.io",
+    "download_host": "https://y.getyarn.io/<clip-id>.mp4",
+    "note": "Clips are third-party film and TV footage served by getyarn.io; the download is a raw clip with no burned-in captions. Check the rights before publishing anything built from them."
+  },
+  "clips": [
+    {
+      "id": "9a66490e-87c2-4948-9055-c09d74c118b9",
+      "title": "The Crown",
+      "line": "It's raining cats and dogs out there, Mam.",
+      "seconds": 2.1,
+      "page": "https://getyarn.io/yarn-clip/9a66490e-87c2-4948-9055-c09d74c118b9",
+      "clip_url": "https://y.getyarn.io/9a66490e-87c2-4948-9055-c09d74c118b9.mp4"
+    },
+    {
+      "id": "326aae19-546a-41b8-9216-8c5ae5db0656",
+      "title": "Chilling Adventures of Sabrina",
+      "line": "It's raining cats and dogs out there.",
+      "seconds": 1.9,
+      "page": "https://getyarn.io/yarn-clip/326aae19-546a-41b8-9216-8c5ae5db0656",
+      "clip_url": "https://y.getyarn.io/326aae19-546a-41b8-9216-8c5ae5db0656.mp4"
+    },
+    {
+      "id": "7e3a1214-e9cd-4ff5-a980-add461bd373a",
+      "title": "How I Met Your Mother",
+      "line": "It's gonna rain cats and dogs, folks.",
+      "seconds": 2.6,
+      "page": "https://getyarn.io/yarn-clip/7e3a1214-e9cd-4ff5-a980-add461bd373a",
+      "clip_url": "https://y.getyarn.io/7e3a1214-e9cd-4ff5-a980-add461bd373a.mp4"
+    },
+    {
+      "id": "93589221-29d6-44b3-a9ad-d2795e43c90f",
+      "title": "The Office",
+      "line": "Phew! Wow. It is raining cats and dogs out there.",
+      "seconds": 3.8,
+      "page": "https://getyarn.io/yarn-clip/93589221-29d6-44b3-a9ad-d2795e43c90f",
+      "clip_url": "https://y.getyarn.io/93589221-29d6-44b3-a9ad-d2795e43c90f.mp4"
+    },
+    {
+      "id": "f501fb91-723a-4251-b44b-ab4a5c2f54ec",
+      "title": "Toy Story 4",
+      "line": "Whoa! It's raining cats and dogs out there!",
+      "seconds": 3.4,
+      "page": "https://getyarn.io/yarn-clip/f501fb91-723a-4251-b44b-ab4a5c2f54ec",
+      "clip_url": "https://y.getyarn.io/f501fb91-723a-4251-b44b-ab4a5c2f54ec.mp4"
+    }
+  ]
+}

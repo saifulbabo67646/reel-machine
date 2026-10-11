@@ -24,6 +24,7 @@ GROUPS = (
     "recipes",
     "sources",
     "corpora",
+    "clips",
     "narration",
     "scripts",
     "subtitles",
@@ -32,6 +33,7 @@ GROUPS = (
     "backgrounds",
     "styles",
     "storage",
+    "browser",
 )
 
 EntryPointsProvider = Callable[[str], Iterable[importlib_metadata.EntryPoint]]
