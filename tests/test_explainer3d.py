@@ -252,3 +252,73 @@ def test_auto_actions():
 )
 def test_refusals_name_the_field(over, path):
     assert _path(**over) == path
+
+
+from reelmachine.recipes.explainer3d.state import build_ctx, initial_world, plan_shots  # noqa: E402
+
+
+def _plans(over, speech=(2000, 2000, 2000)):
+    inputs = Explainer3DInputs.model_validate(_script(**over))
+    shots = resolve_script(inputs)
+    return plan_shots(inputs, shots, shot_windows(list(speech)[: len(shots)]))
+
+
+CAST2 = {
+    "bowl": {"asset": {"shape": "bowl", "height": 0.2}, "at": "stage.center"},
+    "potato": {"asset": {"shape": "ball", "height": 0.1, "colour": "#d9b44a"}},
+}
+
+
+def test_initial_world_hides_unplaced_actors_and_gives_containers_a_fill():
+    inputs = Explainer3DInputs.model_validate(_script(cast=CAST2))
+    world = initial_world(inputs)
+    assert world["bowl"]["visible"] and world["bowl"]["fill"]["level"] == 0.0
+    assert not world["potato"]["visible"] and world["potato"]["fill"] is None
+    assert build_ctx(inputs)["colours"]["potato"] == "#d9b44a"
+
+
+def test_state_carries_to_the_next_shot():
+    plans = _plans({
+        "cast": CAST2,
+        "shots": [
+            {"narration": "in", "actions": [{"move": "fly_in", "actor": "potato"},
+                                            {"move": "drop_into", "actor": "potato", "into": "bowl"}]},
+            {"narration": "mash", "actions": [{"move": "mash", "actor": "bowl"}]},
+        ],
+    })
+    assert plans[0].world["bowl"]["fill"]["level"] == 0.0
+    assert plans[1].world["bowl"]["fill"]["level"] == pytest.approx(0.15)
+    assert plans[1].world["potato"]["visible"] is False
+
+
+def test_actions_become_local_seconds_with_seeds_and_cues():
+    plans = _plans({"cast": CAST2, "shots": [{"narration": "x", "actions": [
+        {"move": "fly_in", "actor": "potato", "at": [0.0, 0.5]}]}]}, speech=(2000,))
+    action = plans[0].actions[0]
+    duration_s = (250 + 2000 + 350) / 1000
+    assert action["t0"] == 0.0 and action["t1"] == pytest.approx(duration_s * 0.5)
+    assert isinstance(action["seed"], int)
+    assert plans[0].cues == [{"at_ms": 0, "sfx": "whoosh"}]
+
+
+def test_camera_chain_continues_and_eases_only_at_the_ends():
+    plans = _plans({"shots": [
+        {"narration": "a", "camera": {"move": "orbit", "target": "bowl", "from": 0, "to": 30}},
+        {"narration": "b", "camera": {"move": "orbit", "target": "bowl", "to": 60, "continue": True}},
+        {"narration": "c", "camera": {"move": "push_in", "target": "bowl", "continue": True}},
+        {"narration": "d", "camera": {"move": "orbit", "target": "bowl"}},
+    ]}, speech=(2000, 2000, 2000, 2000))
+    assert plans[1].camera["start"] == plans[0].camera["end"]
+    assert plans[2].camera["start"] == plans[1].camera["end"]
+    assert [p.join for p in plans] == ["none", "cut", "cut", "xfade"]
+    assert [(p.camera["easeIn"], p.camera["easeOut"]) for p in plans] == [
+        (True, False), (False, False), (False, True), (True, True)]
+
+
+def test_shot_without_camera_holds_the_previous_pose():
+    plans = _plans({"shots": [
+        {"narration": "a", "camera": {"move": "orbit", "target": "bowl"}},
+        {"narration": "b", "actions": [{"move": "spin_showcase", "actor": "bowl"}]},
+    ]}, speech=(2000, 2000))
+    assert plans[1].camera["move"] == "static"
+    assert plans[1].camera["start"] == plans[0].camera["end"] and plans[1].join == "cut"
