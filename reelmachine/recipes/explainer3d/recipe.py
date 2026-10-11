@@ -16,6 +16,8 @@ from .markup import parse_markup, spoken_text
 from .timing import estimate_speech_ms, fit_windows, shot_windows
 from .validate import resolve_script
 from .verify import verify_explainer3d
+from .guide import build_guide
+from .lint import retention_warnings
 
 
 class Explainer3DRecipe:
@@ -47,6 +49,7 @@ class Explainer3DRecipe:
         cost=CostNote(unit="tts_characters", estimate="narration length",
                       notes="the fake voice is free; cloud voices bill per character",
                       providers=("elevenlabs", "cartesia", "fake")),
+        guide=build_guide(),
         artifacts=("reel.mp4", "captions.srt", "reel.json", "timeline.json", "storyboard.jpg",
                    "script.resolved.json"),
         render_modes=("hyperframes",),
@@ -65,6 +68,7 @@ class Explainer3DRecipe:
     def probe(self, inputs: Explainer3DInputs, ctx: ProbeContext) -> ProbeReport:
         checks: list[CheckResult] = []
         details: dict[str, Any] = {}
+        warnings: list[str] = []
         try:
             shots = resolve_script(inputs)
             checks.append(CheckResult(name="script", ok=True, detail=f"{len(shots)} shots"))
@@ -76,6 +80,7 @@ class Explainer3DRecipe:
                 windows = fit_windows(windows, inputs.length * 1000)
             details["shots"] = [{"id": s.id, "estimatedMs": w.duration_ms} for s, w in zip(shots, windows)]
             details["estimatedMs"] = windows[-1].end_ms
+            warnings = retention_warnings(inputs, shots, windows)
             if inputs.length:
                 details["length"] = {"targetMs": inputs.length * 1000, "narrationMs": natural,
                                      "estimatedMs": windows[-1].end_ms}
@@ -95,7 +100,7 @@ class Explainer3DRecipe:
         bound = getattr(voice, "name", "")
         checks.append(CheckResult(name="voice", ok=provider_for(inputs.voice) == bound,
                                   detail=f"requested {provider_for(inputs.voice)!r}, deployment serves {bound!r}"))
-        return ProbeReport(ok=all(c.ok for c in checks), checks=checks, details=details)
+        return ProbeReport(ok=all(c.ok for c in checks), checks=checks, details=details, warnings=warnings)
 
     def verify(self, ctx: StageContext, result: dict[str, Any]) -> VerificationReport | None:
         return verify_explainer3d(ctx, result)

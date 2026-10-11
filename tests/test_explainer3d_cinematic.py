@@ -104,3 +104,123 @@ def test_fit_stretches_tails_to_the_target_and_never_shrinks():
     capped = fit_windows(windows, 20000)
     assert [w.duration_ms for w in capped] == [4160, 4160]  # 1.6x at most
     assert fit_windows(windows, 4000) == windows
+
+
+# ---------------------------------------------------------------- cinematic moves (end states)
+from reelmachine.recipes.explainer3d.camera import CAMERA_MOVES, default_start, pose  # noqa: E402
+from reelmachine.recipes.explainer3d.geometry import anchors  # noqa: E402
+from reelmachine.recipes.explainer3d.moves import MOVES  # noqa: E402
+
+MARKS = {k: list(v) for k, v in anchors("stone-slab").items()}
+CTX = {"anchors": MARKS, "dims": {"bowl": [0.24, 0.1, 0.24], "potato": [0.08, 0.14, 0.08], "fish": [0.14, 0.3, 1.1],
+                                  "balls": [0.05, 0.05, 0.05]},
+       "homes": {"bowl": MARKS["stage.center"], "potato": [0.3, 0.9, 0.1], "fish": MARKS["lake.near"],
+                 "balls": MARKS["stage.front"]},
+       "colours": {"bowl": "#8a5a33", "potato": "#e07b2a", "fish": "#b07a45", "balls": "#c97a34"}}
+
+
+def _w():
+    def actor(pos, visible=True, fill=None):
+        return {"position": list(pos), "visible": visible, "rotationY": 0.0, "scale": 1.0, "fill": fill}
+    return {
+        "bowl": actor(MARKS["stage.center"], fill={"level": 0.2, "colour": "#d9d27a", "surface": "liquid", "glaze": None}),
+        "potato": actor([0.3, 0.9, 0.1]), "fish": actor(MARKS["lake.near"], visible=False),
+        "balls": actor(MARKS["stage.front"], visible=False),
+    }
+
+
+def _end(name, actor, **raw):
+    move = MOVES[name]
+    params = move.params.model_validate(raw).model_dump(by_alias=True)
+    return move.end(_w(), {"actor": actor, "params": params}, CTX)
+
+
+def test_slam_lands_home_and_burst_turns_the_actor_into_crumbs():
+    assert _end("slam", "potato")["potato"]["position"] == [0.3, 0.9, 0.1]
+    world = _end("burst", "potato", into="bowl")
+    assert world["potato"]["visible"] is False
+    assert world["bowl"]["fill"]["surface"] == "crumbs" and world["bowl"]["fill"]["colour"] == "#e07b2a"
+    assert world["bowl"]["fill"]["level"] == pytest.approx(0.4)
+
+
+def test_drizzle_glazes_and_smash_turns_everything_to_paste():
+    assert _end("drizzle", None, into="bowl")["bowl"]["fill"]["glaze"] == "#f0a020"
+    world = _end("smash", "potato", into="bowl", colour="#c97a34")
+    assert world["potato"]["visible"] is False
+    assert world["bowl"]["fill"]["surface"] == "paste" and world["bowl"]["fill"]["glaze"] is None
+
+
+def test_pop_out_throw_leap_sink_school():
+    world = _end("pop_out", "balls", **{"from": "bowl", "to": "stage.front"})
+    assert world["balls"]["visible"] and world["balls"]["position"] == MARKS["stage.front"]
+    assert world["bowl"]["fill"]["level"] == pytest.approx(0.0)
+    thrown = _end("throw", "potato", to="lake.far")["potato"]
+    assert thrown["visible"] is False and thrown["position"][1] < 0
+    leapt = _end("leap", "fish", at="lake.near", span=1.6)["fish"]
+    assert leapt["visible"] is False and leapt["position"][0] == pytest.approx(MARKS["lake.near"][0] + 0.8)
+    assert _end("sink", "potato", to="underwater.center")["potato"]["position"] == MARKS["underwater.center"]
+    eaten = _end("school", "fish", around="potato", eat=True)
+    assert eaten["potato"]["visible"] is False and eaten["fish"]["visible"] is True
+
+
+def test_track_and_dive_cameras():
+    params = CAMERA_MOVES["track"].params.model_validate({"offset": [0, 0.3, 1.0]}).model_dump(by_alias=True)
+    start = default_start("track", params, [0, 1, 0])
+    end = pose("track", params, start, [1.0, 0.5, 0.0], 1.0)
+    assert end["position"] == pytest.approx([1.0, 0.8, 1.0]) and end["target"] == pytest.approx([1.0, 0.5, 0.0])
+    params = CAMERA_MOVES["dive"].params.model_validate({}).model_dump(by_alias=True)
+    start = default_start("dive", params, MARKS["lake.far"])
+    assert pose("dive", params, start, MARKS["lake.far"], 1.0)["position"][1] < 0.05
+    wide = CAMERA_MOVES["orbit"].params.model_validate({"fov": 60}).model_dump(by_alias=True)
+    assert default_start("orbit", wide, [0, 1, 0])["fov"] == 60
+
+
+# ---------------------------------------------------------------- retention lint
+from reelmachine.recipes.explainer3d.lint import retention_warnings  # noqa: E402
+
+FISH_CAST = {
+    "bowl": {"asset": {"shape": "bowl", "material": "wood"}, "at": "stage.center"},
+    "fish": {"asset": {"shape": "ball", "height": 0.3}},
+}
+
+
+def _lint(shots, length=None):
+    inputs = Explainer3DInputs.model_validate(_script(cast=FISH_CAST, shots=shots, length=length))
+    shots = resolve_script(inputs)
+    windows = shot_windows([2400] * len(shots), durations=[s.duration_ms for s in shots])
+    return retention_warnings(inputs, shots, windows)
+
+
+def test_lint_wants_a_hook_beats_and_a_call_to_action():
+    slow = [{"narration": "Welcome to my channel about fishing and other things.", "camera": {"move": "orbit", "target": "bowl"}}] * 4
+    warnings = " ".join(_lint(slow))
+    assert "hook" in warnings and "beat" in warnings and "call to action" in warnings
+    good = [{"narration": "Watch this.", "actions": [{"move": "leap", "actor": "fish", "at": [0.0, 0.6]}]},
+            {"narration": "Save this for later.", "actions": [{"move": "slam", "actor": "fish"}]}]
+    assert _lint(good) == []
+
+
+def test_lint_flags_a_length_far_from_the_target():
+    shots = [{"narration": "Watch this.", "actions": [{"move": "leap", "actor": "fish", "at": [0.0, 0.6]}]},
+             {"narration": "Save this.", "actions": [{"move": "slam", "actor": "fish"}]}]
+    assert any("length" in w for w in _lint(shots, length=60))
+
+
+def test_describe_carries_a_guide_and_probe_lints(tmp_path):
+    import dataclasses
+
+    from reelmachine.config import get_settings
+    from reelmachine.engine import Engine
+
+    engine = Engine(dataclasses.replace(get_settings(), workdir=tmp_path / "w", tts="fake"),
+                    provider_overrides={"renderer": "explainer3d-fake"})
+    try:
+        guide = engine.describe("explainer3d")["guide"]
+        assert "leap" in guide["moves"] and "dive" in guide["cameras"] and "lake" in guide["environments"]
+        assert guide["moves"]["leap"]["params"]["slowmo"]["default"] == 0.6
+        assert "[shown|spoken]" in guide["narration"] and guide["length"]
+        report = engine.probe("explainer3d", _script(length=30), caller="local")
+    finally:
+        engine.close()
+    assert any(w.startswith("hook") for w in report.warnings)
+    assert report.details["length"]["targetMs"] == 30000

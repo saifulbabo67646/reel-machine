@@ -85,7 +85,7 @@ def initial_world(inputs: Explainer3DInputs, models: dict[str, Any] | None = Non
             "visible": member.at is not None,
             "rotationY": 0.0,
             "scale": 1.0,
-            "fill": {"level": 0.0, "colour": DEFAULT_FILL, "surface": "liquid"}
+            "fill": {"level": 0.0, "colour": DEFAULT_FILL, "surface": "liquid", "glaze": None}
             if is_container(inputs, key) else None,
         }
     return world
@@ -118,8 +118,8 @@ def plan_shots(
         )
         cues = []
         for action in actions:
-            sfx = MOVES[action["move"]].sfx
-            if sfx is not None:
+            move = MOVES[action["move"]]
+            for sfx in ((move.sfx,) if move.sfx else ()) + move.extra_sfx:
                 at = action["t0"] + (action["t1"] - action["t0"]) * sfx[1]
                 cues.append({"at_ms": window.start_ms + int(round(at * 1000)), "sfx": sfx[0]})
 
@@ -129,16 +129,21 @@ def plan_shots(
             start = previous_end
         else:
             start = default_start(cam.move, cam.params, target)
-        end = pose(cam.move, cam.params, start, target, 1.0)
+        end_world = world
+        for action in actions:
+            end_world = MOVES[action["move"]].end(end_world, action, ctx)
+        # a tracking camera ends on where its actor ends up
+        end_target = center(ctx, end_world, cam.target) if cam.move == "track" else target
+        end = pose(cam.move, cam.params, start, end_target, 1.0)
         plans.append(ShotPlan(
             shot_id=shot.id, index=shot.index, world=world, actions=actions,
             camera={"move": cam.move, "params": cam.params, "start": start, "target": target,
-                    "end": end, "easeIn": True, "easeOut": True},
+                    "end": end, "easeIn": True, "easeOut": True,
+                    "track": cam.target if cam.move == "track" else None},
             join="none" if shot.index == 0 else ("cut" if cam.continues else "xfade"),
             cues=cues,
         ))
-        for action in actions:
-            world = MOVES[action["move"]].end(world, action, ctx)
+        world = end_world
         previous_end = end
 
     # a chain eases in at its first shot and out at its last; joins inside keep moving

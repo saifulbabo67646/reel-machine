@@ -19,6 +19,8 @@ DEFAULT_OFFSET = (0.0, 0.9, 2.4)
 class _Params(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
+    fov: float | None = Field(None, ge=15, le=90)  # vertical degrees; wider for big scenes
+
 
 class StaticParams(_Params):
     pass
@@ -39,6 +41,14 @@ class DollyParams(_Params):
     offset: tuple[float, float, float] = (0.6, 0.0, 0.0)
 
 
+class TrackParams(_Params):
+    offset: tuple[float, float, float] = (0.0, 0.35, 1.3)  # from the tracked actor
+
+
+class DiveParams(_Params):
+    depth: float = Field(0.5, gt=0.05, le=3)  # how far below the surface it looks
+
+
 @dataclass(frozen=True)
 class CameraMove:
     name: str
@@ -57,6 +67,10 @@ CAMERA_MOVES: dict[str, CameraMove] = {
                    PushInParams, {"factor": 0.6}),
         CameraMove("dolly", "Slide the camera and its aim by `offset` metres.", DollyParams,
                    {"offset": [0.6, 0, 0]}),
+        CameraMove("track", "Follow the target actor as it moves (a throw, a sinking bait), keeping `offset`.",
+                   TrackParams, {"offset": [0, 0.35, 1.3]}),
+        CameraMove("dive", "Plunge toward the target on the water and down through the surface; cut to an "
+                   "underwater shot next.", DiveParams, {"depth": 0.5}),
     )
 }
 
@@ -73,6 +87,12 @@ def ease(p: float, ease_in: bool, ease_out: bool) -> float:
 
 
 def default_start(move: str, params: dict[str, Any], target) -> dict[str, Any]:
+    fov = params.get("fov") or FOV
+    if move == "track":
+        o = params["offset"]
+        return {"position": [target[i] + o[i] for i in range(3)], "target": list(target), "fov": fov}
+    if move == "dive":
+        return {"position": [target[0], target[1] + 0.9, target[2] + 2.2], "target": list(target), "fov": fov}
     if move == "orbit":
         angle = math.radians(params["from"])
         position = [
@@ -82,7 +102,7 @@ def default_start(move: str, params: dict[str, Any], target) -> dict[str, Any]:
         ]
     else:
         position = [target[i] + DEFAULT_OFFSET[i] for i in range(3)]
-    return {"position": position, "target": list(target), "fov": FOV}
+    return {"position": position, "target": list(target), "fov": fov}
 
 
 def pose(move: str, params: dict[str, Any], start: dict[str, Any], target, p: float) -> dict[str, Any]:
@@ -108,4 +128,11 @@ def pose(move: str, params: dict[str, Any], start: dict[str, Any], target, p: fl
             "target": [st[i] + o[i] * p for i in range(3)],
             "fov": start["fov"],
         }
+    if move == "track":
+        o = params["offset"]
+        return {"position": [target[i] + o[i] for i in range(3)], "target": list(target), "fov": start["fov"]}
+    if move == "dive":
+        dest = [target[0], target[1] - 0.06, target[2] + 0.45]
+        look = [target[0], target[1] - params["depth"], target[2]]
+        return {"position": lerp3(sp, dest, p), "target": lerp3(st, look, p), "fov": start["fov"]}
     raise KeyError(move)

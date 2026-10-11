@@ -105,7 +105,7 @@ def shot_document(
         "actors": actors,
         "world": plan.world,
         "actions": plan.actions,
-        "camera": {k: plan.camera[k] for k in ("move", "params", "start", "target", "easeIn", "easeOut")},
+        "camera": {k: plan.camera.get(k) for k in ("move", "params", "start", "target", "easeIn", "easeOut", "track")},
         "captions": {"words": words, "hot": list(hot or []), "label": shot.label, "title": inputs.title,
                      "card": card},
         "reel": {"startMs": window.start_ms, "totalMs": total_ms or window.end_ms, "index": plan.index},

@@ -13,7 +13,7 @@ from typing import Any, Callable, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .models import hex_colour
-from .world import Ctx, World, add, interior, point, pour_fill, set_actor, set_fill, top
+from .world import Ctx, World, add, center, interior, point, pour_fill, set_actor, set_fill, top
 
 OFFSETS = {
     "sky": (0.0, 3.0, 0.0),
@@ -81,6 +81,64 @@ class SteamParams(_Params):
     intensity: float = Field(1.0, gt=0, le=3)
 
 
+# ---- cinematic moves
+class LeapParams(_Params):
+    at: str = "lake.near"  # where on the water the arc is centred
+    span: float = Field(1.6, gt=0.2, le=6)
+    height: float = Field(1.2, gt=0.1, le=4)
+    slowmo: float = Field(0.6, ge=0, le=0.9)  # how much the apex is slowed
+    direction: Literal["right", "left"] = "right"
+
+
+class SlamParams(_Params):
+    on: str | None = None  # an anchor or an actor's top; home when omitted
+    drop: float = Field(0.9, gt=0.1, le=4)
+
+
+class BurstParams(_Coloured):
+    into: str
+    fill_add: float = Field(0.2, ge=0, le=1)
+    colour: str | None = None  # the crumbs; the actor's colour when omitted
+
+
+class DrizzleParams(_Coloured):
+    into: str
+    colour: str = "#f0a020"
+    fill_add: float = Field(0.05, ge=0, le=1)
+
+
+class SmashParams(_Coloured):
+    into: str
+    colour: str = "#c97a34"  # the paste it all becomes
+    fill_add: float = Field(0.15, ge=0, le=1)
+
+
+class PopOutParams(_Params):
+    from_: str = Field(alias="from")  # the container the pieces come out of
+    to: str = "stage.front"
+    take: float = Field(0.3, ge=0, le=1)  # how much of the fill they use up
+
+
+class ThrowParams(_Params):
+    to: str = "lake.far"
+
+
+class SplashParams(_Params):
+    at: str = "lake.near"
+    size: float = Field(1.0, gt=0.1, le=3)
+
+
+class SinkParams(_Params):
+    from_: str = Field("underwater.surface", alias="from")
+    to: str = "underwater.center"
+
+
+class SchoolParams(_Params):
+    around: str  # the bait: an actor or an anchor
+    eat: bool = False  # the lead fish lunges and takes it
+    radius: float = Field(0.7, gt=0.1, le=5)
+
+
 EndFn = Callable[[World, dict[str, Any], Ctx], World]
 
 
@@ -97,6 +155,8 @@ class Move:
     refs: tuple[str, ...] = ()            # params naming a cast member or an anchor
     container_refs: tuple[str, ...] = ()  # params that must name a container
     actor_container: bool = False         # the actor itself must be a container
+    extra_sfx: tuple[tuple[str, float], ...] = ()
+    big: bool = False                     # counts as a hook / a beat in the retention lint
 
 
 def _appear(world, action, ctx):
@@ -159,6 +219,74 @@ def _steam(world, action, ctx):
     return world
 
 
+def _dest(ctx, world, ref):
+    return point(ctx, world, ref) if ref in ctx["anchors"] else top(ctx, world, ref)
+
+
+def _leap(world, action, ctx):
+    p = action["params"]
+    c = point(ctx, world, p["at"])
+    sign = 1.0 if p["direction"] == "right" else -1.0
+    return set_actor(world, action["actor"], position=[c[0] + sign * p["span"] / 2, -0.6, c[2]], visible=False)
+
+
+def _slam(world, action, ctx):
+    on = action["params"].get("on")
+    dest = list(ctx["homes"][action["actor"]]) if on is None else _dest(ctx, world, on)
+    return set_actor(world, action["actor"], position=dest, visible=True, scale=1.0)
+
+
+def _swallow(world, actor, into, ctx):
+    inside = interior(ctx, world, into, world[into]["fill"]["level"])
+    return set_actor(world, actor, position=inside, visible=False, scale=0.0)
+
+
+def _burst(world, action, ctx):
+    p, actor = action["params"], action["actor"]
+    fill = world[p["into"]]["fill"]
+    world = _swallow(world, actor, p["into"], ctx)
+    return set_fill(world, p["into"], level=min(1.0, fill["level"] + p["fill_add"]), surface="crumbs",
+                    colour=p.get("colour") or ctx["colours"][actor])
+
+
+def _drizzle(world, action, ctx):
+    p = action["params"]
+    fill = world[p["into"]]["fill"]
+    return set_fill(world, p["into"], level=min(1.0, fill["level"] + p["fill_add"]), glaze=p["colour"])
+
+
+def _smash(world, action, ctx):
+    p = action["params"]
+    fill = world[p["into"]]["fill"]
+    world = _swallow(world, action["actor"], p["into"], ctx)
+    return set_fill(world, p["into"], level=min(1.0, fill["level"] + p["fill_add"]), surface="paste",
+                    colour=p["colour"], glaze=None)
+
+
+def _pop_out(world, action, ctx):
+    p = action["params"]
+    fill = world[p["from"]]["fill"]
+    world = set_fill(world, p["from"], level=max(0.0, fill["level"] - p["take"]))
+    return set_actor(world, action["actor"], position=point(ctx, world, p["to"]), visible=True, scale=1.0)
+
+
+def _throw(world, action, ctx):
+    to = point(ctx, world, action["params"]["to"])
+    return set_actor(world, action["actor"], position=[to[0], -0.4, to[2]], visible=False)
+
+
+def _sink(world, action, ctx):
+    return set_actor(world, action["actor"], position=point(ctx, world, action["params"]["to"]), visible=True)
+
+
+def _school(world, action, ctx):
+    p = action["params"]
+    world = set_actor(world, action["actor"], position=center(ctx, world, p["around"]), visible=True, scale=1.0)
+    if p["eat"] and p["around"] in world:
+        world = set_actor(world, p["around"], visible=False, scale=0.0)
+    return world
+
+
 MOVES: dict[str, Move] = {
     move.name: move
     for move in (
@@ -192,5 +320,42 @@ MOVES: dict[str, Move] = {
              ("thud", 0.3), "required", _mash, actor_container=True),
         Move("steam", "process", "Steam rises from an actor.", SteamParams,
              {"move": "steam", "actor": "bowl"}, ("sizzle", 0.0), "required", _steam),
+        # ---- cinematic: built for the lake/underwater sets and the cinematic look
+        Move("leap", "cinematic", "A fish bursts out of the water in a slow-motion arc and dives back in, "
+             "with splashes. The hook of a fishing reel.", LeapParams,
+             {"move": "leap", "actor": "fish", "params": {"at": "lake.near", "slowmo": 0.6}},
+             ("splash", 0.02), "required", _leap, refs=("at",), extra_sfx=(("whoosh", 0.25), ("splash", 0.92)), big=True),
+        Move("slam", "cinematic", "Drop an actor from above onto its spot: squash, dust, camera shake.", SlamParams,
+             {"move": "slam", "actor": "potato"}, ("thud", 0.45), "required", _slam, refs=("on",), big=True),
+        Move("burst", "cinematic", "Hop an actor into a container and explode it into crumbs that settle inside "
+             "(bread, biscuits). White flash.", BurstParams, {"move": "burst", "actor": "bread", "params": {"into": "bowl"}},
+             ("crunch", 0.55), "required", _burst, refs=("into",), container_refs=("into",), extra_sfx=(("boom", 0.55),),
+             big=True),
+        Move("drizzle", "cinematic", "A glossy stream (honey, syrup) pours from above and coils on top.",
+             DrizzleParams, {"move": "drizzle", "params": {"into": "bowl", "colour": "#f0a020"}},
+             ("ding", 0.05), "forbidden", _drizzle, refs=("into",), container_refs=("into",), big=True),
+        Move("smash", "cinematic", "Lift an actor over a container, hold, then slam it in: flash, shockwave, "
+             "flying chunks; the contents become a paste.", SmashParams,
+             {"move": "smash", "actor": "potato", "params": {"into": "bowl"}},
+             ("boom", 0.62), "required", _smash, refs=("into",), container_refs=("into",),
+             extra_sfx=(("whoosh", 0.5), ("crunch", 0.63)), big=True),
+        Move("pop_out", "cinematic", "Pieces (a cast member with count > 1, e.g. bait balls) pop out of a "
+             "container one by one into a row at `to`.", PopOutParams,
+             {"move": "pop_out", "actor": "balls", "params": {"from": "bowl", "to": "stage.front"}},
+             ("pop", 0.3), "required", _pop_out, refs=("from", "to"), container_refs=("from",),
+             extra_sfx=(("pop", 0.45), ("pop", 0.6), ("pop", 0.75)), big=True),
+        Move("throw", "cinematic", "Throw an actor in an arc into the water at `to`: it splashes in and is gone.",
+             ThrowParams, {"move": "throw", "actor": "ball", "params": {"to": "lake.far"}},
+             ("whoosh", 0.15), "required", _throw, refs=("to",), extra_sfx=(("splash", 0.6),), big=True),
+        Move("splash", "cinematic", "A splash on the water at `at`: droplets, mist, ripples.", SplashParams,
+             {"move": "splash", "params": {"at": "lake.near"}}, ("splash", 0.0), "forbidden", _steam,
+             refs=("at",), big=True),
+        Move("sink", "cinematic", "Underwater: an actor sinks from `from` to `to`, trailing bubbles.", SinkParams,
+             {"move": "sink", "actor": "ball", "params": {"to": "underwater.center"}},
+             ("bubbles", 0.0), "required", _sink, refs=("from", "to")),
+        Move("school", "cinematic", "Underwater: fish (a model with count > 1) circle in from the murk around "
+             "`around`; with eat, the lead fish lunges and takes it.", SchoolParams,
+             {"move": "school", "actor": "fish", "params": {"around": "ball", "eat": True}},
+             ("bubbles", 0.1), "required", _school, refs=("around",), extra_sfx=(("gulp", 0.78),), big=True),
     )
 }

@@ -21,6 +21,11 @@ _SFX = {
     "sprinkle": "anoisesrc=d=0.8:c=white:a=0.15:s=13,highpass=f=4000,afade=t=in:d=0.1,afade=t=out:st=0.5:d=0.3",
     "sizzle": "anoisesrc=d=1.0:c=white:a=0.12:s=17,bandpass=f=6000,afade=t=in:d=0.2,afade=t=out:st=0.7:d=0.3",
     "ding": "sine=f=1320:d=0.6,afade=t=out:st=0.05:d=0.55",
+    "splash": "anoisesrc=d=1.2:c=brown:a=0.9:s=19,lowpass=f=2400,afade=t=in:d=0.01,afade=t=out:st=0.05:d=1.1",
+    "boom": "sine=f=48:d=1.0,afade=t=out:st=0.02:d=0.95,volume=2.2",
+    "crunch": "anoisesrc=d=0.45:c=white:a=0.6:s=23,bandpass=f=2500:width_type=h:w=3000,afade=t=out:st=0.02:d=0.42",
+    "gulp": "sine=f=220:d=0.4,vibrato=f=12:d=0.6,afade=t=in:d=0.02,afade=t=out:st=0.1:d=0.3",
+    "bubbles": "anoisesrc=d=1.4:c=pink:a=0.3:s=29,bandpass=f=900,tremolo=f=14:d=0.9,afade=t=out:st=0.6:d=0.8",
 }
 SFX_NAMES = tuple(_SFX)
 _RATE = ["-ar", "48000", "-ac", "2"]

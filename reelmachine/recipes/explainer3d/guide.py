@@ -1,0 +1,61 @@
+"""What describe_recipe tells an agent about authoring explainer3d reels."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from .camera import CAMERA_MOVES
+from .moves import MOVES
+
+
+def _params(model: type) -> dict[str, Any]:
+    schema = model.model_json_schema()
+    out = {}
+    for name, prop in schema.get("properties", {}).items():
+        entry = {k: prop[k] for k in ("default", "enum", "minimum", "maximum", "type") if k in prop}
+        if "anyOf" in prop:
+            entry["type"] = " | ".join(p.get("type", "?") for p in prop["anyOf"])
+        out[name] = entry
+    return out
+
+
+def build_guide() -> dict[str, Any]:
+    return {
+        "workflow": [
+            "1. Pick a topic with a payoff people want (a secret, a result, a transformation).",
+            "2. find_models for the cast; use look 'cinematic' and a set environment ('lake', or 'studio').",
+            "3. Write shots: open on the payoff (shot 1, a big move at 0 s), then the steps, a re-hook past "
+            "20 s on long reels, the payoff again, and a call to action ('Save this…').",
+            "4. probe: fix every warning (hook, beat gaps, length); then start_job with mode 'storyboard', "
+            "look at storyboard.jpg, then mode 'build'.",
+        ],
+        "length": ("`length` (15-90 s) is the target: probe estimates and lints it; the build stretches "
+                   "shot tails up to 1.6x to reach it. Plan ~1 big beat per 2-3 s: 25 s ≈ 9-10 shots, "
+                   "55 s ≈ 18-22 shots. Shorter reels usually finish better — choose the length per topic."),
+        "narration": ("Markup: *word* highlights a caption word; [shown|spoken] shows one thing while the "
+                      "voice says another — [$1|one dollar], [WATCH 👀|watch]. A shot with no narration "
+                      "needs a duration (0.8-8 s): a beat for the visuals alone. `card` puts a big line on "
+                      "screen (\"SAVE THIS 📌\"). Keep lines short: 2-7 words land hardest."),
+        "looks": {"cinematic": "HDRI light, bloom, depth of field, colour grade, punch-in cuts, shake on "
+                               "impacts, flash, punch captions, title card, progress bar — the viral look",
+                  "diorama-day": "bright toy diorama", "studio-clean": "plain studio"},
+        "environments": {
+            "lake": "golden-hour lake: reflective water at y=0, a stone slab stage at the water's edge, "
+                    "mossy rocks and grass. Water anchors: lake.near, lake.far, lake.left, lake.right.",
+            "underwater": "teal water, caustics on sand, light shafts, motes. Anchors: underwater.surface, "
+                          "underwater.center, underwater.floor. Switch per shot with shot.set.",
+            "meadow-day": "plan-1 diorama meadow", "studio": "plain backdrop",
+        },
+        "anchors": ["stage.center", "stage.left", "stage.right", "stage.front", "stage.back", "ground", "sky",
+                    "lake.near", "lake.far", "lake.left", "lake.right",
+                    "underwater.surface", "underwater.center", "underwater.floor"],
+        "models": ("Cast members may be shapes or CC0 models: {\"model\": \"polyhaven:<id>\" | "
+                   "\"khronos:BarramundiFish\", \"size\": metres (longest side) or \"height\", "
+                   "\"container\": true for bowls, \"count\": n for a school or a row}. Search with find_models."),
+        "moves": {name: {"category": m.category, "description": m.description, "actor": m.actor,
+                         "params": _params(m.params), "example": m.example}
+                  for name, m in MOVES.items()},
+        "cameras": {name: {"description": c.description, "params": _params(c.params), "example": c.example}
+                    for name, c in CAMERA_MOVES.items()},
+        "music": "\"auto\" synthesises an upbeat bed that ducks under the voice and muffles underwater.",
+    }
