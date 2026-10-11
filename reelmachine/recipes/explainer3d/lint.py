@@ -48,6 +48,10 @@ def retention_warnings(
             if move.big:
                 big_starts.append(t0)
                 beats.append(t0 + span / 2)  # the middle of a big move (a leap's apex) holds attention
+        for effect in _effects(inputs, shot):  # an agent-written effect is a big moment too
+            t0 = start + effect.at[0] * seconds
+            beats.extend([t0, t0 + (effect.at[1] - effect.at[0]) * seconds / 2])
+            big_starts.append(t0)
     total = windows[-1].end_ms / 1000 if windows else 0.0
     beats = sorted(set(round(b, 3) for b in beats)) + [total]
 
@@ -68,7 +72,7 @@ def retention_warnings(
         warnings.append("call to action: end with one (\"Save this…\", \"Follow for part 2\") in the last "
                         "shot's narration or card")
     warnings.extend(_cameras_in_the_stage(inputs, shots))
-    big, suggested = length_advice(shots, windows)
+    big, suggested = length_advice(shots, windows, inputs)
     if inputs.length and inputs.length > suggested * PADDING:
         warnings.append(f"padding: {big} big moments support about {suggested}s; stretching to {inputs.length}s "
                         "will feel slow — add big moments, or choose a shorter length")
@@ -79,10 +83,19 @@ def retention_warnings(
     return warnings
 
 
-def length_advice(shots: Sequence[ResolvedShot], windows: Sequence[ShotWindow]) -> tuple[int, int]:
+def _effects(inputs: Explainer3DInputs | None, shot: ResolvedShot) -> list:
+    if inputs is None:
+        return []
+    return list(inputs.shot_list()[shot.index].effects)
+
+
+def length_advice(
+    shots: Sequence[ResolvedShot], windows: Sequence[ShotWindow], inputs: Explainer3DInputs | None = None
+) -> tuple[int, int]:
     """(big moments, a length in seconds the material supports): ~2.7 s a moment, never
     under the spoken narration, rounded to 5 s, between 15 and 90."""
     big = sum(1 for shot in shots for a in shot.actions if MOVES[a.move].big)
+    big += sum(len(_effects(inputs, shot)) for shot in shots)
     spoken = sum(w.speech_ms + w.speech_offset_ms for w in windows) / 1000
     raw = max(big * SECONDS_PER_MOMENT, spoken)
     return big, int(min(90, max(15, 5 * round(raw / 5))))

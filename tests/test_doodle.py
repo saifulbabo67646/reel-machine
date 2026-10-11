@@ -799,3 +799,39 @@ def _ink_over_time(video: Path, *, start_ms: int, end_ms: int, samples: int) -> 
         pixels = np.frombuffer(proc.stdout or b"", dtype=np.uint8)
         counts.append(int((pixels < 160).sum()))
     return counts
+
+
+def test_cartesia_out_of_credits_is_a_clear_voice_error_not_a_crash(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("CARTESIA_API_KEY", "test-key")
+    bodies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/voices":
+            return httpx.Response(200, json={"data": [{"id": "v-1", "name": "Tanner"}], "has_more": False})
+        bodies.append((request.url.path, json.loads(request.content)))
+        return httpx.Response(402, json={"error_code": "quota_exceeded", "message": "This request requires approximately 17 credits but you have 10 remaining."})
+
+    provider = CartesiaNarration(client=httpx.Client(transport=httpx.MockTransport(handler)),
+                                 base_url="https://api.example.test", workdir=tmp_path)
+    with pytest.raises(VoiceUnavailable) as info:
+        provider.synthesize("hi", voice="cartesia:Tanner")
+    assert "credits" in info.value.message and info.value.details.get("status") == 402
+    assert [path for path, _ in bodies] == ["/tts/sse"]  # no pointless retry on another route
+
+
+def test_cartesia_bytes_fallback_asks_for_a_valid_wav(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("CARTESIA_API_KEY", "test-key")
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/voices":
+            return httpx.Response(200, json={"data": [{"id": "v-1", "name": "Tanner"}], "has_more": False})
+        if request.url.path == "/tts/sse":
+            return httpx.Response(503, text="busy")
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, content=pcm_to_wav_bytes(b"\x00\x00" * 4410, sample_rate=44100))
+
+    provider = CartesiaNarration(client=httpx.Client(transport=httpx.MockTransport(handler)),
+                                 base_url="https://api.example.test", workdir=tmp_path)
+    provider.synthesize("hi", voice="cartesia:Tanner")
+    assert seen["output_format"] == {"container": "wav", "sample_rate": 44100, "encoding": "pcm_s16le"}

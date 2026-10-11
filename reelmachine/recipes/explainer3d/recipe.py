@@ -83,7 +83,7 @@ class Explainer3DRecipe:
             details["shots"] = [{"id": s.id, "estimatedMs": w.duration_ms} for s, w in zip(shots, windows)]
             details["estimatedMs"] = windows[-1].end_ms
             warnings = retention_warnings(inputs, shots, windows)
-            big, suggested = length_advice(shots, windows)
+            big, suggested = length_advice(shots, windows, inputs)
             details["bigMoments"], details["suggestedLength"] = big, suggested
             if inputs.length:
                 details["length"] = {"targetMs": inputs.length * 1000, "narrationMs": natural,

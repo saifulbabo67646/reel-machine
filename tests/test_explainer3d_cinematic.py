@@ -310,3 +310,17 @@ def test_probe_suggests_a_length_from_the_big_moments_and_warns_about_padding():
     assert big == 2 and suggested == 15  # never under 15 s, and never under the narration
     warnings = retention_warnings(inputs, resolved, windows)
     assert any(w.startswith("padding") and "2 big moments" in w for w in warnings)
+
+
+def test_component_effects_count_as_big_moments():
+    from reelmachine.recipes.explainer3d.lint import length_advice
+
+    code = "export function create({ THREE }) { return { object: new THREE.Group() }; }"
+    inputs = Explainer3DInputs.model_validate(_script(
+        look="cinematic", components={"burst": {"code": code}},
+        shots=[{"narration": "Boom.", "camera": {"move": "orbit", "target": "bowl"}, "effects": [{"component": "burst", "at": [0, 0.5]}]},
+               {"narration": "Save this.", "camera": {"move": "orbit", "target": "bowl"}}]))
+    shots = resolve_script(inputs)
+    windows = shot_windows([1000, 1000])
+    assert not any(w.startswith("hook") for w in retention_warnings(inputs, shots, windows))
+    assert length_advice(shots, windows, inputs)[0] == 1
