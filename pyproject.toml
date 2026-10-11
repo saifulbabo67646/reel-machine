@@ -50,6 +50,8 @@ s3 = "reelmachine.storage.s3:S3Storage"
 [project.entry-points."reelmachine.renderers"]
 stroke = "reelmachine.recipes.doodle.scenes.stroke:StrokeRenderer"
 program = "reelmachine.recipes.doodle.scenes.program:ProgramRenderer"
+hyperframes = "reelmachine.render.hyperframes:HyperframesRenderer"
+explainer3d-fake = "reelmachine.recipes.explainer3d.fake:FakeShotRenderer"
 
 [project.entry-points."reelmachine.narration"]
 fake = "reelmachine.recipes.doodle.narration.fake:FakeNarration"
