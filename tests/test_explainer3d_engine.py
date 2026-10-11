@@ -102,6 +102,18 @@ def test_storyboard_stops_after_prep_with_a_contact_sheet(tmp_path):
     assert {"storyboard.jpg", "script.resolved.json"} <= names and "reel.mp4" not in names
 
 
+def test_a_storyboard_leaves_spare_grid_cells_blank(tmp_path):
+    from PIL import Image, ImageStat
+
+    shots = [{"narration": f"Shot {n}.", "camera": {"move": "orbit", "target": "bowl"}} for n in range(5)]  # 4 + 1 on a 4x2 grid
+    job = _run(tmp_path, {**SCRIPT, "mode": "storyboard", "shots": shots})
+    assert job.state == JobState.SUCCEEDED, job.error
+    sheet = next(a for a in job.result.artifacts if a.name == "storyboard.jpg")
+    image = Image.open(sheet.path).convert("L")
+    spare = image.crop((3 * 368 + 20, 648 + 20, 3 * 368 + 340, 648 + 620))  # bottom-right cell
+    assert ImageStat.Stat(spare).mean[0] > 245  # white, not a copy of the last shot
+
+
 def test_build_makes_a_reel_whose_length_is_the_narration(tmp_path):
     job = _run(tmp_path, SCRIPT)
     assert job.state == JobState.SUCCEEDED, job.error

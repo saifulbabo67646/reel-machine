@@ -252,11 +252,19 @@ class PrepStage:
         ]
         cols = min(4, len(frames))
         rows = math.ceil(len(frames) / cols)
-        for index in range(len(frames), cols * rows):  # fill the grid so `tile` emits it
-            shutil.copy2(frames[-1], stills / f"{index:03d}.png")
+        # number the stills 1..n and fill the grid with white cells so `tile` emits it
+        # without repeating a shot
+        sheet_in = ctx.workdir / "sheet"
+        sheet_in.mkdir(parents=True, exist_ok=True)
+        for index, frame in enumerate(frames, start=1):
+            shutil.copy2(frame, sheet_in / f"{index:03d}.png")
+        for index in range(len(frames) + 1, cols * rows + 1):
+            ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-y", "-f", "lavfi",
+                        "-i", "color=white:size=1080x1920", "-frames:v", "1",
+                        str(sheet_in / f"{index:03d}.png")], cancel=ctx.cancel)
         sheet = _artifacts(ctx) / "storyboard.jpg"
         ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-y", "-framerate", "1",
-                    "-i", str(stills / "%03d.png"),
+                    "-start_number", "1", "-i", str(sheet_in / "%03d.png"),
                     "-vf", f"scale=360:640,tile={cols}x{rows}:padding=8:color=white",
                     "-frames:v", "1", "-q:v", "3", str(sheet)], cancel=ctx.cancel)
         return PrepOutput(shots=payload, storyboard=str(sheet), renderer=renderer.name, halt_pipeline=True)

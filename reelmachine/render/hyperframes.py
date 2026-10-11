@@ -122,7 +122,7 @@ class HyperframesRenderer:
                     "HyperFrames could not capture a still",
                     details={"project": str(project), "log": out[-2000:]},
                 )
-            dest = Path(dest)
+            dest = Path(dest).resolve()
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(frames[0], dest)
         return dest
@@ -130,7 +130,9 @@ class HyperframesRenderer:
     def render(
         self, project: Path, dest: Path, *, fps: int = 30, seconds: float = 0.0, cancel: Any = None
     ) -> Path:
-        project, dest = Path(project), Path(dest)
+        # HyperFrames runs with the project as its cwd: a relative `--output` (a relative
+        # REEL_WORKDIR) would land inside the project
+        project, dest = Path(project).resolve(), Path(dest).resolve()
         ok, lint_out = self.lint(project, cancel=cancel)
         if not ok:
             raise ShotRenderFailed(

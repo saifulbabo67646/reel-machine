@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import pathlib
 import stat
 
 import pytest
@@ -52,6 +53,20 @@ def test_render_lints_then_renders_pinned(tmp_path, fake_npx):
     assert calls[0].startswith("--yes hyperframes@0.8.146 lint")
     assert "render" in calls[1] and "--fps 30" in calls[1]
     assert (project / "render.log").is_file()
+
+
+def test_relative_paths_are_resolved_before_hyperframes_runs_in_the_project(
+    tmp_path, fake_npx, monkeypatch
+):
+    # a relative REEL_WORKDIR (`.work`) gives relative paths; HyperFrames runs with the
+    # project as its cwd, so they must not be handed to it as-is
+    (tmp_path / "shot").mkdir()
+    monkeypatch.chdir(tmp_path)
+    renderer = _renderer(tmp_path)
+    out = renderer.render(pathlib.Path("shot"), pathlib.Path("renders/out.mp4"))
+    assert (tmp_path / "renders" / "out.mp4").read_text() == "mp4" and out.is_absolute()
+    still = renderer.snapshot(pathlib.Path("shot"), 1.0, pathlib.Path("stills/still.png"))
+    assert (tmp_path / "stills" / "still.png").read_text() == "png" and still.is_absolute()
 
 
 def test_lint_failure_is_a_shot_render_failure(tmp_path, fake_npx, monkeypatch):
