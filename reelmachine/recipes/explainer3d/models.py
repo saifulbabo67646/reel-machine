@@ -134,3 +134,33 @@ class Explainer3DInputs(BaseModel):
             shot.model_copy(update={"id": shot.id or f"shot-{index}"})
             for index, shot in enumerate(self.shots, start=1)
         ]
+
+
+class ResolvedAction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    move: str
+    actor: str | None = None
+    params: dict[str, Any] = Field(default_factory=dict)
+    at: tuple[float, float]
+    index: int
+
+
+class ResolvedCamera(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    move: str = "static"
+    target: str = "stage.center"
+    params: dict[str, Any] = Field(default_factory=dict)
+    continues: bool = False
+
+
+class ResolvedShot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    index: int
+    narration: str
+    label: str | None = None
+    actions: list[ResolvedAction] = Field(default_factory=list)
+    camera: ResolvedCamera = Field(default_factory=ResolvedCamera)

@@ -175,3 +175,80 @@ def test_push_in_and_ease():
     assert math.dist(end["position"], target) == pytest.approx(math.dist(start["position"], target) * 0.5)
     assert ease(0.0, True, True) == 0.0 and ease(1.0, True, False) == pytest.approx(1.0)
     assert ease(0.5, False, False) == 0.5
+
+
+from reelmachine.core.errors import InvalidInput  # noqa: E402
+from reelmachine.recipes.explainer3d.validate import resolve_script  # noqa: E402
+
+
+def _resolve(**over):
+    return resolve_script(Explainer3DInputs.model_validate(_script(**over)))
+
+
+def _path(**over) -> str:
+    with pytest.raises(InvalidInput) as info:
+        _resolve(**over)
+    return info.value.details["path"]
+
+
+def test_resolve_fills_windows_and_aliases():
+    shots = _resolve(
+        cast={
+            "bowl": {"asset": {"shape": "bowl"}, "at": "stage.center"},
+            "potato": {"asset": {"shape": "ball", "height": 0.1}},
+        },
+        shots=[{
+            "narration": "Drop it.",
+            "actions": [
+                {"move": "fly_in", "actor": "potato", "from": "left"},
+                {"move": "drop_into", "actor": "potato", "into": "bowl"},
+            ],
+        }],
+    )
+    a0, a1 = shots[0].actions
+    assert a0.params["from"] == "left" and a0.at == pytest.approx((0.1, 0.525))
+    assert a1.at[0] == pytest.approx(a0.at[1])
+    assert shots[0].camera.move == "static" and shots[0].camera.continues is False
+
+
+def test_auto_actions():
+    shots = _resolve(shots=[{"narration": "x", "actions": "auto",
+                             "auto": [{"move": "spin_showcase", "actor": "bowl"}]}])
+    assert shots[0].actions[0].at == pytest.approx((0.1, 0.95))
+
+
+@pytest.mark.parametrize(
+    "over, path",
+    [
+        ({"cast": {"bowl": {"asset": "pack:stone-bowl"}}}, "cast.bowl.asset"),
+        ({"cast": {"bowl": {"asset": {"shape": "bowl"}, "at": "moon"}}}, "cast.bowl.at"),
+        ({"look": "neon"}, "look"),
+        ({"shots": [{"narration": "x", "actions": [{"move": "teleport", "actor": "bowl"}]}]},
+         "shots[0].actions[0].move"),
+        ({"shots": [{"narration": "x", "actions": [{"move": "appear", "actor": "ghost"}]}]},
+         "shots[0].actions[0].actor"),
+        ({"shots": [{"narration": "x", "actions": [{"move": "appear"}]}]}, "shots[0].actions[0].actor"),
+        ({"shots": [{"narration": "x", "actions": [{"move": "sprinkle", "actor": "bowl", "into": "bowl"}]}]},
+         "shots[0].actions[0].actor"),
+        ({"shots": [{"narration": "x", "actions": [{"move": "spin_showcase", "actor": "bowl", "turns": 9}]}]},
+         "shots[0].actions[0].turns"),
+        ({"cast": {"bowl": {"asset": {"shape": "bowl"}}, "ball": {"asset": {"shape": "ball"}}},
+          "shots": [{"narration": "x", "actions": [{"move": "drop_into", "actor": "bowl", "into": "ball"}]}]},
+         "shots[0].actions[0].into"),
+        ({"shots": [{"narration": "x", "actions": [
+            {"move": "spin_showcase", "actor": "bowl", "at": [0.0, 0.6]},
+            {"move": "exit", "actor": "bowl", "at": [0.5, 1.0]}]}]},
+         "shots[0].actions[1].at"),
+        ({"shots": [{"narration": "x"}]}, "shots[0]"),
+        ({"shots": [{"narration": "x", "camera": {"move": "orbit", "continue": True}}]},
+         "shots[0].camera.continue"),
+        ({"shots": [{"narration": "x", "camera": {"move": "orbit", "target": "nowhere"}}]},
+         "shots[0].camera.target"),
+        ({"shots": [{"narration": "x", "camera": {"move": "zoom"}}]}, "shots[0].camera.move"),
+        ({"shots": [{"narration": "x", "actions": "auto",
+                     "auto": [{"move": "appear", "actor": "bowl", "at": [0, 1]}]}]},
+         "shots[0].auto[0].at"),
+    ],
+)
+def test_refusals_name_the_field(over, path):
+    assert _path(**over) == path
