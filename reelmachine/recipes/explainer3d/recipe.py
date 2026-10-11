@@ -1,0 +1,62 @@
+"""The explainer3d recipe: a scene script becomes a narrated 3D reel, shot by shot."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from ...core.manifest import VerificationReport
+from ...core.recipe import CostNote, ProbeContext, ProbeReport, ProviderReq, RecipeSpec, StageSpec
+from ...core.stage import StageContext
+from .models import Explainer3DInputs
+from .stages import AssetsStage, ComposeStage, NarrationStage, PrepStage, RenderStage, ScriptStage, ShotsStage
+
+
+class Explainer3DRecipe:
+    spec = RecipeSpec(
+        id="explainer3d",
+        title="3D explainer",
+        summary=(
+            "A scene script — cast, shots, moves, camera — becomes a narrated vertical reel "
+            "rendered in 3D (three.js via HyperFrames). Objects carry over between shots and "
+            "a camera can continue across a cut. `storyboard` renders one still per shot."
+        ),
+        input_model=Explainer3DInputs,
+        version=1,
+        stages=(
+            StageSpec(stage=ScriptStage()),
+            StageSpec(stage=AssetsStage(), feeds="script"),
+            StageSpec(stage=NarrationStage(), feeds="assets", uses=("narration",)),
+            StageSpec(stage=ShotsStage(), feeds="narration"),
+            StageSpec(stage=PrepStage(), feeds="shots", uses=("renderer",)),
+            StageSpec(stage=ComposeStage(), feeds="prep"),
+            StageSpec(stage=RenderStage(), feeds="compose"),
+        ),
+        providers={
+            "narration": ProviderReq(group="narration", default="fake",
+                                     description="Text-to-speech with word timings"),
+            "renderer": ProviderReq(group="renderers", default="hyperframes",
+                                    description="Renders each shot (Node >= 22, HyperFrames, Chrome, ffprobe)"),
+        },
+        cost=CostNote(unit="tts_characters", estimate="narration length",
+                      notes="the fake voice is free; cloud voices bill per character",
+                      providers=("elevenlabs", "cartesia", "fake")),
+        artifacts=("reel.mp4", "captions.srt", "reel.json", "timeline.json", "storyboard.jpg",
+                   "script.resolved.json"),
+        render_modes=("hyperframes",),
+        example={
+            "mode": "storyboard",
+            "title": "The Secret Bait That Attracts Big Carp",
+            "cast": {"bowl": {"asset": {"shape": "bowl", "height": 0.2, "material": "stone"}, "at": "stage.center"},
+                     "potato": {"asset": {"shape": "ball", "height": 0.1, "colour": "#d9b44a"}}},
+            "shots": [{"narration": "First, a steamed potato goes into the bowl.", "label": "Step 1",
+                       "camera": {"move": "orbit", "target": "bowl", "from": 10, "to": 40},
+                       "actions": [{"move": "fly_in", "actor": "potato"},
+                                   {"move": "drop_into", "actor": "potato", "into": "bowl"}]}],
+        },
+    )
+
+    def probe(self, inputs: Explainer3DInputs, ctx: ProbeContext) -> ProbeReport:
+        return ProbeReport(ok=True)
+
+    def verify(self, ctx: StageContext, result: dict[str, Any]) -> VerificationReport | None:
+        return None

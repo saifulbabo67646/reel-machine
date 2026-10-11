@@ -12,6 +12,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from ...core.assets import Licence, Provenance
+from ...core.stage import StageOutput
+from ...core.timeline import Timeline, WordSpan
+
 Mode = Literal["storyboard", "build"]
 ShapeKind = Literal["bowl", "cup", "pot", "jar", "bottle", "ball", "box", "sack", "pile", "plinth"]
 Material = Literal[
@@ -164,3 +168,95 @@ class ResolvedShot(BaseModel):
     label: str | None = None
     actions: list[ResolvedAction] = Field(default_factory=list)
     camera: ResolvedCamera = Field(default_factory=ResolvedCamera)
+
+
+class ScriptOutput(StageOutput):
+    inputs: Explainer3DInputs
+    shots: list[ResolvedShot]
+
+
+class ResolvedModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["shape"] = "shape"
+    shape: ShapeSpec
+    dims: tuple[float, float, float]
+    licence: Licence
+    provenance: Provenance
+
+
+class AssetsOutput(StageOutput):
+    inputs: Explainer3DInputs
+    shots: list[ResolvedShot]
+    models: dict[str, ResolvedModel] = Field(default_factory=dict)
+
+
+class Window(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start_ms: int
+    duration_ms: int
+    speech_offset_ms: int
+    speech_ms: int
+
+
+class NarrationOutput(StageOutput):
+    inputs: Explainer3DInputs
+    shots: list[ResolvedShot]
+    models: dict[str, ResolvedModel] = Field(default_factory=dict)
+    audio_asset: str
+    duration_ms: int
+    windows: list[Window]
+    words: list[list[WordSpan]]  # absolute ms, one list per shot
+    voice: str
+    provider: str
+    licence: Licence | None = None
+
+
+class ShotProject(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    shot_id: str
+    index: int
+    dir: str
+    key: str
+    nominal_ms: int
+    render_ms: int
+    join: Literal["none", "xfade", "cut"]
+
+
+class ShotsOutput(StageOutput):
+    narration: NarrationOutput
+    projects: list[ShotProject]
+    cues: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class Track(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    shot_id: str
+    path: str
+    render_ms: int
+    renderer: str
+
+
+class PrepOutput(StageOutput):
+    shots: ShotsOutput
+    tracks: list[Track] = Field(default_factory=list)
+    storyboard: str = ""
+    renderer: str = ""
+
+
+class ComposeOutput(StageOutput):
+    prep: PrepOutput
+    timeline: Timeline
+    render_options: dict[str, Any] = Field(default_factory=dict)
+
+
+class RenderOutput(StageOutput):
+    video: str
+    ass: str = ""
+    srt: str
+    manifest: str
+    duration_ms: int
+    render_mode: str = "hyperframes"

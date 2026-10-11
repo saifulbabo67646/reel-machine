@@ -62,3 +62,68 @@ def test_join_crossfades_and_cuts_to_the_nominal_length(tmp_path):
     out = join_shots(tracks, joins, nominal, tmp_path / "joined.mp4", settings=settings)
     info = ffmpeg.probe(out)
     assert info.duration_s == pytest.approx(4.5, abs=0.05) and (info.width, info.height) == (1080, 1920)
+
+
+import json  # noqa: E402
+
+from reelmachine.core.job import JobRequest, JobState  # noqa: E402
+from reelmachine.engine import Engine  # noqa: E402
+
+SCRIPT = {
+    "title": "The Secret Bait",
+    "set": {"environment": "meadow-day", "stage": "stone-slab"},
+    "cast": {
+        "bowl": {"asset": {"shape": "bowl", "height": 0.2, "material": "stone"}, "at": "stage.center"},
+        "potato": {"asset": {"shape": "ball", "height": 0.1, "colour": "#d9b44a"}},
+    },
+    "shots": [
+        {"narration": "First, a potato goes in.", "label": "Step 1",
+         "camera": {"move": "orbit", "target": "bowl", "from": 10, "to": 40},
+         "actions": [{"move": "fly_in", "actor": "potato"}, {"move": "drop_into", "actor": "potato", "into": "bowl"}]},
+        {"narration": "Then we mash it.", "camera": {"move": "push_in", "target": "bowl", "continue": True},
+         "actions": [{"move": "mash", "actor": "bowl", "colour": "#d9d27a"}]},
+    ],
+}
+
+
+def _run(tmp_path, inputs):
+    engine = Engine(_settings(tmp_path), provider_overrides={"renderer": "explainer3d-fake"})
+    try:
+        job = engine.submit(JobRequest(recipe="explainer3d", inputs=inputs), caller="local")
+        return engine.wait(job.id, caller="local", timeout_s=600)
+    finally:
+        engine.close()
+
+
+def test_storyboard_stops_after_prep_with_a_contact_sheet(tmp_path):
+    job = _run(tmp_path, {**SCRIPT, "mode": "storyboard"})
+    assert job.state == JobState.SUCCEEDED, job.error
+    names = {a.name for a in job.result.artifacts}
+    assert {"storyboard.jpg", "script.resolved.json"} <= names and "reel.mp4" not in names
+
+
+def test_build_makes_a_reel_whose_length_is_the_narration(tmp_path):
+    job = _run(tmp_path, SCRIPT)
+    assert job.state == JobState.SUCCEEDED, job.error
+    reel = next(a for a in job.result.artifacts if a.name == "reel.mp4")
+    info = ffmpeg.probe(reel.path)
+    assert (info.width, info.height) == (1080, 1920) and info.has_audio
+    timeline = next(a for a in job.result.artifacts if a.name == "timeline.json")
+    assert abs(info.duration_s * 1000 - json.loads(Path(timeline.path).read_text())["duration_ms"]) < 100
+    assert "captions.ass" not in {a.name for a in job.result.artifacts}
+
+
+def test_unchanged_shots_are_not_rendered_twice(tmp_path):
+    _run(tmp_path, {**SCRIPT, "mode": "storyboard"})
+    _run(tmp_path, SCRIPT)
+    second = _run(tmp_path, SCRIPT)
+    assert second.state == JobState.SUCCEEDED
+    cache = _settings(tmp_path).workdir / "jobs" / "local" / "cache" / "explainer3d" / "shots"  # per caller
+    assert len(list(cache.rglob("*.mp4"))) == 2  # two shots, rendered once each
+
+
+def test_a_bad_script_fails_with_the_field(tmp_path):
+    bad = {**SCRIPT, "shots": [{"narration": "x", "actions": [{"move": "teleport", "actor": "bowl"}]}]}
+    job = _run(tmp_path, bad)
+    assert job.state == JobState.FAILED
+    assert job.error.code == "INVALID_INPUT" and job.error.details["path"] == "shots[0].actions[0].move"
