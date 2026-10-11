@@ -9,11 +9,12 @@ from pydantic import ValidationError
 
 from ...core.errors import InvalidInput
 from .camera import CAMERA_MOVES
-from .geometry import CONTAINERS, anchors
+from .geometry import CONTAINERS
 from .models import (
     Action, Explainer3DInputs, ResolvedAction, ResolvedCamera, ResolvedShot, ShapeSpec,
 )
 from .moves import MOVES
+from .sets import reel_sets, stage_anchors
 from .timing import auto_layout
 
 LOOKS = frozenset(p.stem for p in (Path(__file__).resolve().parent / "looks").glob("*.json"))
@@ -38,7 +39,8 @@ def resolve_script(inputs: Explainer3DInputs) -> list[ResolvedShot]:
     if inputs.music and inputs.music != "auto" and not Path(inputs.music).expanduser().is_file():
         raise _refuse("music", f"music file not found: {inputs.music}",
                       hint="give a local audio file, or leave music out")
-    marks = anchors(inputs.set.stage)
+    reel_set, shot_sets = reel_sets(inputs)  # refuses an unknown preset with its path
+    marks = stage_anchors(inputs)
     for key, member in inputs.cast.items():
         if member.at is not None and member.at not in marks:
             raise _refuse(f"cast.{key}.at", f"unknown anchor {member.at!r}", hint=f"one of {sorted(marks)}")
@@ -104,7 +106,7 @@ def resolve_script(inputs: Explainer3DInputs) -> list[ResolvedShot]:
         resolved.append(ResolvedShot(
             id=shot.id, index=index, narration=shot.narration, label=shot.label, actions=actions, camera=cam,
             duration_ms=int(shot.duration * 1000) if shot.duration is not None else None, card=shot.card,
-            environment=shot.set.environment if shot.set else inputs.set.environment))
+            environment=shot_sets[index].name, set_key=shot_sets[index].key))
     return resolved
 
 

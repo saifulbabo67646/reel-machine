@@ -14,9 +14,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from .camera import default_start, pose
-from .geometry import CONTAINERS, anchors, dims
+from .geometry import CONTAINERS, dims
 from .models import Explainer3DInputs, ResolvedShot, ShapeSpec
 from .moves import MOVES
+from .sets import stage_anchors
 from .timing import ShotWindow
 from .world import Ctx, World, center
 
@@ -67,7 +68,7 @@ def actor_colour(inputs: Explainer3DInputs, key: str) -> str:
 
 
 def build_ctx(inputs: Explainer3DInputs, models: dict[str, Any] | None = None) -> Ctx:
-    marks = anchors(inputs.set.stage)
+    marks = stage_anchors(inputs)
     ctx: Ctx = {"anchors": {k: list(v) for k, v in marks.items()}, "dims": {}, "homes": {}, "colours": {}}
     for key, member in inputs.cast.items():
         ctx["dims"][key] = actor_dims(inputs, key, models)
@@ -77,7 +78,7 @@ def build_ctx(inputs: Explainer3DInputs, models: dict[str, Any] | None = None) -
 
 
 def initial_world(inputs: Explainer3DInputs, models: dict[str, Any] | None = None) -> World:
-    marks = anchors(inputs.set.stage)
+    marks = stage_anchors(inputs)
     world: World = {}
     for key, member in inputs.cast.items():
         world[key] = {

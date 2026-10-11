@@ -67,7 +67,7 @@ def shot_document(
     render_ms: int,
     models: dict[str, Any] | None = None,
     env: Any = None,
-    environment: str | None = None,
+    resolved_set: Any = None,
     card: str | None = None,
     hot: list[bool] | None = None,
     total_ms: int | None = None,
@@ -86,19 +86,24 @@ def shot_document(
                 "dims": measured, "count": asset.count, "colour": asset.colour,
             }
     shot = next(s for s in inputs.shot_list() if s.id == plan.shot_id)
-    environment = environment or inputs.set.environment
+    if resolved_set is None:
+        from .sets import reel_sets
+
+        resolved_set = reel_sets(inputs)[0]
+    key = resolved_set.key
     env_doc = None
     if env is not None:
         env_doc = {
-            "files": {rel: f"assets/env/{environment}/{rel}" for rel in sorted(env.files)},
-            "dressing": [{"url": _model_url(d["source"], d["main"]), "dims": d["dims"], "at": d["at"], "yaw": d["yaw"]}
-                         for d in env.dressing],
+            "files": {rel: f"assets/sets/{key}/{rel}" for rel in sorted(env.files)},
+            "dressing": [{"url": _model_url(d["source"], d["main"]), "dims": d["dims"],
+                          "at": list(ctx["anchors"][d["at"]]) if isinstance(d["at"], str) else list(d["at"]),
+                          "yaw": d["yaw"]} for d in env.dressing],
         }
     return {
         "width": WIDTH, "height": HEIGHT, "fps": FPS,
         "duration": window.duration_ms / 1000.0,
         "renderDuration": render_ms / 1000.0,
-        "set": {**inputs.set.model_dump(), "environment": environment},
+        "set": {**resolved_set.model_dump(mode="json"), "environment": resolved_set.name},
         "env": env_doc,
         "look": load_look(inputs.look),
         "ctx": ctx,
@@ -113,7 +118,7 @@ def shot_document(
     }
 
 
-def project_links(models: dict[str, Any] | None, environment: str, env: Any) -> dict[str, Path]:
+def project_links(models: dict[str, Any] | None, set_key: str, env: Any) -> dict[str, Path]:
     """Files a shot project needs from the asset cache: published path → cached file."""
     links: dict[str, Path] = {}
     for resolved in (models or {}).values():
@@ -123,7 +128,7 @@ def project_links(models: dict[str, Any] | None, environment: str, env: Any) -> 
                 links[f"assets/models/{provider}/{ident}/{rel}"] = Path(resolved.root) / rel
     if env is not None:
         for rel, path in env.files.items():
-            links[f"assets/env/{environment}/{rel}"] = Path(path)
+            links[f"assets/sets/{set_key}/{rel}"] = Path(path)
         for d in env.dressing:
             provider, _, ident = d["source"].partition(":")
             for rel in d["files"]:

@@ -47,64 +47,125 @@ export async function skyLight(THREE, renderer, scene, url, { sunAngle = 80, bac
   return sun.applyAxisAngle(new THREE.Vector3(0, 1, 0), turn);
 }
 
-export async function buildLake(THREE, renderer, scene, shot, files, loadModel, fit) {
-  const L = shot.look;
-  const sun = await skyLight(THREE, renderer, scene, files["sky.hdr"], { sunAngle: L.sunAngle ?? 80 });
-  const key = new THREE.DirectionalLight(0xffd7a8, 3.2);
-  key.position.copy(sun.clone().multiplyScalar(6));
+async function surfaceMaterial(THREE, files, surface, repeat, fallback) {
+  const id = surface && surface.texture ? surface.texture.split(":")[1] : null;
+  if (id && files[`tex/${id}/diff.jpg`]) {
+    const [d, n, r] = await Promise.all(["diff", "nor", "rough"].map((k) => loadTex(THREE, files[`tex/${id}/${k}.jpg`], k === "diff")));
+    for (const t of [d, n, r]) t.repeat.set(repeat[0], repeat[1]);
+    return new THREE.MeshStandardMaterial({ map: d, normalMap: n, roughnessMap: r });
+  }
+  return new THREE.MeshStandardMaterial({ color: new THREE.Color((surface && surface.colour) || fallback), roughness: 0.85 });
+}
+
+// Any set, from its data: a sky image (light and backdrop), floor or water, walls, a stage,
+// fog and props. The lake, the kitchen and a set the agent invents are all built here.
+export async function buildFromData(THREE, renderer, scene, shot, files, loadModel, fit) {
+  const S = shot.set, top = shot.ctx.anchors["stage.center"][1];
+  let sun = new THREE.Vector3(0.5, 0.8, 0.3).normalize();
+  if (files["sky.hdr"]) {
+    sun = await skyLight(THREE, renderer, scene, files["sky.hdr"], { sunAngle: S.sun_angle ?? 80, background: S.background === "sky" || S.background === "blur" });
+    if (S.background === "blur") scene.backgroundBlurriness = 0.06;
+  } else {
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x5b6b3a, 1.1));
+  }
+  if (S.background && S.background.startsWith("#")) scene.background = new THREE.Color(S.background);
+  const key = new THREE.DirectionalLight(0xffd7a8, files["sky.hdr"] ? 3.2 : 2.6);
+  key.position.copy(sun.clone().setY(Math.max(0.35, sun.y)).normalize().multiplyScalar(6));
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.bias = -0.0004;
   key.shadow.normalBias = 0.02;
-  Object.assign(key.shadow.camera, { left: -1.4, right: 1.4, top: 1.4, bottom: -1.4, near: 0.1, far: 20 });
-  key.target.position.set(0, 0.8, 0);
+  Object.assign(key.shadow.camera, { left: -2, right: 2, top: 2, bottom: -2, near: 0.1, far: 20 });
+  key.target.position.set(0, top, 0);
   scene.add(key, key.target);
   const fill = new THREE.DirectionalLight(0xffe2c4, 1.6);
   fill.position.set(0.5, 2.5, 4);
   const rim = new THREE.DirectionalLight(0xffb070, 1.2);
   rim.position.set(-3, 1.5, -6);
   scene.add(fill, rim);
+  if (S.fog) scene.fog = new THREE.FogExp2(new THREE.Color(S.fog.colour), S.fog.density);
 
-  const normals = await loadTex(THREE, files["waternormals.jpg"], false);
-  const water = new Water(new THREE.PlaneGeometry(3000, 3000), {
-    textureWidth: 1024, textureHeight: 1024, waterNormals: normals, sunDirection: sun.clone(),
-    sunColor: 0xffc58a, waterColor: 0x0b2a2e, distortionScale: 2.2, fog: false,
-  });
-  water.rotation.x = -Math.PI / 2;
-  water.material.uniforms.size.value = 3.5;
-  scene.add(water);
-
-  const top = shot.ctx.anchors["stage.center"][1];
-  if (shot.set.stage !== "none") {
-    const [d, n, r] = await Promise.all([
-      loadTex(THREE, files["rock/diff.jpg"], true), loadTex(THREE, files["rock/nor.jpg"], false), loadTex(THREE, files["rock/rough.jpg"], false),
-    ]);
-    for (const t of [d, n, r]) t.repeat.set(1.6, 1);
-    const h = top + 0.35;
-    const slab = new THREE.Mesh(new RoundedBoxGeometry(1.6, h, 1.0, 8, 0.1),
-      new THREE.MeshStandardMaterial({ map: d, normalMap: n, roughnessMap: r, normalScale: new THREE.Vector2(1.6, 1.6) }));
-    slab.position.set(0, top - h / 2, 0);
-    slab.castShadow = slab.receiveShadow = true;
-    scene.add(slab);
+  let tick = () => {};
+  if (S.water) {
+    const normals = await loadTex(THREE, files["waternormals.jpg"], false);
+    const water = new Water(new THREE.PlaneGeometry(3000, 3000), {
+      textureWidth: 1024, textureHeight: 1024, waterNormals: normals, sunDirection: sun.clone(),
+      sunColor: 0xffc58a, waterColor: new THREE.Color(S.water.colour), distortionScale: 2.2, fog: false,
+    });
+    water.rotation.x = -Math.PI / 2;
+    water.material.uniforms.size.value = 3.5;
+    scene.add(water);
+    tick = (t) => (water.material.uniforms.time.value = t * 0.45);
+  } else if (S.floor) {
+    const [w, d] = S.floor.size, k = S.floor.repeat ?? 4;
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), await surfaceMaterial(THREE, files, S.floor, [k, (k * d) / w], "#b9a35a"));
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+    if (S.walls) {
+      const h = S.walls.height, k2 = S.walls.repeat ?? 4;
+      const mat = await surfaceMaterial(THREE, files, S.walls, [k2, (k2 * h) / w], "#e8dccb");
+      mat.side = THREE.DoubleSide;
+      const sides = { back: [0, -d / 2, 0, w], front: [0, d / 2, Math.PI, w], left: [-w / 2, 0, Math.PI / 2, d], right: [w / 2, 0, -Math.PI / 2, d] };
+      for (const name of S.walls.sides) {
+        const [x, z, yaw, len] = sides[name];
+        const wall = new THREE.Mesh(new THREE.PlaneGeometry(len, h), mat);
+        wall.position.set(x, h / 2, z);
+        wall.rotation.y = yaw;
+        wall.receiveShadow = true;
+        scene.add(wall);
+      }
+    }
   }
+
+  if (S.stage !== "none") scene.add(await buildStage(THREE, files, S, top));
   for (const item of shot.env.dressing) {
     const g = fit(await loadModel(item.url), item.dims);
     g.position.set(...item.at);
-    g.rotation.y = item.yaw;
+    g.rotation.y = (item.yaw * Math.PI) / 180;
     scene.add(g);
   }
-  return { sun, tick: (t) => (water.material.uniforms.time.value = t * 0.45) };
+  return { sun, tick };
+}
+
+async function buildStage(THREE, files, S, top) {
+  const mat = await surfaceMaterial(THREE, files, S.stage_texture ? { texture: S.stage_texture } : null, [1.6, 1],
+    { "stone-slab": "#8f877c", counter: "#d8d2c8", table: "#8a5a33" }[S.stage]);
+  const group = new THREE.Group();
+  const add = (geometry, x, y, z) => {
+    const m = new THREE.Mesh(geometry, mat);
+    m.position.set(x, y, z);
+    m.castShadow = m.receiveShadow = true;
+    group.add(m);
+  };
+  if (S.stage === "stone-slab") {
+    if (mat.normalMap) mat.normalScale = new THREE.Vector2(1.6, 1.6);
+    const h = top + 0.35;
+    add(new RoundedBoxGeometry(1.6, h, 1.0, 8, 0.1), 0, top - h / 2, 0);
+  } else if (S.stage === "counter") {
+    add(new RoundedBoxGeometry(1.6, 0.05, 0.7, 4, 0.01), 0, top - 0.025, 0);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.56, top - 0.05, 0.64), new THREE.MeshStandardMaterial({ color: 0xf2efe9, roughness: 0.6 }));
+    body.position.set(0, (top - 0.05) / 2, 0);
+    body.castShadow = body.receiveShadow = true;
+    group.add(body);
+  } else if (S.stage === "table") {
+    add(new RoundedBoxGeometry(1.4, 0.06, 0.9, 4, 0.015), 0, top - 0.03, 0);
+    for (const [x, z] of [[-0.62, -0.38], [0.62, -0.38], [-0.62, 0.38], [0.62, 0.38]]) add(new THREE.BoxGeometry(0.06, top - 0.06, 0.06), x, (top - 0.06) / 2, z);
+  }
+  return group;
 }
 
 export async function buildUnderwater(THREE, renderer, scene, shot, files) {
   if (files["sky.hdr"]) await skyLight(THREE, renderer, scene, files["sky.hdr"], { background: false, intensity: 0.35 });
-  scene.fog = new THREE.FogExp2(0x0e5a66, 0.16);
-  scene.background = new THREE.Color(0x0b4652);
+  const S = shot.set;
+  scene.fog = new THREE.FogExp2(new THREE.Color(S.fog ? S.fog.colour : "#0e5a66"), S.fog ? S.fog.density : 0.16);
+  scene.background = new THREE.Color(S.background && S.background.startsWith("#") ? S.background : "#0b4652");
   scene.add(new THREE.HemisphereLight(0x9fe6ff, 0x0c2a20, 1.3));
   const sunU = new THREE.DirectionalLight(0xbff4ff, 1.4);
   sunU.position.set(1, 6, 2);
   scene.add(sunU);
-  const sand = await loadTex(THREE, files["sand/diff.jpg"], true);
+  const sandId = S.floor && S.floor.texture ? S.floor.texture.split(":")[1] : "coast_sand_01";
+  const sand = await loadTex(THREE, files[`tex/${sandId}/diff.jpg`], true);
   const floorMat = new THREE.ShaderMaterial({
     uniforms: { uSand: { value: sand }, uTime: { value: 0 }, fogColor: { value: scene.fog.color }, fogDensity: { value: scene.fog.density } },
     vertexShader: "varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }",

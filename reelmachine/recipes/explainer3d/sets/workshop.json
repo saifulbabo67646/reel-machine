@@ -1,0 +1,2 @@
+{"sky": "polyhaven:carpentry_shop_02", "background": "blur", "stage": "table", "stage_texture": "polyhaven:old_wooden_floor_02",
+ "floor": {"texture": "polyhaven:concrete_floor_02", "size": [8, 8], "repeat": 5}, "sun_angle": 30}

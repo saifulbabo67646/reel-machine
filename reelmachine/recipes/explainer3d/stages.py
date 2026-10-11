@@ -24,13 +24,14 @@ from .audio import mix, pad_speech, silence, synth_sfx
 from .compile import FPS, load_look, look_timing, project_key, project_links, shot_document, write_project
 from .music import synth_music
 from .markup import display_text, display_words, parse_markup, spoken_text
-from .assets import environment_packs, resolve_cast
+from .assets import resolve_cast, set_pack
 from .models import (
     AssetsOutput, ComposeOutput, EnvAssets, Explainer3DInputs, NarrationOutput, PrepOutput, RenderOutput,
     ScriptOutput, ShotProject, ShotsOutput, Track, Window,
 )
 from .state import build_ctx, plan_shots
 from .timing import XFADE_MS, ShotWindow, fit_windows, shot_windows
+from .sets import reel_sets
 from .validate import resolve_script
 from .video import join_shots, mux
 
@@ -95,7 +96,8 @@ class ScriptStage:
         except InvalidInput as exc:
             exc.stage = self.id
             raise
-        return ScriptOutput(inputs=inputs, shots=shots)
+        _, shot_sets = reel_sets(inputs)
+        return ScriptOutput(inputs=inputs, shots=shots, sets={s.key: s for s in shot_sets})
 
 
 def asset_cache(settings: Settings) -> Path:
@@ -119,17 +121,18 @@ class AssetsStage:
         except InvalidInput as exc:
             exc.stage = self.id
             raise
-        environments = [payload.inputs.set.environment] + [s.environment for s in payload.shots]
-        envs = {
-            name: EnvAssets(
+        envs = {}
+        for key, resolved in payload.sets.items():
+            pack = set_pack(resolved, cache)
+            if pack is None:
+                continue
+            envs[key] = EnvAssets(
                 files={rel: str(path) for rel, path in pack.files.items()},
                 dressing=[{"root": str(d.model.root), "main": d.model.main, "files": list(d.model.files),
                            "source": d.model.source, "dims": list(d.dims), "at": d.at, "yaw": d.yaw}
                           for d in pack.dressing],
                 licences=pack.licences)
-            for name, pack in environment_packs(environments, cache).items()
-        }
-        return AssetsOutput(inputs=payload.inputs, shots=payload.shots, models=models, envs=envs)
+        return AssetsOutput(inputs=payload.inputs, shots=payload.shots, sets=payload.sets, models=models, envs=envs)
 
 
 class NarrationStage:
@@ -191,7 +194,8 @@ class NarrationStage:
         asset = ctx.assets.put(joined, kind=AssetKind.NARRATION, licence=licence,
                                provenance=Provenance(provider=name, source=inputs.voice), ext=".wav")
         return NarrationOutput(
-            inputs=inputs, shots=payload.shots, models=payload.models, envs=payload.envs, audio_asset=asset.id,
+            inputs=inputs, shots=payload.shots, sets=payload.sets, models=payload.models, envs=payload.envs,
+            audio_asset=asset.id,
             duration_ms=total,
             windows=[Window(start_ms=w.start_ms, duration_ms=w.duration_ms, speech_offset_ms=w.speech_offset_ms,
                             speech_ms=w.speech_ms) for w in windows],
@@ -222,12 +226,12 @@ class ShotsStage:
                       "end": (w.end_ms - window.start_ms) / 1000} for w in payload.words[i]]
             shot = payload.shots[i]
             hot = payload.hot[i] if i < len(payload.hot) else []
-            env = payload.envs.get(shot.environment)
+            env = payload.envs.get(shot.set_key)
             doc = shot_document(inputs, plan, window, words, scene_ctx, render_ms=window.duration_ms + tail,
-                                models=payload.models, env=env, environment=shot.environment, card=shot.card,
-                                hot=hot, total_ms=payload.duration_ms)
+                                models=payload.models, env=env, resolved_set=payload.sets.get(shot.set_key),
+                                card=shot.card, hot=hot, total_ms=payload.duration_ms)
             directory = write_project(doc, ctx.workdir / "projects" / plan.shot_id,
-                                      links=project_links(payload.models, shot.environment, env))
+                                      links=project_links(payload.models, shot.set_key, env))
             projects.append(ShotProject(shot_id=plan.shot_id, index=i, dir=str(directory), key=project_key(doc),
                                         nominal_ms=window.duration_ms, render_ms=window.duration_ms + tail,
                                         join=plan.join))
@@ -364,7 +368,8 @@ class RenderStage:
         look = load_look(inputs.look)
         if inputs.music == "auto":
             underwater = [(w.start_ms, w.start_ms + w.duration_ms)
-                          for shot, w in zip(narration.shots, narration.windows) if shot.environment == "underwater"]
+                          for shot, w in zip(narration.shots, narration.windows)
+                          if narration.sets.get(shot.set_key) is not None and narration.sets[shot.set_key].mode == "underwater"]
             music = synth_music(work / "music.wav", total_ms=timeline.duration_ms, underwater=underwater)
         else:
             music = Path(inputs.music).expanduser() if inputs.music else None  # validated by the script stage

@@ -13,7 +13,7 @@ import { cameraPose, ease } from "./camera.mjs";
 import { buildShape, innerRadius } from "./shapes.mjs";
 import { buildSet } from "./look.mjs";
 import { Effects, crumbHeap, roughGeometry } from "./fx.mjs";
-import { buildLake, buildUnderwater } from "./sets.mjs";
+import { buildFromData, buildUnderwater } from "./sets.mjs";
 import { CinematicOverlay } from "./overlay.mjs";
 import { clamp01, easeOutCubic, fillY, lerp, mulberry32 } from "./math.mjs";
 
@@ -174,11 +174,11 @@ export async function startCinematic(shot) {
     return g;
   };
 
-  const env = shot.set.environment, files = shot.env ? shot.env.files : {};
+  const files = shot.env ? shot.env.files : {};
   let set = { tick() {} }, underwater = false;
-  if (env === "lake") set = await buildLake(THREE, renderer, scene, shot, files, loadModel, fit);
-  else if (env === "underwater") { set = await buildUnderwater(THREE, renderer, scene, shot, files); underwater = true; }
-  else buildSet(THREE, scene, L, shot.set, shot.ctx.anchors);
+  if (shot.set.mode === "underwater") { set = await buildUnderwater(THREE, renderer, scene, shot, files); underwater = true; }
+  else if (shot.set.mode === "classic") buildSet(THREE, scene, L, shot.set, shot.ctx.anchors);
+  else set = await buildFromData(THREE, renderer, scene, shot, files, loadModel, fit);
 
   const effects = new Effects(THREE, scene);
   const actors = {};

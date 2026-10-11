@@ -8,7 +8,7 @@ from .models import ShapeSpec
 
 Vec3 = tuple[float, float, float]
 
-STAGE_TOP = {"stone-slab": 0.9, "table": 0.75, "none": 0.0}
+STAGE_TOP = {"stone-slab": 0.9, "table": 0.75, "counter": 0.9, "none": 0.0}
 WIDTH_RATIO = {
     "bowl": 2.2, "cup": 0.8, "pot": 1.3, "jar": 0.7, "bottle": 0.32,
     "ball": 1.0, "box": 1.0, "sack": 0.75, "pile": 2.5, "plinth": 2.0,

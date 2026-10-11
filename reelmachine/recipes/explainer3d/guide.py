@@ -41,13 +41,15 @@ def build_guide() -> dict[str, Any]:
         "looks": {"cinematic": "HDRI light, bloom, depth of field, colour grade, punch-in cuts, shake on "
                                "impacts, flash, punch captions, title card, progress bar — the viral look",
                   "diorama-day": "bright toy diorama", "studio-clean": "plain studio"},
-        "environments": {
-            "lake": "golden-hour lake: reflective water at y=0, a stone slab stage at the water's edge, "
-                    "mossy rocks and grass. Water anchors: lake.near, lake.far, lake.left, lake.right.",
-            "underwater": "teal water, caustics on sand, light shafts, motes. Anchors: underwater.surface, "
-                          "underwater.center, underwater.floor. Switch per shot with shot.set.",
-            "meadow-day": "plan-1 diorama meadow", "studio": "plain backdrop",
-        },
+        "sets": ("`set` (and per shot `shot.set`) is a preset or a set built from parts. Presets: lake, "
+                 "underwater, kitchen, living-room, workshop, studio, cafe, meadow-day. Parts: sky "
+                 "(polyhaven:<hdri> — a 360° photo of a real place that lights the set; find_assets kind=sky), "
+                 "background ('sky', 'blur' or #rrggbb), floor/walls ({texture | colour, size, repeat, sides}), "
+                 "stage (stone-slab | counter | table | none, stage_texture), water, fog, props "
+                 "([{model, at: [x,y,z] | anchor, yaw°, size}]) and marks ({\"sink\": [x,y,z]} — named spots "
+                 "usable as anchors). Fields next to a preset change it; a shot.set WITHOUT a preset changes "
+                 "the reel's set, WITH one replaces it. Lake anchors: lake.near/far/left/right; underwater: "
+                 "underwater.surface/center/floor."),
         "anchors": ["stage.center", "stage.near_left", "stage.near_right", "stage.front", "stage.back",
                     "stage.left", "stage.right", "ground", "sky",
                     "lake.near", "lake.far", "lake.left", "lake.right",

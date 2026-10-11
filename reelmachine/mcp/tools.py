@@ -416,3 +416,22 @@ class McpTools:
                 if found else "nothing matched; try a simpler word (bowl, rock, fish, bread)"
             ),
         }
+
+    @_guard
+    def find_assets(self, ctx: Any, query: str, kind: str = "model", limit: int = 12) -> dict[str, Any]:
+        """CC0 models, skies (360° places that light a set) or textures for explainer3d."""
+        from ..core.errors import InvalidInput
+        from ..recipes.explainer3d.assets import KINDS, find_assets
+        from ..recipes.explainer3d.stages import asset_cache
+
+        self._caller(ctx)
+        if kind not in KINDS:
+            raise InvalidInput(f"unknown asset kind {kind!r}", hint=f"one of {sorted(KINDS)}", details={"path": "kind"})
+        found = find_assets(query, asset_cache(self.engine.settings), kind=kind, limit=max(1, min(int(limit), 50)))
+        hints = {
+            "model": 'a cast member {"asset": {"model": "<source>", "size": 0.3}} or a set prop {"model": "<source>", "at": [x, y, z]}',
+            "sky": 'a set\'s "sky": "<source>" — the place\'s light and backdrop (indoor rooms, streets, landscapes)',
+            "texture": 'a set\'s floor/walls {"texture": "<source>"} or "stage_texture": "<source>"',
+        }
+        return {"schemaVersion": SCHEMA_VERSION, "query": query, "kind": kind, "assets": found,
+                "hint": f"use one as {hints[kind]}" if found else "nothing matched; try a simpler word"}

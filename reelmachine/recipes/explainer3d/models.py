@@ -21,12 +21,13 @@ ShapeKind = Literal["bowl", "cup", "pot", "jar", "bottle", "ball", "box", "sack"
 Material = Literal[
     "stone", "wood", "ceramic", "metal", "glass", "dough", "salt", "grain", "water", "cloth"
 ]
-Environment = Literal["meadow-day", "studio", "lake", "underwater"]
-StageKind = Literal["stone-slab", "table", "none"]
+StageKind = Literal["stone-slab", "table", "counter", "none"]
+Vec3 = tuple[float, float, float]
 
 CAST_ID = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 MODEL_SOURCE = re.compile(r"^(polyhaven|khronos):[A-Za-z0-9_\-]{1,80}$")
+POLYHAVEN_SOURCE = re.compile(r"^polyhaven:[A-Za-z0-9_\-]{1,80}$")
 
 
 def hex_colour(value: str | None) -> str | None:
@@ -128,7 +129,7 @@ class Shot(BaseModel):
     duration: float | None = Field(None, ge=0.8, le=8.0)  # seconds; required without narration
     label: str | None = Field(None, max_length=40)
     card: str | None = Field(None, max_length=40)  # a big end-card line ("SAVE THIS 📌")
-    set: "ShotSet | None" = None  # switch environment for this shot (dive underwater)
+    set: "SetSpec | None" = None  # this shot's set: a preset, or changes to the reel's set
     camera: Camera | None = None
     actions: list[Action] | Literal["auto"] = Field(default_factory=list)
     auto: list[Action] = Field(default_factory=list)
@@ -140,17 +141,125 @@ class Shot(BaseModel):
         return self
 
 
+def _polyhaven(value: str | None, what: str) -> str | None:
+    if value is not None and not POLYHAVEN_SOURCE.match(value):
+        raise ValueError(f"{what} are 'polyhaven:<id>' (see find_assets)")
+    return value
+
+
+class SurfaceSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    texture: str | None = None  # polyhaven:<texture>
+    colour: str | None = None
+    repeat: float = Field(4.0, gt=0, le=200)  # texture tiles across the surface
+
+    @field_validator("texture")
+    @classmethod
+    def check_texture(cls, value: str | None) -> str | None:
+        return _polyhaven(value, "textures")
+
+    @field_validator("colour")
+    @classmethod
+    def check_colour(cls, value: str | None) -> str | None:
+        return hex_colour(value)
+
+
+class FloorSpec(SurfaceSpec):
+    size: tuple[float, float] = (8.0, 8.0)
+
+
+class WallsSpec(SurfaceSpec):
+    height: float = Field(2.6, gt=0.2, le=20)
+    sides: list[Literal["back", "left", "right", "front"]] = Field(default_factory=lambda: ["back", "left", "right"])
+
+
+class WaterSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    colour: str = "#0b2a2e"
+
+    @field_validator("colour")
+    @classmethod
+    def check_colour(cls, value: str) -> str:
+        return hex_colour(value)
+
+
+class FogSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    colour: str = "#cfe6f5"
+    density: float = Field(0.05, ge=0, le=1)
+
+    @field_validator("colour")
+    @classmethod
+    def check_colour(cls, value: str) -> str:
+        return hex_colour(value)
+
+
+class PropSpec(BaseModel):
+    """Set dressing: a model placed at a point or a named anchor/mark."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: str
+    at: Vec3 | str
+    yaw: float = Field(0.0, ge=-360, le=360)  # degrees
+    size: float | None = Field(None, gt=0, le=40)
+    height: float | None = Field(None, gt=0, le=40)
+
+    @field_validator("model")
+    @classmethod
+    def check_source(cls, value: str) -> str:
+        if not MODEL_SOURCE.match(value):
+            raise ValueError("models are 'polyhaven:<id>' or 'khronos:<name>' (see find_assets)")
+        return value
+
+
 class SetSpec(BaseModel):
+    """Where a reel happens. A preset (lake, kitchen, …) or a set built from parts — a sky
+    image for light and backdrop, a floor, walls, a stage, water, fog, props and named
+    marks; fields given next to a preset override or extend it."""
+
     model_config = ConfigDict(extra="forbid")
 
-    environment: Environment = "meadow-day"
-    stage: StageKind = "stone-slab"
+    preset: str | None = None
+    environment: str | None = None  # plan-1/2 name for the same thing as preset
+    mode: Literal["normal", "underwater", "classic"] | None = None
+    stage: StageKind | None = None
+    stage_texture: str | None = None
+    sky: str | None = None  # polyhaven:<hdri> — light and, by default, the backdrop
+    background: str | None = None  # "sky", "blur" or #rrggbb
+    floor: FloorSpec | None = None
+    walls: WallsSpec | None = None
+    water: WaterSpec | None = None
+    fog: FogSpec | None = None
+    props: list[PropSpec] = Field(default_factory=list, max_length=40)
+    marks: dict[str, Vec3] = Field(default_factory=dict)
+    sun_angle: float | None = Field(None, ge=-180, le=180)
+
+    @field_validator("sky", "stage_texture")
+    @classmethod
+    def check_sources(cls, value: str | None) -> str | None:
+        return _polyhaven(value, "skies and textures")
+
+    @field_validator("background")
+    @classmethod
+    def check_background(cls, value: str | None) -> str | None:
+        if value is None or value in ("sky", "blur"):
+            return value
+        return hex_colour(value)
+
+    @field_validator("marks")
+    @classmethod
+    def check_marks(cls, value: dict[str, Vec3]) -> dict[str, Vec3]:
+        bad = sorted(k for k in value if not CAST_ID.match(k))
+        if bad:
+            raise ValueError(f"mark names match [a-z][a-z0-9_-]{{0,31}}: {bad}")
+        return value
 
 
-class ShotSet(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    environment: Environment
+ShotSet = SetSpec
 
 
 Shot.model_rebuild()
@@ -219,7 +328,8 @@ class ResolvedShot(BaseModel):
     label: str | None = None
     duration_ms: int | None = None
     card: str | None = None
-    environment: str = "meadow-day"
+    environment: str = "meadow-day"  # the set's name (a preset, or "custom")
+    set_key: str = ""  # which resolved set this shot uses
     actions: list[ResolvedAction] = Field(default_factory=list)
     camera: ResolvedCamera = Field(default_factory=ResolvedCamera)
 
@@ -227,6 +337,7 @@ class ResolvedShot(BaseModel):
 class ScriptOutput(StageOutput):
     inputs: Explainer3DInputs
     shots: list[ResolvedShot]
+    sets: dict[str, "ResolvedSet"] = Field(default_factory=dict)
 
 
 class ResolvedModel(BaseModel):
@@ -257,6 +368,7 @@ class EnvAssets(BaseModel):
 class AssetsOutput(StageOutput):
     inputs: Explainer3DInputs
     shots: list[ResolvedShot]
+    sets: dict[str, "ResolvedSet"] = Field(default_factory=dict)
     models: dict[str, ResolvedModel] = Field(default_factory=dict)
     envs: dict[str, EnvAssets] = Field(default_factory=dict)
 
@@ -273,6 +385,7 @@ class Window(BaseModel):
 class NarrationOutput(StageOutput):
     inputs: Explainer3DInputs
     shots: list[ResolvedShot]
+    sets: dict[str, "ResolvedSet"] = Field(default_factory=dict)
     models: dict[str, ResolvedModel] = Field(default_factory=dict)
     envs: dict[str, EnvAssets] = Field(default_factory=dict)
     audio_asset: str
@@ -332,3 +445,36 @@ class RenderOutput(StageOutput):
     manifest: str
     duration_ms: int
     render_mode: str = "hyperframes"
+
+
+class ResolvedSet(BaseModel):
+    """A set with every field decided: what the renderer builds."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    mode: Literal["normal", "underwater", "classic"] = "normal"
+    stage: StageKind = "stone-slab"
+    stage_texture: str | None = None
+    sky: str | None = None
+    background: str = "sky"
+    floor: FloorSpec | None = None
+    walls: WallsSpec | None = None
+    water: WaterSpec | None = None
+    fog: FogSpec | None = None
+    props: list[PropSpec] = Field(default_factory=list)
+    marks: dict[str, Vec3] = Field(default_factory=dict)
+    sun_angle: float = 80.0
+
+    @property
+    def key(self) -> str:
+        import hashlib
+        import json
+
+        blob = json.dumps(self.model_dump(mode="json"), sort_keys=True)
+        return f"{self.name}-{hashlib.sha256(blob.encode()).hexdigest()[:10]}"
+
+
+ScriptOutput.model_rebuild()
+AssetsOutput.model_rebuild()
+NarrationOutput.model_rebuild()

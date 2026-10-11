@@ -1,0 +1,2 @@
+{"sky": "polyhaven:anniversary_lounge", "background": "blur", "stage": "table", "stage_texture": "polyhaven:old_wood_floor",
+ "floor": {"texture": "polyhaven:rectangular_parquet", "size": [8, 8], "repeat": 6}, "sun_angle": 40}

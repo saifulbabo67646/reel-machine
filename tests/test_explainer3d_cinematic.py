@@ -216,7 +216,7 @@ def test_describe_carries_a_guide_and_probe_lints(tmp_path):
                     provider_overrides={"renderer": "explainer3d-fake"})
     try:
         guide = engine.describe("explainer3d")["guide"]
-        assert "leap" in guide["moves"] and "dive" in guide["cameras"] and "lake" in guide["environments"]
+        assert "leap" in guide["moves"] and "dive" in guide["cameras"] and "kitchen" in guide["sets"]
         assert guide["moves"]["leap"]["params"]["slowmo"]["default"] == 0.6
         assert "[shown|spoken]" in guide["narration"] and guide["length"]
         report = engine.probe("explainer3d", _script(length=30), caller="local")

@@ -250,23 +250,28 @@ def fetch_texture(ident: str, cache_root: Path, res: str = "2k") -> dict[str, Pa
 
 
 # ---------------------------------------------------------------- the catalogue
-def _catalogue(cache_root: Path) -> dict[str, Any]:
-    path = Path(cache_root) / "polyhaven-models.json"
+KINDS = {"model": "models", "sky": "hdris", "texture": "textures"}
+
+
+def _catalogue(cache_root: Path, kind: str = "model") -> dict[str, Any]:
+    t = KINDS[kind]
+    path = Path(cache_root) / f"polyhaven-{t}.json"
     if path.is_file() and time.time() - path.stat().st_mtime < CATALOGUE_TTL_S:
         return json.loads(path.read_text())
     with http_client() as client:
-        data = _get(client, f"{POLYHAVEN_API}/assets", params={"t": "models"}).raise_for_status().json()
+        data = _get(client, f"{POLYHAVEN_API}/assets", params={"t": t}).raise_for_status().json()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data))
     return data
 
 
-def find_models(query: str, cache_root: Path, *, limit: int = 12) -> list[dict[str, Any]]:
-    """CC0 models whose id, name, tags or categories match the query words."""
+def find_assets(query: str, cache_root: Path, *, kind: str = "model", limit: int = 12) -> list[dict[str, Any]]:
+    """CC0 models, skies (360° photos that light a scene: rooms, streets, landscapes) or
+    textures whose id, name, tags or categories match the query words."""
     words = [w for w in re.split(r"\W+", query.lower()) if w]
-    rows = [(f"khronos:{k}", v["name"], v["tags"], ["animals"]) for k, v in KHRONOS.items()]
+    rows = [(f"khronos:{k}", v["name"], v["tags"], ["animals"]) for k, v in KHRONOS.items()] if kind == "model" else []
     rows += [(f"polyhaven:{k}", v.get("name", k), v.get("tags", []), v.get("categories", []))
-             for k, v in _catalogue(cache_root).items()]
+             for k, v in _catalogue(cache_root, kind).items()]
     scored = []
     for source, name, tags, cats in rows:
         hay_id, hay_name = source.lower(), name.lower()
@@ -275,7 +280,11 @@ def find_models(query: str, cache_root: Path, *, limit: int = 12) -> list[dict[s
         if score:
             scored.append((score, source, name, tags))
     scored.sort(key=lambda r: (-r[0], r[1]))
-    return [{"source": s, "name": n, "tags": t[:8], "licence": "CC0-1.0"} for _, s, n, t in scored[:limit]]
+    return [{"source": s, "name": n, "tags": t[:8], "kind": kind, "licence": "CC0-1.0"} for _, s, n, t in scored[:limit]]
+
+
+def find_models(query: str, cache_root: Path, *, limit: int = 12) -> list[dict[str, Any]]:
+    return find_assets(query, cache_root, kind="model", limit=limit)
 
 
 # ---------------------------------------------------------------- the cast
@@ -301,71 +310,48 @@ def resolve_cast(inputs: Any, cache_root: Path) -> dict[str, Any]:
     return out
 
 
-# ---------------------------------------------------------------- cinematic sets
-# where the dressing sits around the stone slab (x right, z toward the camera; water y = 0)
-ENVIRONMENTS: dict[str, dict[str, Any]] = {
-    "lake": {
-        "hdri": "small_harbour_sunset",
-        "textures": {"rock": "rock_boulder_dry"},
-        "water_normals": True,
-        "dressing": [
-            {"source": "polyhaven:rock_moss_set_01", "size": 1.5, "at": [-1.1, -0.3, 0.1], "yaw": 0.4},
-            {"source": "polyhaven:rock_moss_set_01", "size": 1.2, "at": [1.15, -0.32, -0.25], "yaw": 2.1},
-            {"source": "polyhaven:grass_medium_01", "height": 0.5, "at": [-0.8, -0.02, 0.55], "yaw": 0.0},
-            {"source": "polyhaven:grass_medium_01", "height": 0.45, "at": [0.85, -0.02, 0.5], "yaw": 1.5},
-            {"source": "polyhaven:shrub_01", "height": 0.9, "at": [-1.55, -0.05, 0.3], "yaw": 0.3},
-        ],
-    },
-    "underwater": {
-        "hdri": "small_harbour_sunset",  # light only: the underwater background is fog
-        "textures": {"sand": "coast_sand_01"},
-        "water_normals": True,
-        "dressing": [],
-    },
-}
-
-
+# ---------------------------------------------------------------- set packs
 @dataclass(frozen=True)
 class Dressing:
     model: ModelFile
     dims: tuple[float, float, float]
-    at: list[float]
-    yaw: float
+    at: Any  # a point, or an anchor/mark name resolved when the shot is compiled
+    yaw: float  # degrees
 
 
 @dataclass(frozen=True)
 class EnvPack:
-    environment: str
-    files: dict[str, Path]  # published path inside the shot project's assets/env/<environment>/
+    files: dict[str, Path]  # published path inside the shot project's set folder
     dressing: list[Dressing]
     licences: list[Licence]
 
 
-def environment_packs(environments: list[str], cache_root: Path) -> dict[str, EnvPack]:
+def _ident(source: str) -> str:
+    return source.partition(":")[2]
+
+
+def set_pack(resolved: Any, cache_root: Path) -> EnvPack | None:
+    """Everything a resolved set needs from the asset cache; None for a classic set."""
+    if resolved.mode == "classic":
+        return None
     cache_root = Path(cache_root)
-    packs: dict[str, EnvPack] = {}
-    for env in dict.fromkeys(environments):
-        spec = ENVIRONMENTS.get(env)
-        if spec is None:
-            continue
-        files: dict[str, Path] = {}
-        licences: list[Licence] = []
-        if spec.get("hdri"):
-            files["sky.hdr"] = fetch_hdri(spec["hdri"], cache_root)
-            licences.append(POLYHAVEN_LICENCE)
-        for name, ident in spec.get("textures", {}).items():
-            for kind, path in fetch_texture(ident, cache_root).items():
-                files[f"{name}/{kind}.jpg"] = path
-            licences.append(POLYHAVEN_LICENCE)
-        if spec.get("water_normals"):
-            files["waternormals.jpg"] = fetch_url(WATER_NORMALS, cache_root / "three" / "waternormals.jpg")
-            licences.append(THREE_LICENCE)
-        dressing = []
-        for item in spec.get("dressing", []):
-            found = fetch_model(item["source"], cache_root)
-            spec_model = ModelSpec(model=item["source"], height=item.get("height"), size=item.get("size"))
-            dressing.append(Dressing(model=found, dims=model_dims(spec_model, *found.bounds),
-                                     at=list(item["at"]), yaw=float(item["yaw"])))
-            licences.append(found.licence)
-        packs[env] = EnvPack(environment=env, files=files, dressing=dressing, licences=licences)
-    return packs
+    files: dict[str, Path] = {}
+    licences: list[Licence] = []
+    if resolved.sky:
+        files["sky.hdr"] = fetch_hdri(_ident(resolved.sky), cache_root)
+        licences.append(POLYHAVEN_LICENCE)
+    textures = [resolved.stage_texture] + [s.texture for s in (resolved.floor, resolved.walls) if s is not None]
+    for source in dict.fromkeys(t for t in textures if t):
+        for kind, path in fetch_texture(_ident(source), cache_root).items():
+            files[f"tex/{_ident(source)}/{kind}.jpg"] = path
+        licences.append(POLYHAVEN_LICENCE)
+    if resolved.water is not None or resolved.mode == "underwater":
+        files["waternormals.jpg"] = fetch_url(WATER_NORMALS, cache_root / "three" / "waternormals.jpg")
+        licences.append(THREE_LICENCE)
+    dressing = []
+    for prop in resolved.props:
+        found = fetch_model(prop.model, cache_root)
+        spec = ModelSpec(model=prop.model, height=prop.height, size=prop.size)
+        dressing.append(Dressing(model=found, dims=model_dims(spec, *found.bounds), at=prop.at, yaw=prop.yaw))
+        licences.append(found.licence)
+    return EnvPack(files=files, dressing=dressing, licences=licences)

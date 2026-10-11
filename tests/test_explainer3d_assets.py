@@ -128,19 +128,6 @@ def test_cast_models_resolve_with_measured_dims_and_licences(tmp_path, monkeypat
     assert world["bowl"]["fill"]["level"] == 0.0  # a container model gets a fill
 
 
-def test_cinematic_sets_fetch_their_pack(tmp_path, monkeypatch):
-    monkeypatch.setattr(assets, "fetch_model", _fake_fetch(tmp_path))
-    monkeypatch.setattr(assets, "fetch_hdri", lambda ident, root, res="4k": _touch(tmp_path / f"{ident}.hdr"))
-    monkeypatch.setattr(assets, "fetch_texture", lambda ident, root, res="2k": {
-        n: _touch(tmp_path / ident / f"{n}.jpg") for n in ("diff", "nor", "rough")})
-    monkeypatch.setattr(assets, "fetch_url", lambda url, dest: _touch(dest))
-    packs = assets.environment_packs(["lake", "underwater", "meadow-day"], tmp_path)
-    assert set(packs) == {"lake", "underwater"}
-    lake = packs["lake"]
-    assert lake.files["sky.hdr"].is_file() and "rock/diff.jpg" in lake.files and lake.dressing
-    assert all(lic.name in {"CC0-1.0", "MIT"} for lic in lake.licences)
-
-
 def _touch(path):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"x")

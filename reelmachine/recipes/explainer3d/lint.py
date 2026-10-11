@@ -9,10 +9,10 @@ import re
 from typing import Sequence
 
 from .camera import default_start
-from .geometry import anchors
 from .markup import display_text, parse_markup
 from .models import Explainer3DInputs, ResolvedShot
 from .moves import MOVES
+from .sets import reel_sets, stage_anchors
 from .timing import ShotWindow
 
 HOOK_S = 0.5          # something big must start this early
@@ -21,7 +21,7 @@ REHOOK_FROM_S, REHOOK_TO_S = 20.0, 35.0
 REHOOK_OVER_S = 40.0  # reels longer than this need a second hook
 SECONDS_PER_MOMENT = 2.7  # what one big moment can hold a viewer for
 PADDING = 1.3            # a target this far past what the material supports feels slow
-SLAB_HALF = (0.8, 0.5)  # the stone slab, metres either side of the stage centre (x, z)
+BLOCKING = {"stone-slab": (0.8, 0.5), "counter": (0.8, 0.35)}  # solid stages: half-size in x, z (m)
 CTA = re.compile(r"\b(save|follow|share|comment|subscribe|try|like)\b", re.I)
 
 
@@ -91,13 +91,16 @@ def length_advice(shots: Sequence[ResolvedShot], windows: Sequence[ShotWindow]) 
 def _cameras_in_the_stage(inputs: Explainer3DInputs, shots: Sequence[ResolvedShot]) -> list[str]:
     """A fresh camera aimed at an anchor past the stone slab, from the other side of it,
     sees only rock: its line of sight runs through the slab."""
-    if inputs.set.stage == "none":
+    reel, _ = reel_sets(inputs)
+    if reel.stage not in BLOCKING:
         return []
-    marks = anchors(inputs.set.stage)
+    marks = stage_anchors(inputs)
     top = marks["stage.center"][1]
 
+    half = BLOCKING[reel.stage]
+
     def inside(p: list[float]) -> bool:
-        return abs(p[0]) < SLAB_HALF[0] and abs(p[2]) < SLAB_HALF[1] and p[1] < top
+        return abs(p[0]) < half[0] and abs(p[2]) < half[1] and p[1] < top
 
     out = []
     for shot in shots:

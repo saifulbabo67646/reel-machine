@@ -1,0 +1,6 @@
+{"sky": "polyhaven:blinds", "background": "blur", "stage": "counter", "stage_texture": "polyhaven:marble_01",
+ "floor": {"texture": "polyhaven:herringbone_parquet", "size": [8, 8], "repeat": 6}, "sun_angle": 60,
+ "props": [
+  {"model": "polyhaven:wooden_cutting_board", "size": 0.4, "at": [-0.45, 0.9, -0.15], "yaw": 80},
+  {"model": "polyhaven:jug_01", "height": 0.22, "at": [0.6, 0.9, -0.2]}
+ ]}
