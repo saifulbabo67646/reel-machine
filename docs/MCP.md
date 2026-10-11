@@ -147,6 +147,14 @@ viewer picked from `concepts.json` goes into the build job:
 The full agent playbook (the questions, the JSON shapes, the storytelling rules) is
 `docs/STORYREEL_AGENT.md`.
 
+For `explainer3d`, probe validates the whole scene script without rendering — a refusal
+names the field (`details.error.path`, e.g. `shots[2].actions[0].into`) — and returns the
+estimated length per shot and the voice characters it will spend:
+
+```json
+{"recipeId": "explainer3d", "inputs": {"mode": "storyboard", "cast": {"bowl": {"asset": {"shape": "bowl"}, "at": "stage.center"}}, "shots": [{"narration": "A bowl.", "camera": {"move": "orbit", "target": "bowl"}}]}}
+```
+
 ### `start_job`
 
 Start a render; returns a job id immediately. An `idempotencyKey` makes retries safe: the

@@ -1,7 +1,7 @@
 # reel-machine
 
 A modular reel production engine. A reel is a **Timeline plus Assets**; rendering is a
-separate step that turns `(timeline, assets, style)` into a video file. Five recipes ship
+separate step that turns `(timeline, assets, style)` into a video file. Six recipes ship
 with it:
 
 | recipe | what it makes | needs |
@@ -11,6 +11,7 @@ with it:
 | `doodle` | hand-drawn explainer reels, **stroke** (whiteboard inking) or **program** (knowledge graphics), narrated by TTS with timings | ffmpeg; stroke mode adds `[stroke]`, program mode `[program]`, cloud voices need a key |
 | `storyreel` | viral movie storytelling: the whole film is downloaded, its subtitle script read for the moments that hold an audience, one of five story concepts chosen, a voiceover written with a micro-clip plan and SEO, spoken and cut into many short shots | ffmpeg + `REEL_TMDB_API_KEY` (vidvault); SubDL/OpenSubtitles keys widen the subtitle chain; cloud voices need a key |
 | `wordreel` | English word / phrase learning reels: an agent picks a word, the recipe finds real lines of dialogue that use it by searching the subtitles of **your own** media, cuts each one out, and joins them with the word pinned on screen and highlighted where it is spoken | ffmpeg + `REEL_WORDREEL_LIBRARY` (media with subtitles beside it, or subtitle tracks inside it) |
+| `explainer3d` | narrated 3D explainer reels: an agent writes a scene script (cast, shots, moves, camera); each shot is a three.js scene rendered by HyperFrames, objects carry over between shots and a camera can continue across a cut; `storyboard` mode renders one still per shot first | ffmpeg **and ffprobe**, Node ≥ 22 (HyperFrames runs through `npx`, pinned); cloud voices need a key |
 
 The engine is a library. The CLI (`reel`) and the MCP server are both thin clients of it;
 an agent over MCP is a first-class caller.
@@ -210,6 +211,7 @@ reelmachine/
     doodle/         script → narration → scenes → prep → compose → render
     storyreel/      acquire (vidvault) → subtitles → transcript → concepts → script
                     → voiceover → prep → compose → render
+    explainer3d/    script → assets → narration → shots → prep (HyperFrames) → compose → render
   render/      the plain/karaoke ASS writer and the audio profiles
   mcp/         the MCP server (optional extra)
   align.py ffmpeg.py subtitles.py vocab.py …   the media machinery, moved not rewritten
