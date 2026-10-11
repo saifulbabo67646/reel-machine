@@ -632,7 +632,7 @@ def build_reel_video(
                 f"[bg{i}]scale={width}:{height}:force_original_aspect_ratio=increase,"
                 f"crop={width}:{height},gblur=sigma=28,eq=brightness=-0.08[bgz{i}];"
                 f"[fg{i}]scale={width}:{room}:force_original_aspect_ratio=decrease:flags=lanczos[fgs{i}];"
-                f"[bgz{i}][fgs{i}]overlay=(W-w)/2:{top}+({room}-h)/2[v{i}]"
+                f"[bgz{i}][fgs{i}]overlay=(W-w)/2:{top}+({room}-h)/2,setsar=1[v{i}]"
             )
             video_labels.append(f"[v{i}]")
     elif aspect == "square":
@@ -642,7 +642,7 @@ def build_reel_video(
                 f"[bg{i}]scale={width}:{width}:force_original_aspect_ratio=increase,"
                 f"crop={width}:{width},gblur=sigma=28,eq=brightness=-0.08[bgz{i}];"
                 f"[fg{i}]scale={width}:-2:flags=lanczos[fgs{i}];"
-                f"[bgz{i}][fgs{i}]overlay=(W-w)/2:(H-h)/2[v{i}]"
+                f"[bgz{i}][fgs{i}]overlay=(W-w)/2:(H-h)/2,setsar=1[v{i}]"
             )
             video_labels.append(f"[v{i}]")
     else:  # original aspect

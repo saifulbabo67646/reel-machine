@@ -33,13 +33,24 @@ INSTRUCTIONS = (
     "reel-machine turns a request into a rendered video reel. Start with list_recipes, "
     "check your inputs with describe_recipe/probe, then start_job and poll get_job. "
     "Artifacts are fetched with get_artifact, which returns a signed URL — never bytes. "
-    "Jobs outlive a single tool call; nothing here blocks on a render."
+    "Jobs outlive a single tool call; nothing here blocks on a render. Call browser_status "
+    "when a source or page is behind Cloudflare Turnstile: it reports which stealth "
+    "browser backend is selected, whether it is installed, and which hosts its profile "
+    "has already cleared."
 )
 
 DESCRIPTIONS: dict[str, str] = {
     "list_recipes": (
         "List the reel recipes this server can make (id, title, render modes, cost). "
         "Call this first to discover what is available.\n"
+        "Example: {}"
+    ),
+    "browser_status": (
+        "Report the browser backends available for fetching pages that sit behind "
+        "Cloudflare Turnstile: which one is selected (patchright preferred, agent-browser "
+        "as fallback), whether it is installed, the persistent profile, and which hosts "
+        "that profile has already cleared. Cheap and read-only — it never launches a "
+        "browser, because a solve takes seconds and no tool call here may wait.\n"
         "Example: {}"
     ),
     "describe_recipe": (
@@ -81,6 +92,21 @@ DESCRIPTIONS: dict[str, str] = {
         "yourself.\n"
         "Example: {\"jobId\": \"9f2c1ab34d5e\", \"name\": \"reel.mp4\"}"
     ),
+    "suggest_words": (
+        "Words the corpus can actually teach, best first — for choosing what to make a "
+        "reel about. Reads the subtitles on disk, so it is fast, free and read-only; "
+        "nothing is rendered and no job is started. Words come back because they recur "
+        "in real dialogue, not from a word list, so each one is known to have examples "
+        "behind it.\n"
+        "Example: {\"recipe\": \"wordreel\", \"limit\": 12}"
+    ),
+    "find_examples": (
+        "The lines of dialogue that use a word or phrase, each with its file, timestamp "
+        "and the form that matched — call this before start_job to see exactly what a "
+        "reel would be built from. Inflected forms match too (`gave up` for \"give "
+        "up\") unless allowInflected is false. Read-only: no job, no render.\n"
+        "Example: {\"word\": \"give up\", \"inputs\": {\"library\": [\"/media/films\"]}}"
+    ),
 }
 
 
@@ -104,7 +130,7 @@ def build_server(
     transport: str = "stdio",
     base_url: str = "",
 ) -> Any:
-    """Build the MCP server with exactly the eight tools."""
+    """Build the MCP server with exactly the tools described in DESCRIPTIONS."""
     _require_mcp()
     from mcp.server import MCPServer
     from mcp.server.mcpserver import Context
@@ -121,6 +147,10 @@ def build_server(
     @server.tool(name="list_recipes", description=DESCRIPTIONS["list_recipes"])
     def list_recipes(ctx: Context) -> dict[str, Any]:
         return tools.list_recipes(ctx)
+
+    @server.tool(name="browser_status", description=DESCRIPTIONS["browser_status"])
+    def browser_status(ctx: Context) -> dict[str, Any]:
+        return tools.browser_status(ctx)
 
     @server.tool(name="describe_recipe", description=DESCRIPTIONS["describe_recipe"])
     def describe_recipe(ctx: Context, recipe_id: str) -> dict[str, Any]:
@@ -155,6 +185,25 @@ def build_server(
     @server.tool(name="get_artifact", description=DESCRIPTIONS["get_artifact"])
     def get_artifact(ctx: Context, job_id: str, name: str) -> dict[str, Any]:
         return tools.get_artifact(ctx, job_id, name)
+
+    @server.tool(name="suggest_words", description=DESCRIPTIONS["suggest_words"])
+    def suggest_words(
+        ctx: Context,
+        recipe: str = "wordreel",
+        inputs: dict[str, Any] | None = None,
+        limit: int = 12,
+    ) -> dict[str, Any]:
+        return tools.suggest_words(ctx, recipe, inputs, limit)
+
+    @server.tool(name="find_examples", description=DESCRIPTIONS["find_examples"])
+    def find_examples(
+        ctx: Context,
+        word: str,
+        recipe: str = "wordreel",
+        inputs: dict[str, Any] | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        return tools.find_examples(ctx, word, recipe, inputs, limit)
 
     @server.custom_route("/artifacts/{caller}/{job}/{name}", methods=["GET"], name="artifact")
     async def artifact_route(request: Any) -> Any:  # pragma: no cover - exercised over HTTP

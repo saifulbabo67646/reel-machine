@@ -175,6 +175,19 @@ class Engine:
 
     # -------------------------------------------------------------------- jobs
 
+    def providers_for(self, recipe_id: str) -> ProviderSet:
+        """The live providers a recipe would run with.
+
+        For tools that answer a question *without* starting a job — wordreel's
+        `suggest_words` and `find_examples` consult the corpus directly, because
+        searching subtitles is cheap and a job (with its store, quota and artifact
+        plumbing) would be the wrong shape for "which lines use this word?".
+        """
+        recipe = self.get_recipe(recipe_id)
+        return resolve_recipe_providers(
+            recipe.spec, self.settings, overrides=self.provider_overrides, registry=self.registry
+        )
+
     def submit(self, request: JobRequest, *, caller: str = "local") -> Job:
         recipe = self.get_recipe(request.recipe)
         inputs = self._inputs_for(recipe, request.inputs)

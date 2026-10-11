@@ -1,7 +1,7 @@
 # reel-machine
 
 A modular reel production engine. A reel is a **Timeline plus Assets**; rendering is a
-separate step that turns `(timeline, assets, style)` into a video file. Four recipes ship
+separate step that turns `(timeline, assets, style)` into a video file. Five recipes ship
 with it:
 
 | recipe | what it makes | needs |
@@ -10,6 +10,7 @@ with it:
 | `quranic` | Surah/Ayah reels: recitation audio, Arabic text with word-level highlight sync, translation overlays, gradient or supplied background | nothing but ffmpeg (two free Quran corpora providers) |
 | `doodle` | hand-drawn explainer reels, **stroke** (whiteboard inking) or **program** (knowledge graphics), narrated by TTS with timings | ffmpeg; stroke mode adds `[stroke]`, program mode `[program]`, cloud voices need a key |
 | `storyreel` | viral movie storytelling: the whole film is downloaded, its subtitle script read for the moments that hold an audience, one of five story concepts chosen, a voiceover written with a micro-clip plan and SEO, spoken and cut into many short shots | ffmpeg + `REEL_TMDB_API_KEY` (vidvault); SubDL/OpenSubtitles keys widen the subtitle chain; cloud voices need a key |
+| `wordreel` | English word / phrase learning reels: an agent picks a word, the recipe finds real lines of dialogue that use it by searching the subtitles of **your own** media, cuts each one out, and joins them with the word pinned on screen and highlighted where it is spoken | ffmpeg + `REEL_WORDREEL_LIBRARY` (media with subtitles beside it, or subtitle tracks inside it) |
 
 The engine is a library. The CLI (`reel`) and the MCP server are both thin clients of it;
 an agent over MCP is a first-class caller.
@@ -143,6 +144,26 @@ Deployments that bring their own files or their own streaming server need nothin
 Every provider declares its unmet requirements and `reel doctor` prints them, so a
 deployment can gate one (`REEL_PROVIDERS_DISABLED=hls,vidvault`).
 
+Pages that sit behind Cloudflare Turnstile — a clip search page, a media host — are fetched
+through a browser of the engine's own: copying a `cf_clearance` cookie does not work, the
+gate is bound to the client. `patchright` is the default backend because it can click the
+widget inside Turnstile's cross-origin frame; `agent-browser` is the fallback. Both live
+behind the `browser` extra, so the default install stays browser-free and Node-free, and
+agents see the state through the MCP tool `browser_status`. Notes and the measurements
+behind them: [docs/BROWSER.md](docs/BROWSER.md).
+
+Files are a different gate and a cheaper one: a clip host serves an `.mp4` to any client
+whose connection looks like a browser's, and refuses the same request with the same headers
+from a plain one — so downloading needs `reel-machine[impersonate]` and no browser at all.
+The chain in `tools/` is the worked example:
+
+```bash
+uv run python tools/getyarn_search.py "piece of cake" --limit 6 \
+    --download .work/getyarn/clips --json .work/getyarn/piece-of-cake.json
+uv run python tools/getyarn_reel.py --manifest .work/getyarn/piece-of-cake.json \
+    --clips-dir .work/getyarn/clips --aspect vertical   # -> out/*.mp4 (1080x1920)
+```
+
 The full provider notes — HLS hosts that disguise segments as `.jpg`, the signed-token
 seam, the vidvault payload shapes, the per-connection CDN throttling and the
 range-parallel downloader — were the hard-won part of the original README and are
@@ -217,6 +238,7 @@ cannot silently come back.
 | A repeated line pulls a cut into the wrong scene | score alone cannot distinguish two identical matches | `align.locate` sidelobe margin + windowed re-search |
 | A renderer's own tail overran the narration | the stroke runtime holds the finished picture for half a second | the scene window is the contract: the normaliser trims to it |
 | A "hand-drawn" reel was really a static pan | nothing checked that ink accumulates | preflight samples the canvas and refuses zero growth; a test asserts it |
+| A 1080x1920 reel reports DAR 324:575 | a source's non-square sample aspect ratio (getyarn serves clips at SAR 576:575) survives the compositor | `build_reel_video` asserts `setsar=1` on the composed frame |
 
 ## Legal
 

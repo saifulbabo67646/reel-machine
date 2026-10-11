@@ -41,8 +41,12 @@ from reelmachine.observability import configure_logging
 # imported first so the fixture entry point resolves from sys.modules
 from engine_fixture_recipe import EngineFixtureRecipe  # noqa: F401
 
+#: The frozen surface. It only ever grows: a name may be added, never renamed or
+#: removed within a major version, because an agent that learned the old list must
+#: keep working.
 TOOL_NAMES = {
     "list_recipes",
+    "browser_status",
     "describe_recipe",
     "probe",
     "start_job",
@@ -50,6 +54,8 @@ TOOL_NAMES = {
     "list_jobs",
     "cancel_job",
     "get_artifact",
+    "suggest_words",
+    "find_examples",
 }
 
 FIXTURE_ENTRY = EntryPoint(
@@ -117,7 +123,7 @@ def _token_tools(env, token: str = ALICE):
 # ------------------------------------------------------------------- the surface
 
 
-def test_tool_surface_is_exactly_the_eight(env) -> None:
+def test_tool_surface_is_exactly_the_frozen_set(env) -> None:
     async def main():
         server = _local_server(env)
         async with Client(server) as client:
@@ -132,6 +138,28 @@ def test_tool_surface_is_exactly_the_eight(env) -> None:
     schema = next(tool for tool in tools if tool.name == "start_job").input_schema
     assert {"recipe", "inputs", "idempotency_key", "config"} <= set(schema["properties"])
     assert "ctx" not in json.dumps(schema)
+
+
+def test_browser_status_names_the_backends_without_launching_one(env) -> None:
+    """The discovery tool for gated fetches: it reports, it does not fetch."""
+
+    async def main():
+        server = _local_server(env)
+        async with Client(server) as client:
+            return _payload(await client.call_tool("browser_status", {}))
+
+    status = _run(main())
+    assert status["schemaVersion"] == 1
+    names = {row["name"] for row in status["backends"]}
+    assert {"patchright", "agent-browser", "fake"} <= names
+    for row in status["backends"]:
+        assert row["status"] in ("ok", "missing", "disabled", "error"), row
+    assert status["selected"] in names | {"none"}
+    assert status["configured"]
+    assert isinstance(status["clearedHosts"], dict)
+    assert status["downloads"]["name"] == "curl-cffi", "the file path is reported too"
+    assert isinstance(status["downloads"]["missing"], list)
+    assert status["hint"] and status["profile"]
 
 
 def test_in_memory_walk_list_describe_probe_start_poll_artifact_cancel(env) -> None:
@@ -289,6 +317,7 @@ def test_every_tool_call_returns_in_milliseconds(env) -> None:
             timings = {}
             for name, arguments in (
                 ("list_recipes", {}),
+                ("browser_status", {}),
                 ("describe_recipe", {"recipe_id": "engine-fixture"}),
                 ("get_job", {"job_id": started["jobId"]}),
                 ("list_jobs", {}),

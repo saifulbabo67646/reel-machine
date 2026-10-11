@@ -204,6 +204,7 @@ Entry-point groups:
 | `reelmachine.backgrounds` | `quranic.backgrounds.BackgroundProvider` (a clip + its provenance and licence) | gradient, pexels, fake |
 | `reelmachine.styles` | `core.style.StylePack` | quranic/*, doodle/* |
 | `reelmachine.storage` | `storage.Storage` | local, s3 ([s3]), memory |
+| `reelmachine.browser` | `browser.BrowserProvider` (`fetch_html`, `evaluate`) | patchright (default), agent-browser, fake ([browser]) — [ADR-0013](adr/0013-browser-fetch-backends.md) |
 
 Discovery takes an **injectable `entry_points()` provider**, which is how the test suite
 proves a third-party package can add a recipe with no core change. Loading is lazy and

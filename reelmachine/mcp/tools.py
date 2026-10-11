@@ -1,11 +1,13 @@
-"""The eight MCP tools, and nothing else.
+"""The MCP tools, and nothing else.
 
 Every tool is written for a model: a description that says when to use it, one example,
 structured errors that say what to fix, and a result that is data — never bytes, never a
 traceback, never a secret.
 
 `start_job` returns in milliseconds; callers poll `get_job`. No call ever waits on a
-render.
+render. The two discovery tools (`suggest_words`, `find_examples`) are the exception
+that proves it: they answer immediately because searching subtitles is cheap and
+read-only, and an agent has to decide *what* to teach before it can submit anything.
 """
 
 from __future__ import annotations
@@ -16,9 +18,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from .. import impersonate
+from ..browser import clearance_state, preferred_name
 from ..core.errors import ReelError
 from ..core.job import Job, JobRequest, JobState
 from ..engine import Engine
+from ..engine.providers import provider_health
 from .artifacts import ArtifactSigner, artifact_file, file_url
 from .auth import resolve_caller
 from .tenants import TenantRegistry
@@ -148,6 +153,41 @@ class McpTools:
         return {"schemaVersion": SCHEMA_VERSION, "recipes": self.engine.list_recipes()}
 
     @_guard
+    def browser_status(self, ctx: Any) -> dict[str, Any]:
+        """Report the browser backends, the download driver, and the gates already cleared.
+
+        Read-only and instant: it answers "can this deployment fetch a Cloudflare-gated
+        page or clip, and with what" by inspecting what is installed, never by launching
+        a browser or fetching anything — a solve takes seconds, which no tool call here is
+        allowed to do.
+        """
+        self._caller(ctx)
+        settings = self.engine.settings
+        rows = [row for row in provider_health(settings=settings) if row["group"] == "browser"]
+        return {
+            "schemaVersion": SCHEMA_VERSION,
+            "selected": preferred_name(settings) or "none",
+            "configured": settings.browser,
+            "backends": [
+                {"name": row["name"], "status": row["status"], "detail": row["detail"]}
+                for row in rows
+            ],
+            "downloads": impersonate.describe(settings),
+            "profile": str(settings.browser_profile),
+            "headless": bool(settings.browser_headless),
+            "clearedHosts": clearance_state(settings.browser_profile),
+            "hint": (
+                "Two different gates, two different tools: a page behind an interactive "
+                "challenge needs a browser backend (patchright is preferred — it clicks "
+                "inside Turnstile's cross-origin frame; the profile keeps its clearance), "
+                "while a file host that judges the TLS fingerprint needs `downloads` "
+                "(curl-cffi impersonating a browser; no cookies required). If a fetch "
+                "reports the interstitial, warm the session headed "
+                "(REEL_BROWSER_HEADLESS=false) or switch with REEL_BROWSER."
+            ),
+        }
+
+    @_guard
     def describe_recipe(self, ctx: Any, recipe_id: str) -> dict[str, Any]:
         """Describe one recipe: input schema, providers, cost and an example request."""
         self._caller(ctx)
@@ -250,4 +290,109 @@ class McpTools:
             "expiresAt": expires,
             "provenance": provenance,
             "licence": licence,
+        }
+
+    # ------------------------------------------------- teaching-word discovery
+    #
+    # These two answer a question rather than start a job. Searching subtitles is
+    # cheap and read-only, and an agent choosing *what to teach* needs the answer
+    # before it can write a request — so a job (with its store, quota and artifact
+    # plumbing) would be the wrong shape, and a poll loop would be pure latency.
+
+    def _clip_source(self, recipe_id: str) -> Any:
+        from ..core.errors import InvalidInput
+
+        providers = self.engine.providers_for(recipe_id)
+        try:
+            source = providers.get("corpus")
+        except KeyError as exc:
+            raise InvalidInput(
+                f"recipe {recipe_id!r} has no clip corpus",
+                hint="these tools work with a recipe whose corpus role is a clip source (wordreel)",
+                details={"recipe": recipe_id},
+            ) from exc
+        describe = getattr(source, "describe", None)
+        return source if callable(describe) else None
+
+    @_guard
+    def suggest_words(
+        self,
+        ctx: Any,
+        recipe: str = "wordreel",
+        inputs: dict[str, Any] | None = None,
+        limit: int = 12,
+    ) -> dict[str, Any]:
+        """Words a recipe's corpus can actually teach, best first."""
+        from ..recipes.wordreel.clips import ClipRequest
+        from ..recipes.wordreel.models import WordReelInputs
+
+        self._caller(ctx)
+        source = self._clip_source(recipe)
+        model = WordReelInputs.model_validate({**(inputs or {}), "word": "", "mode": "suggest"})
+        request = ClipRequest(
+            word="",
+            match_mode=model.match_mode,
+            languages=model.request_languages(),
+            library=list(model.library),
+            subtitles=list(model.subtitles),
+        )
+        words = list(source.suggest(request, limit=max(1, min(int(limit), 100))))
+        return {
+            "schemaVersion": SCHEMA_VERSION,
+            "recipe": recipe,
+            "corpus": getattr(source, "name", ""),
+            "words": words,
+            "hint": (
+                "pick one, give it a `gloss` (its meaning) and start_job with it — "
+                "or call find_examples first to see the lines it would use"
+            ),
+        }
+
+    @_guard
+    def find_examples(
+        self,
+        ctx: Any,
+        word: str,
+        recipe: str = "wordreel",
+        inputs: dict[str, Any] | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Lines of dialogue that use a word or phrase, with where each one is spoken."""
+        from ..recipes.wordreel.clips import ClipRequest
+        from ..recipes.wordreel.models import WordReelInputs
+
+        self._caller(ctx)
+        source = self._clip_source(recipe)
+        model = WordReelInputs.model_validate({**(inputs or {}), "word": word, "mode": "scan"})
+        request = ClipRequest(
+            word=model.normalised_word(),
+            match_mode=model.match_mode,
+            allow_inflected=model.allow_inflected,
+            languages=model.request_languages(),
+            library=list(model.library),
+            subtitles=list(model.subtitles),
+            min_clip_ms=model.min_clip_ms or 0 or 2_000,
+            max_clip_ms=model.max_clip_ms or 0 or 12_000,
+            per_source=max(1, model.per_source),
+        )
+        found = list(source.find(request, limit=max(1, min(int(limit), 200))))
+        with_footage = [item for item in found if item.media_path]
+        return {
+            "schemaVersion": SCHEMA_VERSION,
+            "recipe": recipe,
+            "corpus": getattr(source, "name", ""),
+            "word": model.normalised_word(),
+            "matchMode": model.match_mode,
+            "examples": [item.to_dict() for item in found],
+            "counts": {
+                "matched": len(found),
+                "withFootage": len(with_footage),
+                "sources": len({item.media_label for item in found}),
+            },
+            "hint": (
+                "start_job with this word to build the reel; lines without footage can "
+                "be scanned but not cut"
+                if with_footage
+                else "none of these lines has local footage behind it — a build needs media"
+            ),
         }
