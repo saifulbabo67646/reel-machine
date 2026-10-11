@@ -79,10 +79,47 @@ class ModelSpec(BaseModel):
         return hex_colour(value)
 
 
+class PartSpec(BaseModel):
+    """One primitive of a compound object. `size` is the part's own box (x, y, z) before it
+    is rotated; `at` is its centre; `rotate` is in degrees about x, y, z."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    shape: Literal["box", "cylinder", "sphere", "cone", "torus", "capsule", "plane"]
+    size: tuple[float, float, float]
+    at: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    rotate: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    material: Material = "ceramic"
+    colour: str | None = None
+    glow: float = Field(0.0, ge=0, le=10)  # emissive strength: screens, lamps, warning lights
+
+    @field_validator("size")
+    @classmethod
+    def check_size(cls, value: tuple[float, float, float]) -> tuple[float, float, float]:
+        if any(v <= 0 or v > 20 for v in value):
+            raise ValueError("every side of a part is between 0 and 20 m")
+        return value
+
+    @field_validator("colour")
+    @classmethod
+    def check_colour(cls, value: str | None) -> str | None:
+        return hex_colour(value)
+
+
+class CompoundSpec(BaseModel):
+    """An object the agent builds from primitive parts, when no model fits."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    parts: list[PartSpec] = Field(min_length=1, max_length=80)
+    container: bool = False
+    count: int = Field(1, ge=1, le=12)
+
+
 class CastMember(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    asset: ShapeSpec | ModelSpec
+    asset: ShapeSpec | ModelSpec | CompoundSpec
     at: str | None = None  # an anchor; None keeps the actor hidden until a move brings it
 
     @field_validator("asset", mode="before")
@@ -343,9 +380,10 @@ class ScriptOutput(StageOutput):
 class ResolvedModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["shape", "model"] = "shape"
+    kind: Literal["shape", "model", "compound"] = "shape"
     shape: ShapeSpec | None = None
     model: ModelSpec | None = None
+    compound: CompoundSpec | None = None
     root: str = ""  # the cached model folder (models only)
     main: str = ""  # the .gltf/.glb inside it
     files: list[str] = Field(default_factory=list)

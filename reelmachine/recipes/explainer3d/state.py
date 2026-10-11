@@ -13,9 +13,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .assets import compound_dims
 from .camera import default_start, pose
 from .geometry import CONTAINERS, dims
-from .models import Explainer3DInputs, ResolvedShot, ShapeSpec
+from .models import CompoundSpec, Explainer3DInputs, ResolvedShot, ShapeSpec
 from .moves import MOVES
 from .sets import stage_anchors
 from .timing import ShotWindow
@@ -51,6 +52,8 @@ def actor_dims(inputs: Explainer3DInputs, key: str, models: dict[str, Any] | Non
     asset = inputs.cast[key].asset
     if isinstance(asset, ShapeSpec):
         return list(dims(asset))
+    if isinstance(asset, CompoundSpec):
+        return list(compound_dims(asset))
     side = asset.height if asset.height is not None else (asset.size or 0.3)
     return [side, side, side]
 
@@ -64,6 +67,9 @@ def actor_colour(inputs: Explainer3DInputs, key: str) -> str:
     asset = inputs.cast[key].asset
     if isinstance(asset, ShapeSpec):
         return asset.colour or MATERIAL_COLOURS[asset.material]
+    if isinstance(asset, CompoundSpec):
+        first = asset.parts[0]
+        return first.colour or MATERIAL_COLOURS[first.material]
     return asset.colour or MODEL_COLOUR
 
 

@@ -10,7 +10,7 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { stateAt } from "./poses.mjs";
 import { cameraPose, ease } from "./camera.mjs";
-import { buildShape, innerRadius } from "./shapes.mjs";
+import { buildCompound, buildShape, innerRadius } from "./shapes.mjs";
 import { buildSet } from "./look.mjs";
 import { Effects, crumbHeap, roughGeometry } from "./fx.mjs";
 import { buildFromData, buildUnderwater } from "./sets.mjs";
@@ -184,7 +184,10 @@ export async function startCinematic(shot) {
   const actors = {};
   for (const [id, a] of Object.entries(shot.actors)) {
     let base, innerR = null, wiggle = null, template = null;
-    if (a.shape) {
+    if (a.compound) {
+      base = buildCompound(THREE, a.compound);
+      if (a.compound.container) innerR = (y) => (a.dims[0] / 2) * (0.6 + 0.3 * clamp01(y / a.dims[1]));
+    } else if (a.shape) {
       const built = buildShape(THREE, a.shape, a.dims);
       base = built.group;
       if (built.fill) { built.fill.visible = false; built.fill.scale.set(0, 0, 0); }

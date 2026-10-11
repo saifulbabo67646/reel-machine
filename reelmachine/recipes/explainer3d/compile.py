@@ -18,7 +18,8 @@ from typing import Any
 
 from ...render.hyperframes import HYPERFRAMES_VERSION
 from .geometry import dims
-from .models import Explainer3DInputs, ShapeSpec
+from .assets import compound_dims
+from .models import CompoundSpec, Explainer3DInputs, ShapeSpec
 from .state import ShotPlan
 from .timing import ShotWindow
 from .world import Ctx
@@ -77,6 +78,9 @@ def shot_document(
         asset, resolved = member.asset, (models or {}).get(key)
         if isinstance(asset, ShapeSpec):
             actors[key] = {"shape": asset.model_dump(), "dims": list(dims(asset)), "count": asset.count}
+        elif isinstance(asset, CompoundSpec):
+            actors[key] = {"compound": asset.model_dump(mode="json"), "dims": list(compound_dims(asset)),
+                           "count": asset.count}
         else:
             measured = list(resolved.dims) if resolved else [asset.size or asset.height or 0.3] * 3
             actors[key] = {

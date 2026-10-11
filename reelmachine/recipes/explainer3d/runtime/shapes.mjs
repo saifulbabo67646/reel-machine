@@ -75,3 +75,40 @@ export function buildShape(THREE, spec, dims) {
   }
   return { group, fill, innerRadius: spec.shape in INNER ? (y) => innerRadius(spec.shape, w, h, y) : null };
 }
+
+// An object the agent built from parts. Each part is a unit primitive scaled to its own box
+// (`size`), turned by `rotate` (degrees, XYZ) and centred on `at`; the whole is then moved so
+// its bounding box sits on its origin, like every other actor.
+const UNIT = {
+  box: (T) => [new T.BoxGeometry(1, 1, 1), [1, 1, 1]],
+  cylinder: (T) => [new T.CylinderGeometry(0.5, 0.5, 1, 40), [1, 1, 1]],
+  sphere: (T) => [new T.SphereGeometry(0.5, 40, 24), [1, 1, 1]],
+  cone: (T) => [new T.ConeGeometry(0.5, 1, 40), [1, 1, 1]],
+  torus: (T) => [new T.TorusGeometry(0.375, 0.125, 20, 64), [1, 1, 0.25]],
+  capsule: (T) => [new T.CapsuleGeometry(0.25, 0.5, 8, 24), [0.5, 1, 0.5]],
+  plane: (T) => [new T.PlaneGeometry(1, 1), [1, 1, 1]],
+};
+
+export function buildCompound(THREE, spec) {
+  const inner = new THREE.Group();
+  for (const part of spec.parts) {
+    const [geometry, unit] = UNIT[part.shape](THREE);
+    const mat = material(THREE, part.material, part.colour);
+    if (part.shape === "plane") mat.side = THREE.DoubleSide;
+    if (part.glow > 0) {
+      mat.emissive = new THREE.Color(part.colour || MATERIALS[part.material].colour);
+      mat.emissiveIntensity = part.glow;
+    }
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.scale.set(part.size[0] / unit[0], part.size[1] / unit[1], part.size[2] / unit[2]);
+    mesh.rotation.set(...part.rotate.map((d) => (d * Math.PI) / 180));
+    mesh.position.set(...part.at);
+    mesh.castShadow = mesh.receiveShadow = true;
+    inner.add(mesh);
+  }
+  const box = new THREE.Box3().setFromObject(inner), c = box.getCenter(new THREE.Vector3());
+  inner.position.set(-c.x, -box.min.y, -c.z);
+  const group = new THREE.Group();
+  group.add(inner);
+  return group;
+}

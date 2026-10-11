@@ -2,7 +2,7 @@
 import * as THREE from "three";
 import { stateAt } from "./poses.mjs";
 import { cameraPose, ease } from "./camera.mjs";
-import { buildShape, material, SURFACES } from "./shapes.mjs";
+import { buildCompound, buildShape, material, SURFACES } from "./shapes.mjs";
 import { buildSet } from "./look.mjs";
 import { grains, steam, stream } from "./particles.mjs";
 import { captionState } from "./captions.mjs";
@@ -25,7 +25,7 @@ export function startClassic(shot) {
 
   const actors = {};
   for (const [id, actor] of Object.entries(shot.actors)) {
-    const built = buildShape(THREE, actor.shape, actor.dims);
+    const built = actor.compound ? { group: buildCompound(THREE, actor.compound), fill: null } : buildShape(THREE, actor.shape, actor.dims);
     scene.add(built.group);
     actors[id] = built;
   }

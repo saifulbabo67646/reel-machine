@@ -11,8 +11,9 @@ from ...core.errors import InvalidInput
 from .camera import CAMERA_MOVES
 from .geometry import CONTAINERS
 from .models import (
-    Action, Explainer3DInputs, ResolvedAction, ResolvedCamera, ResolvedShot, ShapeSpec,
+    Action, Explainer3DInputs, ModelSpec, ResolvedAction, ResolvedCamera, ResolvedShot, ShapeSpec,
 )
+from .compile import load_look
 from .moves import MOVES
 from .sets import reel_sets, stage_anchors
 from .timing import auto_layout
@@ -41,7 +42,11 @@ def resolve_script(inputs: Explainer3DInputs) -> list[ResolvedShot]:
                       hint="give a local audio file, or leave music out")
     reel_set, shot_sets = reel_sets(inputs)  # refuses an unknown preset with its path
     marks = stage_anchors(inputs)
+    cinematic = load_look(inputs.look).get("renderer") == "cinematic"
     for key, member in inputs.cast.items():
+        if isinstance(member.asset, ModelSpec) and not cinematic:
+            raise _refuse(f"cast.{key}.asset", "models are drawn by the cinematic renderer",
+                          hint='use look "cinematic", or a shape / a compound of parts')
         if member.at is not None and member.at not in marks:
             raise _refuse(f"cast.{key}.at", f"unknown anchor {member.at!r}", hint=f"one of {sorted(marks)}")
 

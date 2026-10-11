@@ -25,7 +25,7 @@ import httpx
 
 from ...core.assets import Licence, Provenance
 from ...core.errors import InvalidInput, ProviderUnavailable
-from .models import ModelSpec
+from .models import CompoundSpec, ModelSpec
 
 POLYHAVEN_API = "https://api.polyhaven.com"
 USER_AGENT = "reel-machine/explainer3d (+https://github.com/)"
@@ -287,6 +287,35 @@ def find_models(query: str, cache_root: Path, *, limit: int = 12) -> list[dict[s
     return find_assets(query, cache_root, kind="model", limit=limit)
 
 
+# ---------------------------------------------------------------- compounds
+def _rotation(deg: tuple[float, float, float]) -> list[list[float]]:
+    """Euler XYZ (three.js default order) as a 3x3 matrix."""
+    x, y, z = (math.radians(v) for v in deg)
+    cx, sx, cy, sy, cz, sz = math.cos(x), math.sin(x), math.cos(y), math.sin(y), math.cos(z), math.sin(z)
+    return [[cy * cz, -cy * sz, sy],
+            [cx * sz + sx * sy * cz, cx * cz - sx * sy * sz, -sx * cy],
+            [sx * sz - cx * sy * cz, sx * cz + cx * sy * sz, cx * cy]]
+
+
+def compound_bounds(spec: CompoundSpec) -> tuple[list[float], list[float]]:
+    lo, hi = [math.inf] * 3, [-math.inf] * 3
+    for part in spec.parts:
+        r = _rotation(part.rotate)
+        for sx in (-0.5, 0.5):
+            for sy in (-0.5, 0.5):
+                for sz in (-0.5, 0.5):
+                    c = (sx * part.size[0], sy * part.size[1], sz * part.size[2])
+                    p = [sum(r[i][j] * c[j] for j in range(3)) + part.at[i] for i in range(3)]
+                    for i in range(3):
+                        lo[i], hi[i] = min(lo[i], p[i]), max(hi[i], p[i])
+    return lo, hi
+
+
+def compound_dims(spec: CompoundSpec) -> tuple[float, float, float]:
+    lo, hi = compound_bounds(spec)
+    return (round(hi[0] - lo[0], 4), round(hi[1] - lo[1], 4), round(hi[2] - lo[2], 4))
+
+
 # ---------------------------------------------------------------- the cast
 def resolve_cast(inputs: Any, cache_root: Path) -> dict[str, Any]:
     """Every cast member as drawn: shapes from their numbers, models fetched and measured."""
@@ -301,6 +330,11 @@ def resolve_cast(inputs: Any, cache_root: Path) -> dict[str, Any]:
         if isinstance(asset, ShapeSpec):
             out[key] = ResolvedModel(kind="shape", shape=asset, dims=shape_dims(asset), licence=generated,
                                      provenance=Provenance(provider="shape", source=asset.shape))
+            continue
+        if isinstance(asset, CompoundSpec):
+            out[key] = ResolvedModel(kind="compound", compound=asset, dims=compound_dims(asset),
+                                     bounds=compound_bounds(asset), licence=generated,
+                                     provenance=Provenance(provider="compound", source=f"{len(asset.parts)} parts"))
             continue
         found = fetch_model(asset.model, Path(cache_root), path=f"cast.{key}.asset.model")
         lo, hi = found.bounds
