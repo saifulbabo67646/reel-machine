@@ -25,7 +25,7 @@ import httpx
 
 from ...core.assets import Licence, Provenance
 from ...core.errors import InvalidInput, ProviderUnavailable
-from .models import CharacterSpec, CompoundSpec, ModelSpec
+from .models import CharacterSpec, ComponentAsset, CompoundSpec, ModelSpec
 
 POLYHAVEN_API = "https://api.polyhaven.com"
 USER_AGENT = "reel-machine/explainer3d (+https://github.com/)"
@@ -335,6 +335,10 @@ def resolve_cast(inputs: Any, cache_root: Path) -> dict[str, Any]:
             out[key] = ResolvedModel(kind="compound", compound=asset, dims=compound_dims(asset),
                                      bounds=compound_bounds(asset), licence=generated,
                                      provenance=Provenance(provider="compound", source=f"{len(asset.parts)} parts"))
+            continue
+        if isinstance(asset, ComponentAsset):
+            out[key] = ResolvedModel(kind="component", component=asset, dims=tuple(asset.size), licence=generated,
+                                     provenance=Provenance(provider="component", source=asset.component))
             continue
         if isinstance(asset, CharacterSpec):
             from . import characters

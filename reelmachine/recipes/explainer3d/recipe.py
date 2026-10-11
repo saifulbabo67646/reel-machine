@@ -17,6 +17,7 @@ from .timing import estimate_speech_ms, fit_windows, shot_windows
 from .validate import resolve_script
 from .verify import verify_explainer3d
 from .guide import build_guide
+from .components import check as check_components
 from .lint import length_advice, retention_warnings
 
 
@@ -71,6 +72,7 @@ class Explainer3DRecipe:
         warnings: list[str] = []
         try:
             shots = resolve_script(inputs)
+            check_components(inputs, ctx.config)
             checks.append(CheckResult(name="script", ok=True, detail=f"{len(shots)} shots"))
             windows = shot_windows(
                 [estimate_speech_ms(spoken_text(parse_markup(s.narration)), inputs.language) for s in shots],

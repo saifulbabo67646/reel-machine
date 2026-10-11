@@ -228,6 +228,11 @@ class Settings:
     #: the job's folder and would otherwise download everything again.
     shared_cache: Path | None = None
 
+    #: explainer3d: run components an agent writes as code. Off by default — it executes
+    #: caller-supplied JavaScript (linted, dry-run in an isolated context, rendered in
+    #: Chrome's sandbox) on this machine; turn on only for agents you trust.
+    explainer3d_custom_code: bool = False
+
     # --- derived helpers -------------------------------------------------
     @property
     def cache_dir(self) -> Path:
@@ -365,6 +370,7 @@ def get_settings() -> Settings:
         dictionary_offline=_env("REEL_DICTIONARY_OFFLINE", "false").lower() in {"1", "true", "yes"},
         wordreel_library=_csv("REEL_WORDREEL_LIBRARY", ""),
         wordreel_embedded=_env("REEL_WORDREEL_EMBEDDED", "true").lower() in {"1", "true", "yes"},
+        explainer3d_custom_code=_env("REEL_EXPLAINER3D_CUSTOM_CODE", "").lower() in {"1", "true", "yes"},
         wordreel_max_media=_env_int("REEL_WORDREEL_MAX_MEDIA", 400),
         wordreel_media_suffixes=_csv("REEL_WORDREEL_MEDIA_SUFFIXES", ""),
         ffmpeg=_env("REEL_FFMPEG", "ffmpeg"),

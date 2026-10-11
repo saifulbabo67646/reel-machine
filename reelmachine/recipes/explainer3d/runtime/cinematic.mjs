@@ -197,6 +197,27 @@ class FillView {
   }
 }
 
+// an agent-written component module (the shot's own file; see components.py for the rules)
+async function component(url, params, seed, size) {
+  const mod = await import(new URL(`../${url}`, import.meta.url).href);
+  if (typeof mod.create !== "function") throw new Error(`${url} does not export create()`);
+  return mod.create({ THREE, params: params || {}, rng: mulberry32(seed), size }) || {};
+}
+function guard(name, fn) {
+  try { fn(); } catch (error) {
+    window.__e3dError = `${name}: ${(error && error.message) || error}`;
+    let box = document.getElementById("e3d-error");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "e3d-error";
+      Object.assign(box.style, { position: "absolute", left: "40px", right: "40px", top: "40%", padding: "24px", background: "#c0392b",
+        color: "#fff", font: "bold 40px sans-serif", zIndex: 99 });
+      document.getElementById("root").appendChild(box);
+    }
+    box.textContent = `component error — ${window.__e3dError}`;
+  }
+}
+
 export async function startCinematic(shot) {
   window.THREE = THREE;
   const W = shot.width, H = shot.height, L = shot.look, post = L.post || {};
@@ -266,8 +287,12 @@ export async function startCinematic(shot) {
   const effects = new Effects(THREE, scene);
   const actors = {};
   for (const [id, a] of Object.entries(shot.actors)) {
-    let base, innerR = null, wiggle = null, template = null, rig = null;
-    if (a.character) {
+    let base, innerR = null, wiggle = null, template = null, rig = null, made = null;
+    if (a.component) {
+      made = await component(a.component.url, a.component.params, a.component.seed, a.dims);
+      base = new THREE.Group();
+      if (made.object) base.add(made.object);
+    } else if (a.character) {
       const body = await loadBody(a.character.url);
       dress(body, a.character);
       rig = { mixer: new THREE.AnimationMixer(body), clips: await loadClips(a.character.animations), actions: new Map(),
@@ -312,7 +337,15 @@ export async function startCinematic(shot) {
         return { holder, u };
       });
     }
-    actors[id] = { group, pieces, fill, wiggle, school, spacing, dims: a.dims, rig };
+    actors[id] = { group, pieces, fill, wiggle, school, spacing, dims: a.dims, rig, made };
+  }
+
+  // effects the agent wrote: drawn over a stretch of the shot
+  const effectsMade = [];
+  for (const e of shot.effects || []) {
+    const made = await component(e.url, e.params, e.seed, null);
+    if (made.object) scene.add(made.object);
+    effectsMade.push({ ...e, made });
   }
 
   const composer = new EffectComposer(renderer);
@@ -422,6 +455,17 @@ export async function startCinematic(shot) {
       const hand = A.rig.hand.getWorldPosition(new THREE.Vector3());
       actors[held].group.position.set(hand.x, hand.y - actors[held].dims[1] * 0.5 * world[held].scale, hand.z);
       actors[held].group.visible = true;
+    }
+
+    // agent-written components: a pure function of t; an error is shown on the frame
+    const reelT = t + shot.reel.startMs / 1000;
+    for (const [id, A] of Object.entries(actors)) {
+      if (A.made && A.made.update) guard(id, () => A.made.update(t, { t, reelT, dims: A.dims, world: world[id] }));
+    }
+    for (const e of effectsMade) {
+      const on = t >= e.t0 && t <= e.t1;
+      if (e.made.object) e.made.object.visible = on;
+      if (on && e.made.update) guard(e.url, () => e.made.update(t - e.t0, { t, reelT, p: (t - e.t0) / (e.t1 - e.t0) }));
     }
 
     effects.begin();

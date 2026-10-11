@@ -19,7 +19,7 @@ from typing import Any
 from ...render.hyperframes import HYPERFRAMES_VERSION
 from .geometry import dims
 from .assets import compound_dims
-from .models import CharacterSpec, CompoundSpec, Explainer3DInputs, ShapeSpec
+from .models import CharacterSpec, ComponentAsset, CompoundSpec, Explainer3DInputs, ShapeSpec
 from .state import ShotPlan
 from .timing import ShotWindow
 from .world import Ctx
@@ -51,6 +51,16 @@ def look_timing(name: str) -> dict[str, int]:
     """Narration padding for a look: tight for cinematic cuts, roomy for diorama."""
     timing = load_look(name).get("timing") or {}
     return {k: int(timing[k]) for k in ("lead_ms", "tail_ms", "min_ms") if k in timing}
+
+
+def _code_hash(inputs: Explainer3DInputs, name: str) -> str:
+    """In the document so the shot's cache key changes when the component's code does."""
+    spec = inputs.components.get(name)
+    return hashlib.sha256(spec.code.encode()).hexdigest()[:16] if spec else ""
+
+
+def _seed(name: str) -> int:
+    return int(hashlib.sha256(name.encode()).hexdigest()[:8], 16)
 
 
 def _model_url(source: str, main: str) -> str:
@@ -90,6 +100,10 @@ def shot_document(
                                          "regions": {k: list(v) for k, v in BONE_REGIONS.items()}},
                            "dims": list(resolved.dims) if resolved else [0.35 * asset.height, asset.height, 0.2 * asset.height],
                            "count": 1}
+        elif isinstance(asset, ComponentAsset):
+            actors[key] = {"component": {"url": f"components/{asset.component}.mjs", "params": asset.params,
+                                         "seed": _seed(key), "code": _code_hash(inputs, asset.component)},
+                           "dims": list(asset.size), "count": 1}
         elif isinstance(asset, CompoundSpec):
             actors[key] = {"compound": asset.model_dump(mode="json"), "dims": list(compound_dims(asset)),
                            "count": asset.count}
@@ -130,6 +144,10 @@ def shot_document(
         "captions": {"words": words, "hot": list(hot or []), "label": shot.label, "title": inputs.title,
                      "card": card},
         "reel": {"startMs": window.start_ms, "totalMs": total_ms or window.end_ms, "index": plan.index},
+        "effects": [{"url": f"components/{e.component}.mjs", "params": e.params, "seed": _seed(f"{plan.shot_id}/{j}"),
+                     "code": _code_hash(inputs, e.component),
+                     "t0": round(e.at[0] * window.duration_ms / 1000, 6), "t1": round(e.at[1] * window.duration_ms / 1000, 6)}
+                    for j, e in enumerate(shot.effects)],
         "runtime": RUNTIME_VERSION,
     }
 
@@ -192,7 +210,13 @@ html,body{margin:0;background:#000}
 """
 
 
-def write_project(doc: dict[str, Any], dest: Path, *, links: dict[str, Path] | None = None) -> Path:
+# agent-written components may reach nothing but this shot's own files
+_CSP = ("default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; connect-src 'self' data: blob:; font-src 'self' data:")
+
+
+def write_project(doc: dict[str, Any], dest: Path, *, links: dict[str, Path] | None = None,
+                  components: dict[str, str] | None = None) -> Path:
     dest = Path(dest)
     if dest.exists():
         shutil.rmtree(dest)
@@ -202,13 +226,21 @@ def write_project(doc: dict[str, Any], dest: Path, *, links: dict[str, Path] | N
     shutil.copytree(RUNTIME_DIR / "vendor", dest / "vendor")
     for rel, src in (links or {}).items():
         _link(Path(src), dest / rel)
+    used = {a["component"]["url"] for a in doc.get("actors", {}).values() if "component" in a}
+    used |= {e["url"] for e in doc.get("effects", [])}
+    if used:
+        (dest / "components").mkdir()
+        for name, code in (components or {}).items():
+            if f"components/{name}.mjs" in used:
+                (dest / "components" / f"{name}.mjs").write_text(code, encoding="utf-8")
+    csp = f'<meta http-equiv="Content-Security-Policy" content="{_CSP}" />\n' if used else ""
     data = json.dumps(doc, ensure_ascii=False).replace("</", "<\\/")
     html = f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width={WIDTH}, height={HEIGHT}" />
-<style>{_CSS}</style>
+{csp}<style>{_CSS}</style>
 <script>window.__hf = window.__hf || {{}}; window.__e3dReady = new Promise((r) => {{ window.__e3dResolve = r; }}); window.__hf.buildReady = {{ explainer3d: window.__e3dReady }};</script>
 <script type="importmap">{{"imports": {{"three": "./vendor/three.module.js", "three/addons/": "./vendor/jsm/"}}}}</script>
 </head>

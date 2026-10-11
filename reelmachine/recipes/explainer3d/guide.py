@@ -66,6 +66,15 @@ def build_guide() -> dict[str, Any]:
                        "stand_up, pick_up (item rides in the right hand), put_down. Indoor presets have marks front, "
                        "left, right, door on the floor. People are ~1.7 m: frame them from 2.5-3.5 m (orbit radius, "
                        f"track offset z). Clips for act: {sorted(CLIPS)}."),
+        "components": ("When nothing on the menu fits, build it. Without code: a cast asset {\"parts\": [{shape: box|"
+                       "cylinder|sphere|cone|torus|capsule|plane, size: [x,y,z], at, rotate (deg), material, colour, "
+                       "glow}]}. With code (only if the deployment sets REEL_EXPLAINER3D_CUSTOM_CODE): "
+                       "\"components\": {name: {code}} where code is `export function create({ THREE, params, rng, "
+                       "size }) { …; return { object, update(t, info) { … } }; }` — build once in create, move only in "
+                       "update, and make every frame a function of t alone (use the given rng, never Math.random, "
+                       "Date, timers, fetch, imports, globals). Use it as a cast asset {\"component\": name, \"size\": "
+                       "[x,y,z], \"params\"} or a shot effect {\"component\", \"at\": [s, e], \"params\"}. probe lints "
+                       "it and dry-runs it (seven frames, drawn twice in different orders) and names the line that broke."),
         "moves": {name: {"category": m.category, "description": m.description, "actor": m.actor,
                          "params": _params(m.params), "example": m.example}
                   for name, m in MOVES.items()},

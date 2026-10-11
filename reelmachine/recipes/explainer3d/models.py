@@ -156,10 +156,54 @@ class CharacterSpec(BaseModel):
         return self
 
 
+class ComponentSpec(BaseModel):
+    """JavaScript the agent writes: `export function create({ THREE, params, rng, size })`
+    returning `{ object?, update?(t, info) }` — a pure function of t (see the guide)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=10, max_length=65536)
+
+
+class ComponentAsset(BaseModel):
+    """A cast member drawn by a component; `size` is its box, so moves can place it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    component: str
+    size: tuple[float, float, float]
+    params: dict[str, Any] = Field(default_factory=dict)
+    container: bool = False
+    count: int = 1
+
+    @field_validator("size")
+    @classmethod
+    def check_size(cls, value: tuple[float, float, float]) -> tuple[float, float, float]:
+        if any(v <= 0 or v > 40 for v in value):
+            raise ValueError("every side is between 0 and 40 m")
+        return value
+
+
+class EffectSpec(BaseModel):
+    """A component drawn over a stretch of one shot (a laser, a chart, a magic burst)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    component: str
+    at: tuple[float, float] = (0.0, 1.0)
+    params: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _window(self) -> "EffectSpec":
+        if not (0.0 <= self.at[0] < self.at[1] <= 1.0):
+            raise ValueError("at is [start, end] with 0 <= start < end <= 1")
+        return self
+
+
 class CastMember(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    asset: ShapeSpec | ModelSpec | CompoundSpec | CharacterSpec
+    asset: ShapeSpec | ModelSpec | CompoundSpec | CharacterSpec | ComponentAsset
     at: str | None = None  # an anchor; None keeps the actor hidden until a move brings it
 
     @field_validator("asset", mode="before")
@@ -208,6 +252,7 @@ class Shot(BaseModel):
     card: str | None = Field(None, max_length=40)  # a big end-card line ("SAVE THIS 📌")
     set: "SetSpec | None" = None  # this shot's set: a preset, or changes to the reel's set
     camera: Camera | None = None
+    effects: list[EffectSpec] = Field(default_factory=list, max_length=8)
     actions: list[Action] | Literal["auto"] = Field(default_factory=list)
     auto: list[Action] = Field(default_factory=list)
 
@@ -354,6 +399,7 @@ class Explainer3DInputs(BaseModel):
     length: int | None = Field(None, ge=15, le=90)  # target seconds; probe lints, build fits
     set: SetSpec = Field(default_factory=SetSpec)
     cast: dict[str, CastMember] = Field(default_factory=dict)
+    components: dict[str, ComponentSpec] = Field(default_factory=dict, max_length=20)
     shots: list[Shot] = Field(min_length=1, max_length=40)
     allow_fallback: bool = False
     audio_profile: str = "studio"
@@ -420,11 +466,12 @@ class ScriptOutput(StageOutput):
 class ResolvedModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["shape", "model", "compound", "character"] = "shape"
+    kind: Literal["shape", "model", "compound", "character", "component"] = "shape"
     shape: ShapeSpec | None = None
     model: ModelSpec | None = None
     compound: CompoundSpec | None = None
     character: CharacterSpec | None = None
+    component: ComponentAsset | None = None
     root: str = ""  # the cached model folder (models only)
     main: str = ""  # the .gltf/.glb inside it
     files: list[str] = Field(default_factory=list)

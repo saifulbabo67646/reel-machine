@@ -31,6 +31,7 @@ from .models import (
 )
 from .state import build_ctx, plan_shots
 from .timing import XFADE_MS, ShotWindow, fit_windows, shot_windows
+from .components import check as check_components
 from .sets import reel_sets
 from .validate import resolve_script
 from .video import join_shots, mux
@@ -93,6 +94,7 @@ class ScriptStage:
         inputs = Explainer3DInputs.model_validate(payload)
         try:
             shots = resolve_script(inputs)
+            check_components(inputs, ctx.config)
         except InvalidInput as exc:
             exc.stage = self.id
             raise
@@ -231,7 +233,8 @@ class ShotsStage:
                                 models=payload.models, env=env, resolved_set=payload.sets.get(shot.set_key),
                                 card=shot.card, hot=hot, total_ms=payload.duration_ms)
             directory = write_project(doc, ctx.workdir / "projects" / plan.shot_id,
-                                      links=project_links(payload.models, shot.set_key, env))
+                                      links=project_links(payload.models, shot.set_key, env),
+                                      components={k: v.code for k, v in inputs.components.items()})
             projects.append(ShotProject(shot_id=plan.shot_id, index=i, dir=str(directory), key=project_key(doc),
                                         nominal_ms=window.duration_ms, render_ms=window.duration_ms + tail,
                                         join=plan.join))

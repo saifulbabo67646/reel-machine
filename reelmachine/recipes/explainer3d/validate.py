@@ -11,7 +11,7 @@ from ...core.errors import InvalidInput
 from .camera import CAMERA_MOVES
 from .geometry import CONTAINERS
 from .models import (
-    Action, CharacterSpec, Explainer3DInputs, ModelSpec, ResolvedAction, ResolvedCamera, ResolvedShot, ShapeSpec,
+    Action, CharacterSpec, ComponentAsset, Explainer3DInputs, ModelSpec, ResolvedAction, ResolvedCamera, ResolvedShot, ShapeSpec,
 )
 from .compile import load_look
 from .moves import MOVES
@@ -44,8 +44,11 @@ def resolve_script(inputs: Explainer3DInputs) -> list[ResolvedShot]:
     marks = stage_anchors(inputs)
     cinematic = load_look(inputs.look).get("renderer") == "cinematic"
     for key, member in inputs.cast.items():
-        if isinstance(member.asset, ModelSpec) and not cinematic:
-            raise _refuse(f"cast.{key}.asset", "models are drawn by the cinematic renderer",
+        if isinstance(member.asset, ComponentAsset) and member.asset.component not in inputs.components:
+            raise _refuse(f"cast.{key}.asset.component", f"no component named {member.asset.component!r}",
+                          hint=f"components: {sorted(inputs.components)}")
+        if isinstance(member.asset, (ModelSpec, CharacterSpec, ComponentAsset)) and not cinematic:
+            raise _refuse(f"cast.{key}.asset", "models, characters and components are drawn by the cinematic renderer",
                           hint='use look "cinematic", or a shape / a compound of parts')
         if member.at is not None and member.at not in marks:
             raise _refuse(f"cast.{key}.at", f"unknown anchor {member.at!r}", hint=f"one of {sorted(marks)}")
@@ -68,6 +71,10 @@ def resolve_script(inputs: Explainer3DInputs) -> list[ResolvedShot]:
     resolved: list[ResolvedShot] = []
     for index, shot in enumerate(inputs.shot_list()):
         base = f"shots[{index}]"
+        for j, effect in enumerate(shot.effects):
+            if effect.component not in inputs.components:
+                raise _refuse(f"{base}.effects[{j}].component", f"no component named {effect.component!r}",
+                              hint=f"components: {sorted(inputs.components)}")
         if shot.actions == "auto":
             for j, action in enumerate(shot.auto):
                 if action.at is not None:
