@@ -468,3 +468,7 @@ def test_probe_reports_script_errors_with_the_path():
 def test_probe_reports_a_missing_renderer():
     report = _probe(_script(), problems=["node is not on PATH"])
     assert not report.ok and "node" in next(c for c in report.checks if c.name == "renderer").detail
+
+
+def test_a_missing_music_file_is_refused_before_any_render(tmp_path):
+    assert _path(music=str(tmp_path / "nope.mp3")) == "music"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Callable
 
 from pydantic import ValidationError
@@ -34,6 +35,9 @@ def _params(model, raw: dict[str, Any], path: str) -> dict[str, Any]:
 def resolve_script(inputs: Explainer3DInputs) -> list[ResolvedShot]:
     if inputs.look not in LOOKS:
         raise _refuse("look", f"unknown look {inputs.look!r}", hint=f"one of {sorted(LOOKS)}")
+    if inputs.music and not Path(inputs.music).expanduser().is_file():
+        raise _refuse("music", f"music file not found: {inputs.music}",
+                      hint="give a local audio file, or leave music out")
     marks = anchors(inputs.set.stage)
     for key, member in inputs.cast.items():
         if isinstance(member.asset, str):

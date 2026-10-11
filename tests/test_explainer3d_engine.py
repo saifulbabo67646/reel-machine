@@ -148,3 +148,21 @@ def test_build_is_verified(tmp_path):
     verification = json.loads(Path(manifest.path).read_text())["verification"]
     assert verification["ok"], verification
     assert {c["name"] for c in verification["checks"]} >= {"format", "duration", "motion", "licences", "renderer"}
+
+
+def test_a_build_after_a_storyboard_does_not_pay_for_the_voice_twice(tmp_path, monkeypatch):
+    from reelmachine.recipes.doodle.narration.fake import FakeNarration
+
+    calls = []
+    original = FakeNarration.synthesize
+
+    def counting(self, text, **kwargs):
+        calls.append(text)
+        return original(self, text, **kwargs)
+
+    monkeypatch.setattr(FakeNarration, "synthesize", counting)
+    _run(tmp_path, {**SCRIPT, "mode": "storyboard"})
+    assert len(calls) == 2
+    job = _run(tmp_path, SCRIPT)
+    assert job.state == JobState.SUCCEEDED, job.error
+    assert len(calls) == 2  # the build reused both lines

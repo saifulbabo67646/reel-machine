@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -43,15 +44,37 @@ def _workers() -> int:
         return 2
 
 
-def _shot_cache(ctx: StageContext) -> Path:
-    """Rendered shots are kept per caller, beside the engine's own stage cache
-    (`jobs/<caller>/cache/`), so an unchanged shot is reused by every later job. Outside
-    the engine (a bare StageContext) they fall back to the configured cache dir."""
+def _caller_cache(ctx: StageContext) -> Path:
+    """Rendered shots and spoken lines are kept per caller, beside the engine's own stage
+    cache (`jobs/<caller>/cache/`), so a later job — a build after its storyboard — reuses
+    them instead of rendering or paying for them again. Outside the engine (a bare
+    StageContext) they fall back to the configured cache dir."""
     settings: Settings = ctx.config
     job_id = getattr(ctx.job, "id", "")
     if job_id and settings.workdir.name == job_id:
-        return settings.workdir.parent / "cache" / "explainer3d" / "shots"
-    return settings.cache_dir / "explainer3d" / "shots"
+        return settings.workdir.parent / "cache" / "explainer3d"
+    return settings.cache_dir / "explainer3d"
+
+
+def _speak(ctx: StageContext, provider: Any, text: str, voice: str, language: str) -> tuple[Path, int, list[WordSpan], Licence | None]:
+    """One line, spoken once per (voice, language, text): cloud voices bill per character."""
+    key = hashlib.sha256(json.dumps([getattr(provider, "name", ""), voice, language, text]).encode()).hexdigest()
+    folder = _caller_cache(ctx) / "lines" / key[:2]
+    audio, meta = folder / f"{key}.wav", folder / f"{key}.json"
+    if audio.is_file() and meta.is_file():
+        data = json.loads(meta.read_text(encoding="utf-8"))
+        licence = Licence.model_validate(data["licence"]) if data.get("licence") else None
+        return audio, data["ms"], [WordSpan.model_validate(w) for w in data["words"]], licence
+    speech = provider.synthesize(text, voice=voice, language=language)
+    ms = speech.duration_ms or int(ffmpeg.probe(speech.path).duration_s * 1000)
+    words = list(speech.segments[0].words) if speech.segments else []
+    folder.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(speech.path, audio)
+    meta.write_text(json.dumps({
+        "ms": ms, "words": [w.model_dump() for w in words],
+        "licence": speech.licence.model_dump() if speech.licence else None,
+    }), encoding="utf-8")
+    return audio, ms, words, speech.licence
 
 
 def _artifacts(ctx: StageContext) -> Path:
@@ -116,13 +139,11 @@ class NarrationStage:
         speeches, licence = [], None
         for shot in payload.shots:
             ctx.cancel.raise_if_cancelled()
-            speech = provider.synthesize(shot.narration, voice=inputs.voice, language=inputs.language)
-            ms = speech.duration_ms or int(ffmpeg.probe(speech.path).duration_s * 1000)
-            local = work / f"{shot.id}{Path(speech.path).suffix or '.wav'}"
-            shutil.copy2(speech.path, local)
-            words = list(speech.segments[0].words) if speech.segments else []
+            spoken, ms, words, line_licence = _speak(ctx, provider, shot.narration, inputs.voice, inputs.language)
+            local = work / f"{shot.id}.wav"
+            shutil.copy2(spoken, local)
             speeches.append((local, ms, words, shot.narration))
-            licence = speech.licence or licence
+            licence = line_licence or licence
 
         windows = shot_windows([ms for _, ms, _, _ in speeches])
         padded, all_words = [], []
@@ -203,7 +224,7 @@ class PrepStage:
         if self.halt_for(payload):
             return self._storyboard(ctx, payload, renderer, settings)
 
-        cache = _shot_cache(ctx)
+        cache = _caller_cache(ctx) / "shots"
 
         def render_one(project: ShotProject) -> Track:
             cached = cache / project.key[:2] / f"{project.key}.mp4"
@@ -291,9 +312,7 @@ class RenderStage:
         outdir.mkdir(parents=True, exist_ok=True)
         name = options["reel_name"]
 
-        music = Path(inputs.music).expanduser() if inputs.music else None
-        if music is not None and not music.is_file():
-            raise InvalidInput(f"music file not found: {music}", details={"path": "music"}, stage=self.id)
+        music = Path(inputs.music).expanduser() if inputs.music else None  # validated by the script stage
         joined = join_shots([Path(t.path) for t in prep.tracks], [p.join for p in prep.shots.projects],
                             [p.nominal_ms for p in prep.shots.projects], work / "video.mp4",
                             settings=settings, fps=FPS, cancel=ctx.cancel)
