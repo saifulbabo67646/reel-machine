@@ -390,3 +390,39 @@ def test_runtime_end_states_match_python():
 def test_runtime_node_unit_tests_pass():
     proc = subprocess.run(["node", "--test", str(RUNTIME / "tests" / "*.test.mjs")], capture_output=True, text=True)
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+from reelmachine.recipes.explainer3d.compile import (  # noqa: E402
+    RUNTIME_VERSION, load_look, project_key, shot_document, write_project,
+)
+
+
+def _doc():
+    inputs = Explainer3DInputs.model_validate(_script(cast=CAST2, shots=[{"narration": "In it goes.", "label": "Step 1",
+        "actions": [{"move": "fly_in", "actor": "potato"}], "camera": {"move": "orbit", "target": "bowl"}}]))
+    shots = resolve_script(inputs)
+    windows = shot_windows([1500])
+    plan = plan_shots(inputs, shots, windows)[0]
+    words = [{"text": "In", "start": 0.25, "end": 0.5}]
+    return shot_document(inputs, plan, windows[0], words, build_ctx(inputs), render_ms=windows[0].duration_ms + 300)
+
+
+def test_shot_document_is_complete_and_keyed():
+    doc = _doc()
+    assert doc["width"] == 1080 and doc["height"] == 1920 and doc["fps"] == 30
+    assert doc["duration"] == pytest.approx(2.1) and doc["renderDuration"] == pytest.approx(2.4)
+    assert doc["look"]["id"] == "diorama-day" and doc["captions"]["label"] == "Step 1"
+    assert doc["actors"]["potato"]["dims"] == [0.1, 0.1, 0.1]
+    assert project_key(doc) == project_key(_doc()) and len(RUNTIME_VERSION) == 16
+
+
+def test_write_project_is_self_contained(tmp_path):
+    out = write_project(_doc(), tmp_path / "shot-1")
+    html = (out / "index.html").read_text()
+    assert 'data-composition-id="shot"' in html and "data-no-timeline" in html
+    assert 'data-duration="2.400"' in html and '"three": "./vendor/three.module.js"' in html
+    assert (out / "runtime/main.mjs").is_file() and (out / "vendor/three.module.js").is_file()
+
+
+def test_looks_load():
+    assert load_look("studio-clean")["id"] == "studio-clean"

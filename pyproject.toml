@@ -121,6 +121,10 @@ include = ["reelmachine*"]
 reelmachine = [
     "data/*.json",
     "data/styles/*.json",
+    "recipes/explainer3d/looks/*.json",
+    "recipes/explainer3d/runtime/*.mjs",
+    "recipes/explainer3d/runtime/tools/*.mjs",
+    "recipes/explainer3d/runtime/vendor/*",
     "vendor/srt-whiteboard-animation/LICENSE",
     "vendor/srt-whiteboard-animation/UPSTREAM.md",
     "vendor/srt-whiteboard-animation/assets/*",

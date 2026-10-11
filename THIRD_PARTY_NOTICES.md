@@ -80,3 +80,10 @@ Arabic, `Helvetica` for Latin); the deployment installs them under their own lic
 The default install depends on `httpx`, `numpy`, `pydantic`, `rich`, `scipy` and `typer`.
 Optional extras: `mcp` (the MCP server), `stroke` (`opencv-python-headless`, `Pillow`,
 `av`), `program` (`Pillow`), `s3` (`boto3`). Each is used under its own licence.
+
+## three.js 0.181.2 (MIT)
+
+`reelmachine/recipes/explainer3d/runtime/vendor/three.module.js` and `three.core.js` are
+the unmodified build files of three.js 0.181.2 (https://github.com/mrdoob/three.js),
+copyright © 2010–2025 three.js authors, MIT licence (`vendor/LICENSE`). They are shipped
+so a shot renders with no network access.
