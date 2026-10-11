@@ -396,3 +396,23 @@ class McpTools:
                 else "none of these lines has local footage behind it — a build needs media"
             ),
         }
+
+    @_guard
+    def find_models(self, ctx: Any, query: str, limit: int = 12) -> dict[str, Any]:
+        """CC0 3D models for explainer3d casts, searched by name and tags."""
+        from ..recipes.explainer3d.assets import find_models
+        from ..recipes.explainer3d.stages import asset_cache
+
+        self._caller(ctx)
+        found = find_models(query, asset_cache(self.engine.settings), limit=max(1, min(int(limit), 50)))
+        return {
+            "schemaVersion": SCHEMA_VERSION,
+            "query": query,
+            "models": found,
+            "hint": (
+                'use one in an explainer3d cast as {"asset": {"model": "<source>", "size": 0.3}} — '
+                "size is the longest side in metres (or give height); add \"container\": true "
+                "for bowls and buckets things are dropped into"
+                if found else "nothing matched; try a simpler word (bowl, rock, fish, bread)"
+            ),
+        }

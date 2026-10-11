@@ -31,6 +31,15 @@ def anchors(stage: str) -> dict[str, Vec3]:
         "stage.right": (0.45, top, 0.0),
         "ground": (0.0, 0.0, 0.9),
         "sky": (0.0, top + SKY_HEIGHT, 0.0),
+        # the lake set: water at y = 0, out beyond the slab (the camera sits at +z)
+        "lake.near": (0.0, 0.0, -1.6),
+        "lake.far": (0.3, 0.0, -3.6),
+        "lake.left": (-1.4, 0.0, -2.4),
+        "lake.right": (1.4, 0.0, -2.4),
+        # the underwater set, below the lake
+        "underwater.center": (0.0, -1.2, -3.0),
+        "underwater.surface": (0.0, -0.15, -3.0),
+        "underwater.floor": (0.0, -2.3, -3.0),
     }
 
 

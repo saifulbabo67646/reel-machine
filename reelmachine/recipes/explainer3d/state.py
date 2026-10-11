@@ -40,35 +40,53 @@ class ShotPlan(BaseModel):
     cues: list[dict[str, Any]] = Field(default_factory=list)
 
 
-def _shape(inputs: Explainer3DInputs, key: str) -> ShapeSpec:
+MODEL_COLOUR = "#b07a45"
+
+
+def actor_dims(inputs: Explainer3DInputs, key: str, models: dict[str, Any] | None = None) -> list[float]:
+    """Measured dims once the assets stage has run; before that a model is nominal."""
+    if models and key in models:
+        return list(models[key].dims)
     asset = inputs.cast[key].asset
-    assert isinstance(asset, ShapeSpec)  # validate.py refuses anything else in plan 1
-    return asset
+    if isinstance(asset, ShapeSpec):
+        return list(dims(asset))
+    side = asset.height if asset.height is not None else (asset.size or 0.3)
+    return [side, side, side]
 
 
-def build_ctx(inputs: Explainer3DInputs) -> Ctx:
+def is_container(inputs: Explainer3DInputs, key: str) -> bool:
+    asset = inputs.cast[key].asset
+    return asset.shape in CONTAINERS if isinstance(asset, ShapeSpec) else asset.container
+
+
+def actor_colour(inputs: Explainer3DInputs, key: str) -> str:
+    asset = inputs.cast[key].asset
+    if isinstance(asset, ShapeSpec):
+        return asset.colour or MATERIAL_COLOURS[asset.material]
+    return asset.colour or MODEL_COLOUR
+
+
+def build_ctx(inputs: Explainer3DInputs, models: dict[str, Any] | None = None) -> Ctx:
     marks = anchors(inputs.set.stage)
     ctx: Ctx = {"anchors": {k: list(v) for k, v in marks.items()}, "dims": {}, "homes": {}, "colours": {}}
     for key, member in inputs.cast.items():
-        shape = _shape(inputs, key)
-        ctx["dims"][key] = list(dims(shape))
+        ctx["dims"][key] = actor_dims(inputs, key, models)
         ctx["homes"][key] = list(marks[member.at or "stage.center"])
-        ctx["colours"][key] = shape.colour or MATERIAL_COLOURS[shape.material]
+        ctx["colours"][key] = actor_colour(inputs, key)
     return ctx
 
 
-def initial_world(inputs: Explainer3DInputs) -> World:
+def initial_world(inputs: Explainer3DInputs, models: dict[str, Any] | None = None) -> World:
     marks = anchors(inputs.set.stage)
     world: World = {}
     for key, member in inputs.cast.items():
-        shape = _shape(inputs, key)
         world[key] = {
             "position": list(marks[member.at or "stage.center"]),
             "visible": member.at is not None,
             "rotationY": 0.0,
             "scale": 1.0,
             "fill": {"level": 0.0, "colour": DEFAULT_FILL, "surface": "liquid"}
-            if shape.shape in CONTAINERS else None,
+            if is_container(inputs, key) else None,
         }
     return world
 
@@ -78,10 +96,11 @@ def _seed(shot_id: str, actor: str | None, index: int) -> int:
 
 
 def plan_shots(
-    inputs: Explainer3DInputs, shots: list[ResolvedShot], windows: list[ShotWindow]
+    inputs: Explainer3DInputs, shots: list[ResolvedShot], windows: list[ShotWindow],
+    models: dict[str, Any] | None = None,
 ) -> list[ShotPlan]:
-    ctx = build_ctx(inputs)
-    world = initial_world(inputs)
+    ctx = build_ctx(inputs, models)
+    world = initial_world(inputs, models)
     plans: list[ShotPlan] = []
     previous_end: dict[str, Any] | None = None
     for shot, window in zip(shots, windows):

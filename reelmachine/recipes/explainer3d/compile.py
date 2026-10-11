@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 from functools import lru_cache
 from pathlib import Path
@@ -51,6 +52,11 @@ def look_timing(name: str) -> dict[str, int]:
     return {k: int(timing[k]) for k in ("lead_ms", "tail_ms", "min_ms") if k in timing}
 
 
+def _model_url(source: str, main: str) -> str:
+    provider, _, ident = source.partition(":")
+    return f"assets/models/{provider}/{ident}/{main}"
+
+
 def shot_document(
     inputs: Explainer3DInputs,
     plan: ShotPlan,
@@ -59,27 +65,79 @@ def shot_document(
     ctx: Ctx,
     *,
     render_ms: int,
+    models: dict[str, Any] | None = None,
+    env: Any = None,
+    environment: str | None = None,
+    card: str | None = None,
+    hot: list[bool] | None = None,
+    total_ms: int | None = None,
 ) -> dict[str, Any]:
     actors = {}
     for key, member in inputs.cast.items():
-        shape = member.asset
-        assert isinstance(shape, ShapeSpec)
-        actors[key] = {"shape": shape.model_dump(), "dims": list(dims(shape))}
+        asset, resolved = member.asset, (models or {}).get(key)
+        if isinstance(asset, ShapeSpec):
+            actors[key] = {"shape": asset.model_dump(), "dims": list(dims(asset)), "count": asset.count}
+        else:
+            measured = list(resolved.dims) if resolved else [asset.size or asset.height or 0.3] * 3
+            actors[key] = {
+                "model": {"url": _model_url(asset.model, resolved.main if resolved else ""),
+                          "bounds": [list(b) for b in resolved.bounds] if resolved and resolved.bounds else None,
+                          "container": asset.container},
+                "dims": measured, "count": asset.count, "colour": asset.colour,
+            }
     shot = next(s for s in inputs.shot_list() if s.id == plan.shot_id)
+    environment = environment or inputs.set.environment
+    env_doc = None
+    if env is not None:
+        env_doc = {
+            "files": {rel: f"assets/env/{environment}/{rel}" for rel in sorted(env.files)},
+            "dressing": [{"url": _model_url(d["source"], d["main"]), "dims": d["dims"], "at": d["at"], "yaw": d["yaw"]}
+                         for d in env.dressing],
+        }
     return {
         "width": WIDTH, "height": HEIGHT, "fps": FPS,
         "duration": window.duration_ms / 1000.0,
         "renderDuration": render_ms / 1000.0,
-        "set": inputs.set.model_dump(),
+        "set": {**inputs.set.model_dump(), "environment": environment},
+        "env": env_doc,
         "look": load_look(inputs.look),
         "ctx": ctx,
         "actors": actors,
         "world": plan.world,
         "actions": plan.actions,
         "camera": {k: plan.camera[k] for k in ("move", "params", "start", "target", "easeIn", "easeOut")},
-        "captions": {"words": words, "label": shot.label, "title": inputs.title},
+        "captions": {"words": words, "hot": list(hot or []), "label": shot.label, "title": inputs.title,
+                     "card": card},
+        "reel": {"startMs": window.start_ms, "totalMs": total_ms or window.end_ms, "index": plan.index},
         "runtime": RUNTIME_VERSION,
     }
+
+
+def project_links(models: dict[str, Any] | None, environment: str, env: Any) -> dict[str, Path]:
+    """Files a shot project needs from the asset cache: published path → cached file."""
+    links: dict[str, Path] = {}
+    for resolved in (models or {}).values():
+        if resolved.kind == "model":
+            provider, _, ident = resolved.model.model.partition(":")
+            for rel in resolved.files:
+                links[f"assets/models/{provider}/{ident}/{rel}"] = Path(resolved.root) / rel
+    if env is not None:
+        for rel, path in env.files.items():
+            links[f"assets/env/{environment}/{rel}"] = Path(path)
+        for d in env.dressing:
+            provider, _, ident = d["source"].partition(":")
+            for rel in d["files"]:
+                links[f"assets/models/{provider}/{ident}/{rel}"] = Path(d["root"]) / rel
+    return links
+
+
+def _link(src: Path, dest: Path) -> None:
+    """Hard-link from the cache (no copy: a sky image is 25 MB and every shot needs it)."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.link(src, dest)
+    except OSError:
+        shutil.copy2(src, dest)
 
 
 def project_key(doc: dict[str, Any]) -> str:
@@ -99,7 +157,7 @@ html,body{margin:0;background:#000}
 """
 
 
-def write_project(doc: dict[str, Any], dest: Path) -> Path:
+def write_project(doc: dict[str, Any], dest: Path, *, links: dict[str, Path] | None = None) -> Path:
     dest = Path(dest)
     if dest.exists():
         shutil.rmtree(dest)
@@ -107,6 +165,8 @@ def write_project(doc: dict[str, Any], dest: Path) -> Path:
     for path in RUNTIME_DIR.glob("*.mjs"):
         shutil.copy2(path, dest / "runtime" / path.name)
     shutil.copytree(RUNTIME_DIR / "vendor", dest / "vendor")
+    for rel, src in (links or {}).items():
+        _link(Path(src), dest / rel)
     data = json.dumps(doc, ensure_ascii=False).replace("</", "<\\/")
     html = f"""<!doctype html>
 <html lang="en">

@@ -40,18 +40,12 @@ def resolve_script(inputs: Explainer3DInputs) -> list[ResolvedShot]:
                       hint="give a local audio file, or leave music out")
     marks = anchors(inputs.set.stage)
     for key, member in inputs.cast.items():
-        if isinstance(member.asset, str):
-            raise _refuse(
-                f"cast.{key}.asset",
-                f"model sources like {member.asset!r} are not available yet",
-                hint='use a shape, e.g. {"shape": "bowl", "material": "stone"}',
-            )
         if member.at is not None and member.at not in marks:
             raise _refuse(f"cast.{key}.at", f"unknown anchor {member.at!r}", hint=f"one of {sorted(marks)}")
 
     def is_container(ref: str) -> bool:
         asset = inputs.cast[ref].asset
-        return isinstance(asset, ShapeSpec) and asset.shape in CONTAINERS
+        return asset.shape in CONTAINERS if isinstance(asset, ShapeSpec) else asset.container
 
     def check_ref(ref: Any, path: str, *, container: bool = False) -> None:
         if ref is None:

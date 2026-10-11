@@ -232,17 +232,33 @@ class ScriptOutput(StageOutput):
 class ResolvedModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["shape"] = "shape"
-    shape: ShapeSpec
+    kind: Literal["shape", "model"] = "shape"
+    shape: ShapeSpec | None = None
+    model: ModelSpec | None = None
+    root: str = ""  # the cached model folder (models only)
+    main: str = ""  # the .gltf/.glb inside it
+    files: list[str] = Field(default_factory=list)
+    bounds: tuple[list[float], list[float]] | None = None  # in the file's own units
     dims: tuple[float, float, float]
     licence: Licence
     provenance: Provenance
+
+
+class EnvAssets(BaseModel):
+    """A cinematic set's files (published path → cached file) and its dressing models."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    files: dict[str, str] = Field(default_factory=dict)
+    dressing: list[dict[str, Any]] = Field(default_factory=list)
+    licences: list[Licence] = Field(default_factory=list)
 
 
 class AssetsOutput(StageOutput):
     inputs: Explainer3DInputs
     shots: list[ResolvedShot]
     models: dict[str, ResolvedModel] = Field(default_factory=dict)
+    envs: dict[str, EnvAssets] = Field(default_factory=dict)
 
 
 class Window(BaseModel):
@@ -258,6 +274,7 @@ class NarrationOutput(StageOutput):
     inputs: Explainer3DInputs
     shots: list[ResolvedShot]
     models: dict[str, ResolvedModel] = Field(default_factory=dict)
+    envs: dict[str, EnvAssets] = Field(default_factory=dict)
     audio_asset: str
     duration_ms: int
     windows: list[Window]
