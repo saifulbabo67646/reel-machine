@@ -38,7 +38,7 @@ EXAMPLE = {
          "stats": [{"value": "81", "label": "instant noodles per person, 2024", "source": NOODLES},
                    {"value": "79", "label": "instant noodles per person, 2024", "source": NOODLES},
                    {"value": "47", "label": "instant noodles per person, 2024", "source": NOODLES}],
-         "narration": "Noodles a head? Vietnam, 81. South Korea, 79. Japan, 47."},
+         "narration": "Who eats the most instant noodles? Vietnam, 81. South Korea, 79. Japan, 47."},
         {"kind": "regions", "country": "JPN",
          "narration": "Even in Japan: Osaka eats takoyaki, octopus balls. Hokkaido grills mutton, jingisukan.",
          "regions": [{"region": "JP-27", "say": "Osaka",

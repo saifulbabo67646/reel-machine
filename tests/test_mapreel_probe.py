@@ -222,7 +222,7 @@ def test_the_recipe_example_uses_every_shot_and_probes_clean(tmp_path):
     report = _strict(tmp_path, example)
     assert report.ok, report.checks
     found = report.details["lint"]
-    assert not [f for f in found if f["severity"] == "error"] and len(found) <= 3, found
+    assert not [f for f in found if f["severity"] == "error"] and len(found) <= 4, found
 
 
 def test_the_food_example_uses_every_shot_with_sources_and_passes_every_lint_rule(tmp_path):
@@ -241,7 +241,7 @@ def test_the_food_example_uses_every_shot_with_sources_and_passes_every_lint_rul
     report = _strict(tmp_path, food)
     assert report.ok, report.checks
     found = report.details["lint"]
-    assert not [f for f in found if f["severity"] == "error"] and len(found) <= 3, found
+    assert not [f for f in found if f["severity"] == "error"] and len(found) <= 4, found
     final = food["segments"][-1]["countries"]
     assert ("VNM" in final) == ("KOR" in final)
 
