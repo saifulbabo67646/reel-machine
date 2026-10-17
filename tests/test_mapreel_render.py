@@ -50,3 +50,33 @@ def test_a_real_reel_moves_and_fills(tmp_path):
     first, later = _frame(reel, 0), _frame(reel, 45)
     assert np.abs(first - later).mean() > 3  # the camera and fills moved
     assert later.std() > 20                  # a map, not a blank canvas
+
+
+TILE_W, TILE_H, PAD = 360, 640, 8
+FOOD = Path(__file__).resolve().parents[1] / "examples" / "mapreel" / "food.json"
+
+
+def _tiles(sheet: Path, count: int) -> list[np.ndarray]:
+    from PIL import Image
+
+    grid = np.asarray(Image.open(sheet).convert("RGB")).astype(np.int16)
+    cols = min(4, count)
+    return [grid[(i // cols) * (TILE_H + PAD):(i // cols) * (TILE_H + PAD) + TILE_H,
+                 (i % cols) * (TILE_W + PAD):(i % cols) * (TILE_W + PAD) + TILE_W] for i in range(count)]
+
+
+def test_every_segment_kind_renders_a_real_still(tmp_path):
+    inputs = json.loads(FOOD.read_text(encoding="utf-8"))
+    inputs["mode"] = "storyboard"
+    kinds = [s["kind"] for s in inputs["segments"]]
+    assert {"highlight", "rank", "versus", "country", "regions"} <= set(kinds)
+    job = _build(tmp_path, inputs)
+    assert job.state == JobState.SUCCEEDED, job.error
+    sheet = next(Path(a.path) for a in job.result.artifacts if a.name == "storyboard.jpg")
+    assert sheet.is_file()
+    tiles = _tiles(sheet, len(kinds))
+    for index, (kind, tile) in enumerate(zip(kinds, tiles)):
+        assert tile.std() > 10, f"still {index + 1} ({kind}) is blank"
+    versus = tiles[kinds.index("versus")]
+    top, bottom = versus[:TILE_H // 2], versus[TILE_H // 2:]
+    assert np.abs(top - bottom).mean() > 10  # two maps, not one picture twice
