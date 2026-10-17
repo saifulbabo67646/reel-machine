@@ -10,7 +10,7 @@ from typing import Any
 
 from ...core.timeline import WordSpan
 from . import compose
-from .geometry import BADGE_HALF_H, BADGE_HALF_W, HEIGHT, SAFE, WIDTH, Frame, Shape, shape_of
+from .geometry import BADGE_DOWN, BADGE_HALF_W, BADGE_RISE, BADGE_UP, HEIGHT, SAFE, WIDTH, Frame, Shape, shape_of
 from .models import ResolvedSegment
 from .places import Atlas
 from .regions import RegionAtlas
@@ -207,7 +207,11 @@ def tag_boxes(tags: list[tuple[str, dict[str, float]]], items: list[dict[str, An
     """Where each region's name tag goes on the landed frame: at its label point or, when it would cover an item
     badge or an earlier tag, beside what it hits (left, then right) and only then above it. A state's label
     point is near its middle, where its first item lands."""
-    taken: list[Box] = [(it["x"], it["y"], BADGE_HALF_W * it["size"], BADGE_HALF_H * it["size"]) for it in items]
+    # each badge as drawn: its emoji reaches higher above its anchor than its text below, and it rises as it holds
+    taken: list[Box] = []
+    for it in items:
+        top, bottom = it["y"] - BADGE_UP * it["size"] - BADGE_RISE, it["y"] + BADGE_DOWN * it["size"]
+        taken.append((it["x"], (top + bottom) / 2, BADGE_HALF_W * it["size"], (bottom - top) / 2))
     out = []
     for text, label in tags:
         half_w, half_h = 0.4 * TAG_PX * len(text) + 4, TAG_PX / 2 + 4  # Arial Black runs about 0.8 em a letter

@@ -200,8 +200,21 @@ def inside(rings_px: list[np.ndarray], x: float | np.ndarray, y: float | np.ndar
 #: a badge's footprint around its anchor, as fractions of its size: the text may be
 #: size * 1.1 wide (draw.mjs) and two lines tall
 BADGE_HALF_W, BADGE_HALF_H = 0.55, 0.3
+#: how far a badge is drawn above and below its anchor, as fractions of its size: its emoji reaches 0.45 above
+#: (draw.mjs drawItem: centred 0.23 up, a 0.34 font whose glyph runs a little taller), two lines of text 0.31 below
+BADGE_UP, BADGE_DOWN = 0.45, 0.31
+#: px a badge rises after it pops (draw.mjs drawItem: 6 px a second), allowed for over a 5 s hold
+BADGE_RISE = 30.0
+#: the caption band (runtime/draw.mjs CAPTION_Y, CAPTION_HALF): 60 px words at 71 % of the height, stroke and air
+CAPTION_BAND = (HEIGHT * 0.71 - 43, HEIGHT * 0.71 + 43)
 BADGE_MAX, BADGE_MIN, BADGE_STEP = 300, 180, 20
 COLUMN_SPACING = 220.0
+
+
+def clear_of_captions(y: np.ndarray, size: float, band: tuple[float, float] = CAPTION_BAND) -> np.ndarray:
+    """Which anchors keep a badge of `size`, as drawn (emoji above, text below), off the caption band."""
+    y = np.asarray(y, dtype=float)
+    return (y + BADGE_DOWN * size <= band[0]) | (y - BADGE_UP * size - BADGE_RISE >= band[1])
 
 
 def _boxes_overlap(a: tuple[float, float], b: tuple[float, float], size: float) -> bool:
@@ -217,7 +230,7 @@ def item_layout(rings_px: list[np.ndarray], n: int, *, max_size: int = BADGE_MAX
                 step: float = 24.0, cell: float = 12.0,
                 safe: tuple[float, float, float, float] = SAFE) -> tuple[list[tuple[float, float]], int]:
     """`n` badge anchors and one badge size. Every badge box (size*1.1 x size*0.6) lies inside
-    the place and the safe area, and no two boxes overlap; anchors spread as far apart as they
+    the place and the safe area, every badge as drawn stays off the caption band, and no two boxes overlap; anchors spread as far apart as they
     can (greedy farthest-point). The size steps down to `min_size` until they fit. A place too
     small even then gets a column at its centre, which may overhang."""
     sx0, sy0, sx1, sy1 = safe
@@ -241,7 +254,7 @@ def item_layout(rings_px: list[np.ndarray], n: int, *, max_size: int = BADGE_MAX
         r0 = np.clip(np.floor((gy - hh - ry[0]) / cell).astype(int), 0, len(ry) - 1)
         r1 = np.clip(np.ceil((gy + hh - ry[0]) / cell).astype(int), 0, len(ry) - 1) + 1
         outside = table[r1, c1] - table[r0, c1] - table[r1, c0] + table[r0, c0]
-        keep = outside == 0
+        keep = (outside == 0) & clear_of_captions(gy, size)
         gx, gy = gx[keep], gy[keep]
         if len(gx):  # exact check of the box outline
             ok = np.ones(len(gx), dtype=bool)
@@ -272,7 +285,7 @@ def item_layout(rings_px: list[np.ndarray], n: int, *, max_size: int = BADGE_MAX
     gx, gy = np.meshgrid(np.arange(sx0 * WIDTH + hw, sx1 * WIDTH - hw + 1e-9, step),
                          np.arange(sy0 * HEIGHT + hh, sy1 * HEIGHT - hh + 1e-9, step))
     gx, gy = gx.ravel(), gy.ravel()
-    ok = inside(rings_px, gx, gy) if len(gx) else np.zeros(0, dtype=bool)
+    ok = (inside(rings_px, gx, gy) & clear_of_captions(gy, size)) if len(gx) else np.zeros(0, dtype=bool)
     gx, gy = gx[ok], gy[ok]
     if len(gx) >= n:
         c0 = np.clip(np.floor((gx - hw - rx[0]) / cell).astype(int), 0, len(rx) - 1)

@@ -156,3 +156,20 @@ def test_frame_for_frames_inside_a_panel_view():
     frame = g.frame_for((0.5, 0.3, 0.52, 0.32), view=(1080, 960), safe=(0.0, 0.0, 1.0, 1.0))
     assert frame.s == pytest.approx(min(1080 / 0.02, 960 / 0.02))
     assert (frame.x, frame.y) == pytest.approx((0.51, 0.31))
+
+
+@pytest.mark.parametrize("code,n", [("GBR", 4), ("FRA", 4), ("USA", 4), ("NOR", 3), ("ITA", 4)])
+def test_every_badge_as_drawn_stays_off_the_caption_band(code, n):
+    """Captions sit at 71 % of the height: a badge's emoji (above its anchor) and its text (below) never
+    reach the band. Britain's four food badges put "Love it" on the caption word before."""
+    from reelmachine.recipes.mapreel.kinds import RANK_SAFE
+
+    shape = g.shape_of(ATLAS.resolve(code))
+    for safe in (g.SAFE, RANK_SAFE):
+        frame = g.frame_for(shape.main, safe=safe)
+        rings = [g.to_screen(frame, r) for r in shape.rings]
+        anchors, size = g.item_layout(rings, n, safe=safe)
+        y0, y1 = g.CAPTION_BAND
+        assert y0 == pytest.approx(0.71 * 1920 - 43) and y1 == pytest.approx(0.71 * 1920 + 43)
+        for _, y in anchors:
+            assert y + g.BADGE_DOWN * size <= y0 or y - g.BADGE_UP * size >= y1, (code, safe, y, size)
