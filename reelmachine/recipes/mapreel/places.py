@@ -27,11 +27,12 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "ivorycoast": ("CIV",), "uae": ("ARE",), "czechrepublic": ("CZE",), "russia": ("RUS",),
     "vatican": ("VAT",), "southkorea": ("KOR",), "northkorea": ("PRK",),
 }
-#: how each alias is written, for matching it against the voice's words
+#: how each alias is written, for matching it against the voice's words. "us" is left out: it is
+#: also the word "us" ("let us look at America" must not fill the USA early)
 ALIAS_SAID: dict[str, str] = {
     "holland": "Holland", "uk": "UK", "britain": "Britain", "greatbritain": "Great Britain",
     "england": "England", "scotland": "Scotland", "wales": "Wales",
-    "us": "US", "usa": "USA", "america": "America", "unitedstates": "United States",
+    "usa": "USA", "america": "America", "unitedstates": "United States",
     "korea": "Korea", "congo": "Congo", "turkiye": "Türkiye", "burma": "Burma",
     "ivorycoast": "Ivory Coast", "uae": "UAE", "czechrepublic": "Czech Republic", "russia": "Russia",
     "vatican": "Vatican", "southkorea": "South Korea", "northkorea": "North Korea",
@@ -106,6 +107,15 @@ class Atlas:
             seen.setdefault(name.casefold(), name)
         return sorted(seen.values(), key=len, reverse=True)
 
+    def heard_as(self, code: str, written: str) -> list[str]:
+        """`spoken_names(code)` plus what the script wrote for it, unless that is a code ("NOR",
+        "CAN", "AND" are ordinary words), an abbreviation, or an alias never matched ("US")."""
+        raw = (written or "").strip()
+        key = norm(raw)
+        is_code = raw.isupper() and len(key) <= 3
+        unsaid = key in ALIASES and key not in ALIAS_SAID
+        return [*self.spoken_names(code), *([] if is_code or unsaid or "." in raw or not key else [raw])]
+
     def search(self, query: str, limit: int = 8) -> list[dict[str, Any]]:
         key = norm(query)
         scored: dict[str, float] = {}
@@ -154,12 +164,14 @@ def _load(path: str, _mtime: int) -> Atlas:
         for field in _NAME_FIELDS:
             if props.get(field):
                 keys.setdefault(norm(props[field]), set()).add(code)
-                said.setdefault(code, []).append(props[field])
+                # abbreviations ("Nor.", "Fr.", "Can.") are ordinary words when spoken: never heard as names
+                if field != "ABBREV" and "." not in props[field]:
+                    said.setdefault(code, []).append(props[field])
     for alias, codes in ALIASES.items():  # aliases replace whatever a short code collided with
         present = {c for c in codes if c in places}
         if present:
             keys[alias] = present
-            if len(present) == 1:  # an alias for two countries ("Korea") names neither when spoken
+            if len(present) == 1 and alias in ALIAS_SAID:  # an alias for two countries ("Korea") names neither when spoken
                 said.setdefault(next(iter(present)), []).append(ALIAS_SAID[alias])
     return Atlas(places, keys, said)
 

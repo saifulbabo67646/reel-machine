@@ -121,3 +121,53 @@ def test_highlight_fills_on_an_alias(tmp_path, monkeypatch):
     resolved = json.loads((tmp_path / "stage" / "artifacts" / "script.resolved.json").read_text())
     fills = {p["code"]: p["fillMs"] for p in resolved["segments"][0]["places"]}
     assert fills == {"USA": 1000, "NLD": 1800}
+
+
+def test_a_flight_takes_the_short_way_round(tmp_path, monkeypatch):
+    from reelmachine.core.timeline import WordSpan
+    from reelmachine.recipes.mapreel import compose
+    from reelmachine.recipes.mapreel.geometry import shape_of
+    from reelmachine.recipes.mapreel.models import NarrationOutput, Window
+    from reelmachine.recipes.mapreel.places import Atlas
+
+    atlas = Atlas.load(FIXTURE)
+    monkeypatch.setattr(stages, "atlas_for", lambda settings: atlas)
+    inputs = MapReelInputs.model_validate({"segments": [
+        {"kind": "country", "country": "JPN", "narration": "Japan.", "items": [{"name": "Sony"}]},
+        {"kind": "highlight", "countries": ["USA", "JPN"], "narration": "America and Japan."}]})
+    segs = [ResolvedSegment(id="seg-1", index=0, kind="country", codes=["JPN"], names={"JPN": "Japan"},
+                            colours={"JPN": "#8a2be2"}),
+            ResolvedSegment(id="seg-2", index=1, kind="highlight", codes=["USA", "JPN"],
+                            names={"USA": "United States of America", "JPN": "Japan"},
+                            colours={"USA": "#e0201b", "JPN": "#8a2be2"})]
+    frames = {s.id: compose.segment_frame([shape_of(atlas.places[c]) for c in s.codes], 1.0).to_dict()
+              for s in segs}
+    assert abs(frames["seg-2"]["x"] - frames["seg-1"]["x"]) > 0.5  # the long way, unless the stage wraps
+    layer = tmp_path / "layer.jpg"
+    layer.write_bytes(b"jpg")
+    said = [[WordSpan(text="Japan.", start_ms=0, end_ms=300)],
+            [WordSpan(text=w, start_ms=i * 400, end_ms=i * 400 + 300) for i, w in enumerate("America and Japan.".split())]]
+    payload = NarrationOutput(
+        inputs=inputs, segments=segs, world=str(layer), layers={s.id: str(layer) for s in segs},
+        detail_bboxes={"seg-1": [0.8, 0.3, 0.95, 0.45], "seg-2": [-0.2, 0.3, 0.35, 0.45]}, frames=frames,
+        images={"seg-1/0": None}, audio_asset="a.wav", duration_ms=10000,
+        windows=[Window(start_ms=0, duration_ms=5000, speech_offset_ms=1000, speech_ms=2000),
+                 Window(start_ms=5000, duration_ms=5000, speech_offset_ms=1000, speech_ms=2000)],
+        words=said, hot=[[False] * len(w) for w in said], spoken=said, provider="fake")
+    docs = {}
+    write = stages.compose.write_project
+    monkeypatch.setattr(stages.compose, "write_project",
+                        lambda doc, dest, links: docs.setdefault(Path(dest).name, doc) and write(doc, dest, links))
+    ctx = SimpleNamespace(workdir=tmp_path / "stage", config=None)
+    stages.SegmentsStage().run(ctx, payload)
+    resolved = json.loads((tmp_path / "stage" / "artifacts" / "script.resolved.json").read_text())
+    camera = resolved["segments"][1]["camera"]
+    assert camera["flyMs"] > 0
+    assert abs(camera["to"]["x"] - camera["from"]["x"]) <= 0.5
+    assert camera["to"] == frames["seg-2"]  # the landed frame stays in its own world
+    doc = docs["seg-2"]
+    # what the previous segment showed moved with the camera's start: one world west
+    prev = next(layer for layer in doc["layers"] if layer["url"] == "layers/prev-detail.jpg")
+    assert prev["bbox"] == pytest.approx([-0.2, 0.3, -0.05, 0.45])
+    jpn = docs["seg-1"]["places"][0]["rings"][0][0]
+    assert doc["previous"][0]["rings"][0][0] == pytest.approx([jpn[0] - 1, jpn[1]])

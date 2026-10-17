@@ -78,6 +78,11 @@ def resolve_segments(inputs: MapReelInputs, atlas: Atlas) -> list[ResolvedSegmen
             for seg_id, index, seg, codes, names in resolved]
 
 
+def _shifted(rings: list[list[list[float]]], dx: int) -> list[list[list[float]]]:
+    """Rings moved by a whole number of worlds."""
+    return [[[x + dx, y] for x, y in ring] for ring in rings] if dx else rings
+
+
 def check_music(inputs: MapReelInputs) -> None:
     """`music` is "auto" (a synthesised bed) or an existing local audio file."""
     if inputs.music and inputs.music != "auto" and not Path(inputs.music).expanduser().is_file():
@@ -285,6 +290,12 @@ class SegmentsStage:
                 start, target, fly = previous_end, previous_end, 0  # held: keep drifting from there
             else:
                 start, target, fly = previous_end, frame, FLY_MS
+            # the flight takes the short way round: it starts from the copy of the previous camera (and of
+            # what it showed) nearest this frame. Shifting the start, not the target, keeps every landed
+            # frame in its own world, so x never creeps a world further on each cut
+            wrap = round(start["x"] - target["x"]) if fly else 0
+            if wrap:
+                start = {**start, "x": start["x"] - wrap}
             speech_start = window.speech_offset_ms
             speech_end = window.speech_offset_ms + window.speech_ms
             last_ms = window.duration_ms - POP_TAIL_MS
@@ -295,8 +306,7 @@ class SegmentsStage:
             # places fill when named (highlight) or as the camera lands (country)
             if spec.kind == "highlight":
                 # any name the place goes by, or what the script itself wrote for it
-                heard = match_any([[*atlas.spoken_names(c), query] for c, query in zip(seg.codes, spec.countries)],
-                                  spoken)
+                heard = match_any([atlas.heard_as(c, query) for c, query in zip(seg.codes, spec.countries)], spoken)
                 fills, _ = pop_times(heard, overrides=[None] * len(seg.codes),
                                      speech_start_ms=speech_start, speech_end_ms=speech_end)
                 fills = [min(t, last_ms) for t in fills]
@@ -331,7 +341,8 @@ class SegmentsStage:
             details = [{"url": "layers/detail.jpg", "bbox": payload.detail_bboxes[seg.id]}]
             links = {"layers/world.jpg": Path(payload.world), "layers/detail.jpg": Path(payload.layers[seg.id])}
             if fly:  # the flight leaves a sharp country, not the blurry world layer magnified
-                details.insert(0, {"url": "layers/prev-detail.jpg", "bbox": payload.detail_bboxes[previous_id]})
+                x0, y0, x1, y1 = payload.detail_bboxes[previous_id]
+                details.insert(0, {"url": "layers/prev-detail.jpg", "bbox": [x0 - wrap, y0, x1 - wrap, y1]})
                 links["layers/prev-detail.jpg"] = Path(payload.layers[previous_id])
                 # the sharper of the two on top: a layer's px per Mercator unit only falls as its box grows,
                 # so on a zoom out (a country back to the world) the previous country stays above
@@ -340,7 +351,8 @@ class SegmentsStage:
             camera = {"from": start, "to": target, "flyMs": fly, "drift": compose.DRIFT}
             doc = compose.segment_document(
                 duration_ms=window.duration_ms, camera=camera, layers=layers, places=places,
-                previous=[{"colour": p["colour"], "rings": p["rings"]} for p in previous_places] if fly else [],
+                previous=[{"colour": p["colour"], "rings": _shifted(p["rings"], -wrap)} for p in previous_places]
+                if fly else [],
                 items=items, words=words, legend=getattr(spec, "legend", None))
             for it in items_in:
                 if it["_local"]:

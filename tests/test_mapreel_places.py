@@ -144,3 +144,29 @@ def test_spoken_names_include_aliases(atlas):
     assert len({n.casefold() for n in names}) == len(names)
     assert [len(n) for n in names] == sorted((len(n) for n in names), reverse=True)
     assert "Holland" in atlas.spoken_names("NLD")
+
+
+def test_spoken_names_leave_out_abbreviations_and_us(atlas):
+    assert "US" not in atlas.spoken_names("USA") and "U.S.A." not in atlas.spoken_names("USA")
+    assert not any("." in n for c in ("NOR", "FRA", "USA", "GBR") for n in atlas.spoken_names(c))
+    assert atlas.resolve("US").code == "USA"  # still a name the script may write
+
+
+def _said(text, step=300):
+    from reelmachine.core.timeline import WordSpan
+    return [WordSpan(text=w, start_ms=i * step, end_ms=i * step + 250) for i, w in enumerate(text.split())]
+
+
+@pytest.mark.parametrize("code,query,text,at", [
+    ("NOR", "Norway", "Neither Sweden nor Norway leads", 900),
+    ("USA", "USA", "Let us look at America", 1200),
+])
+def test_ordinary_words_never_fill_a_place(atlas, code, query, text, at):
+    from reelmachine.recipes.mapreel.timing import match_any
+    assert match_any([[*atlas.spoken_names(code), query]], _said(text)) == [at]
+
+
+def test_a_written_code_is_never_heard_as_a_word(atlas):
+    assert atlas.heard_as("NOR", "NOR") == atlas.spoken_names("NOR")
+    assert atlas.heard_as("USA", "US") == atlas.spoken_names("USA")
+    assert atlas.heard_as("ITA", "the Italian peninsula")[-1] == "the Italian peninsula"
