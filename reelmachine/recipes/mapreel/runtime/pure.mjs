@@ -157,3 +157,21 @@ export function leaderLine(box, ax, ay, minPx = 40) {
   if (Math.hypot(ax - px, ay - py) <= minPx) return null;
   return { x0: px, y0: py, x1: ax, y1: ay };
 }
+
+// The world's texture ends at ±85° (Mercator's square): a world view too wide to fill the screen's height leaves a
+// band above and below it. {top, bottom}: how many px each band is (0: none), and `fade`: how far a soft edge
+// runs from each band into the map (never deeper than the band is tall, so a sliver of band gets a sliver of fade).
+export const BAND_FADE = 96;
+export function worldBands(cam, h = H) {
+  const top = Math.max(0, Math.min(h, h / 2 - cam.y * cam.s));
+  const bottom = Math.max(0, Math.min(h, h - (h / 2 + (1 - cam.y) * cam.s)));
+  return { top, bottom, fadeTop: Math.min(BAND_FADE, top), fadeBottom: Math.min(BAND_FADE, bottom) };
+}
+
+// The legend pill's centre y: in the top band when the band holds it with air on both sides (centred, never
+// higher than its usual place), else its usual place over the map. `band`: the top band's height in px.
+export const LEGEND_Y = 193, LEGEND_H = 86, LEGEND_AIR = 40;
+export function legendY(band) {
+  if (band < LEGEND_Y + LEGEND_H / 2 + LEGEND_AIR) return LEGEND_Y;
+  return Math.max(LEGEND_Y, band / 2);
+}

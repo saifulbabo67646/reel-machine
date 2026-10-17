@@ -2,7 +2,7 @@
 // Draws one frame of a map segment on a 2D canvas.
 import {
   cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, clamp01, POP_MS, cardLayout,
-  slideOffset, tagCentre, leaderLine,
+  slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_H,
 } from "./pure.mjs";
 
 const W = 1080, H = 1920;
@@ -41,6 +41,31 @@ function drawLayers(ctx, cam, layers, images, view = SCREEN) {
       ctx.drawImage(img, px0, py0, px1 - px0, py1 - py0);
     }
   }
+}
+
+const BAND_EDGE = "#0b2236", BAND_FAR = "#040b14"; // the band by the map (the base fill), and at the screen edge
+
+// Mercator's square ends at ±85°: a world view shorter than the screen gets a dark band above and below,
+// deepening toward the screen's edge, with a soft edge fading into the map, so the bands read as framing.
+function drawBands(ctx, cam) {
+  const b = worldBands(cam);
+  const band = (y0, y1, fadeTo) => {
+    let g = ctx.createLinearGradient(0, y0, 0, y1); // y0: the screen edge, y1: the map's edge
+    g.addColorStop(0, BAND_FAR);
+    g.addColorStop(1, BAND_EDGE);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, Math.min(y0, y1), W, Math.abs(y1 - y0));
+    g = ctx.createLinearGradient(0, y1, 0, fadeTo);
+    g.addColorStop(0, "rgba(11,34,54,1)");
+    g.addColorStop(0.45, "rgba(11,34,54,0.55)");
+    g.addColorStop(1, "rgba(11,34,54,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, Math.min(y1, fadeTo), W, Math.abs(fadeTo - y1));
+  };
+  ctx.save();
+  if (b.top > 0) band(0, b.top, b.top + b.fadeTop);
+  if (b.bottom > 0) band(H, H - b.bottom, H - b.bottom - b.fadeBottom);
+  ctx.restore();
 }
 
 const MARK_BELOW = 70, MARK_R = 46; // px: a place smaller than this on both sides gets a ring
@@ -247,19 +272,20 @@ function caption(ctx, words, seconds) {
   ctx.restore();
 }
 
-function legend(ctx, text) {
+// `y`: the pill's centre (legendY: in the top band when the world view leaves one tall enough)
+function legend(ctx, text, y) {
   if (!text) return;
   ctx.save();
   ctx.font = `900 50px ${FONT}`;
   const width = ctx.measureText(text).width + 64;
   ctx.fillStyle = "rgba(255,255,255,0.94)";
   ctx.beginPath();
-  ctx.roundRect((W - width) / 2, 150, width, 86, 24);
+  ctx.roundRect((W - width) / 2, y - LEGEND_H / 2, width, LEGEND_H, 24);
   ctx.fill();
   ctx.fillStyle = "#111";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, W / 2, 193);
+  ctx.fillText(text, W / 2, y);
   ctx.restore();
 }
 
@@ -441,6 +467,7 @@ export function drawFrame(ctx, doc, images, seconds) {
   const ms = seconds * 1000;
   const cam = cameraAt(doc.camera, ms);
   drawLayers(ctx, cam, doc.layers, images);
+  drawBands(ctx, cam);
   const fadeOut = 1 - Math.min(1, ms / Math.max(1, doc.camera.flyMs * 0.8));
   // each at the share it was drawn at (a regions segment's faint country), all fading together
   for (const place of doc.previous || []) fillPlace(ctx, cam, place, fadeOut * (place.alpha ?? 1), seconds);
@@ -454,7 +481,8 @@ export function drawFrame(ctx, doc, images, seconds) {
   if (doc.places.length === 1 && !doc.countryFaint) ghostName(ctx, cam, doc.places[0], fillAlpha(doc.places[0].fillMs, ms), seconds, doc.duration || 0);
   for (const region of regions) regionTag(ctx, cam, region, fillAlpha(region.fillMs, ms));
   for (const item of doc.items) drawItem(ctx, item, ms, images);
-  legend(ctx, doc.legend);
+  // placed by the band at the segment's end, when the drift has made it thinnest: still, and in it throughout
+  if (doc.legend) legend(ctx, doc.legend, legendY(worldBands(cameraAt(doc.camera, (doc.duration || 0) * 1000)).top));
   // the card sits right of the badge (cardLayout); the badge is drawn last, on top of any overhang
   if (doc.stat) statCard(ctx, doc.stat, ms, doc.places[0] && doc.places[0].colour);
   if (doc.rank) rankBadge(ctx, doc.rank, ms);

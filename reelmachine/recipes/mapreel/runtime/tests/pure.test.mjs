@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, slideOffset, tagCentre, leaderLine } from "../pure.mjs";
+import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_Y, LEGEND_H, LEGEND_AIR } from "../pure.mjs";
 
 const A = { x: 0.2, y: 0.4, s: 1080 };
 const B = { x: 0.55, y: 0.35, s: 20000 };
@@ -159,4 +159,23 @@ test("a tag far from its region gets a leader from its box edge to the region", 
   assert.deepEqual(down, { x0: 540, y0: 826, x1: 540, y1: 1000 });
   const side = leaderLine(box, 300, 800);
   assert.deepEqual(side, { x0: 440, y0: 800, x1: 300, y1: 800 });
+});
+
+test("a world view too wide for the screen's height has a band above and below; a filled one has none", () => {
+  assert.deepEqual(worldBands({ x: 0.5, y: 0.5, s: 1920 }), { top: 0, bottom: 0, fadeTop: 0, fadeBottom: 0 });
+  assert.deepEqual(worldBands({ x: 0.5, y: 0.5, s: 1080 }), { top: 420, bottom: 420, fadeTop: 96, fadeBottom: 96 });
+  const sliver = worldBands({ x: 0.5, y: 0.5, s: 1880 });
+  assert.equal(sliver.top, 20);
+  assert.equal(sliver.fadeTop, 20); // the fade never runs deeper than the band is tall
+  assert.deepEqual(worldBands({ x: 0.3, y: 0.4, s: 8000 }), { top: 0, bottom: 0, fadeTop: 0, fadeBottom: 0 }); // zoomed in
+});
+
+test("the legend sits in the top band when the band holds it, else in its usual place", () => {
+  assert.equal(legendY(0), LEGEND_Y);
+  assert.equal(legendY(200), LEGEND_Y); // too thin: the legend stays over the map
+  assert.equal(legendY(340), LEGEND_Y); // brands.json's opening: the usual place is already inside the band
+  assert.equal(legendY(420), 210);      // centred in a full-width world's band
+  for (const band of [276, 300, 340, 420]) {
+    assert.ok(legendY(band) + LEGEND_H / 2 + LEGEND_AIR <= band, `${band}`); // clear of the map's edge
+  }
 });
