@@ -1,5 +1,6 @@
 import json
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -63,8 +64,40 @@ def test_the_project_key_changes_with_content(tmp_path):
 
 
 def test_the_runtime_unit_tests_pass():
+    if shutil.which("node") is None:
+        pytest.skip("node not installed")
     proc = subprocess.run(["node", "--test", str(compose.RUNTIME_DIR / "tests" / "pure.test.mjs")],
                           capture_output=True, text=True)
-    if proc.returncode == 127:
-        pytest.skip("node not installed")
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_the_project_key_covers_the_html_template(tmp_path, monkeypatch):
+    doc = _doc(tmp_path)
+    layer = tmp_path / "world.jpg"
+    layer.write_bytes(b"jpeg")
+    a = compose.project_key(doc, {"layers/world.jpg": layer})
+    monkeypatch.setattr(compose, "_CSS", compose._CSS + "body{color:red}")
+    assert compose.project_key(doc, {"layers/world.jpg": layer}) != a
+    monkeypatch.undo()
+    monkeypatch.setattr(compose, "_TEMPLATE", compose._TEMPLATE + "<!-- x -->")
+    assert compose.project_key(doc, {"layers/world.jpg": layer}) != a
+
+
+def test_nan_fails_loudly(tmp_path):
+    doc = _doc(tmp_path)
+    doc["legend"] = float("nan")
+    with pytest.raises(ValueError):
+        compose.write_project(doc, tmp_path / "p", {})
+
+
+@pytest.mark.parametrize("codes", [("USA", "RUS"), ("FJI", "JPN")])
+def test_a_place_is_not_torn_across_world_copies(codes):
+    shapes = [g.shape_of(ATLAS.resolve(c)) for c in codes]
+    frame = compose.segment_frame(shapes, 1.0)
+    for code, shape in zip(codes, shapes):
+        place = ATLAS.resolve(code)
+        entry = compose.place_entry(code, code, "#fff", shape, frame, 500, place.label)
+        xs = [x for ring in entry["rings"] for x, _ in ring]
+        assert max(xs) - min(xs) < 0.6, code
+        assert min(xs) - 0.05 <= entry["label"]["x"] <= max(xs) + 0.05, code
+

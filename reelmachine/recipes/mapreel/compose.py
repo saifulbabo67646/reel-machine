@@ -36,8 +36,13 @@ def segment_frame(shapes: list[Shape], zoom: float) -> Frame:
     return frame_for(union, zoom=zoom)
 
 
-def _near(frame: Frame, ring: np.ndarray) -> np.ndarray:
-    shift = round(frame.x - float(ring[:, 0].mean()))
+def _shift(frame: Frame, shape: Shape) -> int:
+    """One world-copy shift for the whole shape, from its main cluster, so no part is torn away."""
+    return round(frame.x - (shape.main[0] + shape.main[2]) / 2)
+
+
+def _near(frame: Frame, shape: Shape, ring: np.ndarray) -> np.ndarray:
+    shift = _shift(frame, shape)
     return ring + np.array([shift, 0.0]) if shift else ring
 
 
@@ -45,11 +50,12 @@ def place_entry(code: str, name: str, colour: str, shape: Shape, frame: Frame, f
                 label_lonlat: tuple[float, float]) -> dict[str, Any]:
     rings = []
     for ring in shape.rings:
-        slim = simplify_for(frame, _near(frame, ring))
+        slim = simplify_for(frame, _near(frame, shape, ring))
         if len(slim) >= 3:
             rings.append([[round(float(x), 7), round(float(y), 7)] for x, y in slim])
     lx, ly = merc(label_lonlat[0], label_lonlat[1])
-    lx = float(lx) + round(frame.x - float(lx))
+    centre = (shape.main[0] + shape.main[2]) / 2
+    lx = float(lx) + round(centre - float(lx)) + _shift(frame, shape)
     return {"code": code, "name": name, "colour": colour, "rings": rings, "fillMs": int(fill_ms),
             "label": {"x": lx, "y": float(ly)}}
 
@@ -60,7 +66,7 @@ def item_entries(items: list[dict[str, Any]], shape: Shape | None, frame: Frame)
     if shape is None:
         anchors = [(WIDTH / 2, HEIGHT * (0.25 + 0.45 * i / max(1, len(items) - 1))) for i in range(len(items))]
     else:
-        rings_px = [to_screen(frame, _near(frame, r)) for r in shape.rings]
+        rings_px = [to_screen(frame, _near(frame, shape, r)) for r in shape.rings]
         anchors = item_anchors(rings_px, len(items))
     gap = min((np.hypot(a[0] - b[0], a[1] - b[1]) for i, a in enumerate(anchors) for b in anchors[i + 1:]),
               default=ITEM_SIZE * 2)
@@ -80,6 +86,29 @@ _CSS = "html,body{margin:0;background:#000}#root{position:relative;width:100%;he
        "#map{position:absolute;inset:0;width:100%;height:100%;display:block}"
 
 
+_TEMPLATE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width={w}, height={h}" />
+<style>{css}</style>
+<script>window.__hf = window.__hf || {{}}; window.__mapReady = new Promise((r) => {{ window.__mapResolve = r; }}); window.__hf.buildReady = {{ mapreel: window.__mapReady }};</script>
+</head>
+<body>
+<div id="root" data-composition-id="segment" data-start="0" data-width="{w}" data-height="{h}" data-duration="{duration}" data-no-timeline>
+<canvas id="map" width="{w}" height="{h}"></canvas>
+</div>
+<script id="segment-data" type="application/json">{data}</script>
+<script type="module" src="./runtime/main.mjs"></script>
+</body>
+</html>
+"""
+
+
+def _template_version() -> str:
+    return hashlib.sha256((_TEMPLATE + _CSS).encode()).hexdigest()[:12]
+
+
 def _link(src: Path, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -97,31 +126,16 @@ def write_project(doc: dict[str, Any], dest: Path, links: dict[str, Path]) -> Pa
         shutil.copy2(path, dest / "runtime" / path.name)
     for rel, src in links.items():
         _link(Path(src), dest / rel)
-    data = json.dumps(doc, ensure_ascii=False).replace("</", "<\\/")
-    html = f"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width={WIDTH}, height={HEIGHT}" />
-<style>{_CSS}</style>
-<script>window.__hf = window.__hf || {{}}; window.__mapReady = new Promise((r) => {{ window.__mapResolve = r; }}); window.__hf.buildReady = {{ mapreel: window.__mapReady }};</script>
-</head>
-<body>
-<div id="root" data-composition-id="segment" data-start="0" data-width="{WIDTH}" data-height="{HEIGHT}" data-duration="{doc['duration']:.3f}" data-no-timeline>
-<canvas id="map" width="{WIDTH}" height="{HEIGHT}"></canvas>
-</div>
-<script id="segment-data" type="application/json">{data}</script>
-<script type="module" src="./runtime/main.mjs"></script>
-</body>
-</html>
-"""
+    data = json.dumps(doc, ensure_ascii=False, allow_nan=False).replace("</", "<\\/")
+    html = _TEMPLATE.format(w=WIDTH, h=HEIGHT, css=_CSS, duration=f"{doc['duration']:.3f}", data=data)
     (dest / "index.html").write_text(html, encoding="utf-8")
     return dest
 
 
 def project_key(doc: dict[str, Any], links: dict[str, Path]) -> str:
-    digest = hashlib.sha256(json.dumps(doc, sort_keys=True).encode())
+    digest = hashlib.sha256(json.dumps(doc, sort_keys=True, allow_nan=False).encode())
     digest.update(RUNTIME_VERSION.encode())
+    digest.update(_template_version().encode())
     for rel in sorted(links):
         stat = Path(links[rel]).stat()
         digest.update(f"{rel}:{stat.st_size}:{stat.st_mtime_ns}".encode())
