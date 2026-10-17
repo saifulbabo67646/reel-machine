@@ -57,8 +57,9 @@ def retention_warnings(
 
     if not any(t <= HOOK_S for t in big_starts):
         warnings.append(
-            "hook: nothing big happens in the first half second — open on the payoff "
-            "(leap, slam, burst, smash, throw, splash) with `at` starting at 0")
+            "hook: nothing big happens in the first half second — open on the payoff with a big move "
+            f"({', '.join(name for name, m in MOVES.items() if m.big)}) or a component effect, "
+            "with `at` starting at 0")
     for a, b in zip(beats, beats[1:]):
         if b - a > MAX_GAP_S:
             where = next((s.id for s, w in zip(shots, windows) if w.start_ms / 1000 <= a < w.end_ms / 1000), "")
