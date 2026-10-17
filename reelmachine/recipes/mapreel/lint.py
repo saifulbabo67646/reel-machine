@@ -10,7 +10,7 @@ from typing import Any, Literal, Mapping, Sequence
 
 from ..explainer3d.markup import parse_markup, spoken_text
 from ..explainer3d.timing import ShotWindow, shot_windows
-from .kinds import RANK_AFTER_FILL_MS, VS_AT_MS
+from .kinds import RANK_AFTER_FILL_MS, VS_AT_MS, fill_ms
 from .models import MapReelInputs
 from .timing import FLY_MS, MIN_SEGMENT_MS, pop_times
 
@@ -103,10 +103,12 @@ def estimate_beats(inputs: MapReelInputs, windows: Sequence[ShotWindow], *,
         beats = list(times)
         if not segment.camera.hold:
             beats.append(0)
+        # the camera flies except into the first segment, a held one or a versus (as SegmentsStage decides)
+        fill = fill_ms(0 if index == 0 or segment.camera.hold or segment.kind == "versus" else FLY_MS)
         if segment.kind in ("country", "rank", "regions"):
-            beats.append(FLY_MS)
+            beats.append(fill)
         if segment.kind == "rank":
-            badge = FLY_MS + RANK_AFTER_FILL_MS
+            badge = fill + RANK_AFTER_FILL_MS
             beats.append(badge)
             if segment.stat:  # a value said before the badge lands waits for it
                 beats[0] = max(beats[0], badge)

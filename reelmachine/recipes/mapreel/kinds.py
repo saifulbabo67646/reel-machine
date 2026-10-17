@@ -18,6 +18,11 @@ from .timing import match, match_any, pop_times
 
 #: a rank segment's country and items sit below the badge (top left) and the stat card (top centre)
 RANK_SAFE = (0.08, 0.24, 0.92, 0.80)
+def fill_ms(fly_ms: int) -> int:
+    """When a segment's country fills: just before the flight lands, or at once when the camera does not fly."""
+    return max(300, fly_ms - 200)
+
+
 RANK_AFTER_FILL_MS = 150   # the badge lands just after the country fills ...
 STAT_AFTER_FILL_MS = 600   # ... and an unheard stat a beat after that
 #: a versus panel's country sits between its name (top) and its stat card (bottom), as fractions of the panel
@@ -106,7 +111,7 @@ def _items(seg: ResolvedSegment, spec: Any, ctx: KindContext, built: Built,
 
 def build_country(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:
     """One country, filled as the camera lands, its items popping as they are said."""
-    built = Built(places=[_place(seg, seg.codes[0], max(300, ctx.fly_ms - 200), ctx)])
+    built = Built(places=[_place(seg, seg.codes[0], fill_ms(ctx.fly_ms), ctx)])
     _items(seg, spec, ctx, built)
     return built
 
@@ -135,7 +140,7 @@ def count_spec(value: str) -> dict[str, Any] | None:
 def build_rank(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:
     """A country as a ranking entry: a big #N badge as it fills, a stat card that counts up when said."""
     code = seg.codes[0]
-    fill = max(300, ctx.fly_ms - 200)
+    fill = fill_ms(ctx.fly_ms)
     built = Built(places=[_place(seg, code, fill, ctx)])
     _items(seg, spec, ctx, built, safe=RANK_SAFE)
     rank = {"n": spec.rank, "atMs": fill + RANK_AFTER_FILL_MS, "colour": seg.colours[code], "gold": spec.rank == 1}
@@ -244,7 +249,7 @@ def build_regions(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:
     """A country's states: the country faint under every state border, each named state filling in its own
     colour when it is heard, its items laid out inside it and popping as they are said (never before it fills)."""
     country = seg.codes[0]
-    built = Built(places=[_place(seg, country, max(300, ctx.fly_ms - 200), ctx)])
+    built = Built(places=[_place(seg, country, fill_ms(ctx.fly_ms), ctx)])
     built.extras["countryFaint"] = True
     built.extras["borders"] = [ring for place in ctx.regions.in_country(country)
                                for ring in compose.place_rings(shape_of(place), ctx.landed)]

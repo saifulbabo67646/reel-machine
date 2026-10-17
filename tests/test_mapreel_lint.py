@@ -211,10 +211,16 @@ def test_a_versus_vs_beat_uses_the_runtime_time():
 
 
 def test_a_rank_badge_beat_lands_just_after_the_fill():
-    inputs = _inputs([highlight("Only 3 countries dress the world."), rank(1)])
-    windows = estimated_windows(inputs)
-    beats = lint.estimate_beats(inputs, windows)[1]
-    assert (windows[1].start_ms + lint.FLY_MS + kinds.RANK_AFTER_FILL_MS) / 1000 in beats
+    # no flight into the first segment: fill at 300, badge at 450; after a flight: fill 700, badge 850
+    first = _inputs([rank(1)])
+    w = estimated_windows(first)
+    assert (w[0].start_ms + 450) / 1000 in lint.estimate_beats(first, w)[0]
+    later = _inputs([highlight("Only 3 countries dress the world."), rank(1)])
+    w = estimated_windows(later)
+    assert (w[1].start_ms + 850) / 1000 in lint.estimate_beats(later, w)[1]
+    held = _inputs([highlight("Only 3 countries dress the world."), rank(1, camera={"hold": True})])
+    w = estimated_windows(held)
+    assert (w[1].start_ms + 450) / 1000 in lint.estimate_beats(held, w)[1]
 
 
 def test_a_versus_stat_is_one_beat_matched_on_its_value():
