@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
+import shutil
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -25,22 +28,36 @@ def _raw(settings: Settings, src: Path, *, x: int, y: int, w: int, h: int, out_w
     ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-v", "error", "-y", "-i", str(src),
                 "-vf", f"crop={w}:{h}:{x}:{y},scale={out_w}:{h}:flags=area",
                 "-f", "rawvideo", "-pix_fmt", "rgb24", str(out)])
-    data = np.fromfile(out, dtype=np.uint8).reshape(h, out_w, 3)
-    out.unlink(missing_ok=True)
-    return data
+    try:
+        return np.fromfile(out, dtype=np.uint8).reshape(h, out_w, 3)
+    finally:
+        out.unlink(missing_ok=True)
 
 
-def _encode(settings: Settings, rgb: np.ndarray, dest: Path) -> Path:
+def _encode(settings: Settings, rgb: np.ndarray, dest: Path, scratch: Path) -> Path:
+    """Encode in the job's own scratch folder, then move into the shared cache in one step."""
     dest.parent.mkdir(parents=True, exist_ok=True)
-    raw = dest.with_suffix(".rgb")
+    raw = scratch / "layer.rgb"
     np.ascontiguousarray(rgb).tofile(raw)
     h, w = rgb.shape[:2]
-    partial = dest.with_name(dest.stem + ".partial.jpg")
-    ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-v", "error", "-y", "-f", "rawvideo",
-                "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-i", str(raw), "-q:v", "3", str(partial)])
-    raw.unlink(missing_ok=True)
-    partial.replace(dest)
+    fd, name = tempfile.mkstemp(dir=dest.parent, prefix=dest.stem + ".", suffix=".partial.jpg")
+    os.close(fd)
+    partial = Path(name)
+    try:
+        ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-v", "error", "-y", "-f", "rawvideo",
+                    "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-i", str(raw), "-q:v", "3", str(partial)])
+        os.replace(partial, dest)
+    finally:
+        raw.unlink(missing_ok=True)
+        partial.unlink(missing_ok=True)
     return dest
+
+
+def _scratch(root: Path) -> Path:
+    """A private scratch folder: two jobs building layers at once never share a file name."""
+    base = Path(root) / "layers" / "scratch"
+    base.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(dir=base))
 
 
 def _mercator(settings: Settings, src: Path, lon0: float, lon1: float, y0: float, y1: float,
@@ -79,10 +96,12 @@ def world_layer(settings: Settings, root: Path) -> Path:
     if dest.is_file():
         return dest
     src = geodata.ensure(root, "world")
-    scratch = dest.parent / "scratch"
-    scratch.mkdir(parents=True, exist_ok=True)
-    rgb = _mercator(settings, src, -180.0, 180.0, 0.0, 1.0, WORLD_PX, WORLD_PX, scratch)
-    return _encode(settings, rgb, dest)
+    scratch = _scratch(root)
+    try:
+        rgb = _mercator(settings, src, -180.0, 180.0, 0.0, 1.0, WORLD_PX, WORLD_PX, scratch)
+        return _encode(settings, rgb, dest, scratch)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
 
 
 def detail_layer(settings: Settings, root: Path,
@@ -102,7 +121,9 @@ def detail_layer(settings: Settings, root: Path,
     out_w = int(min(native_w, long_side if aspect <= 1 else long_side / aspect))
     out_w = max(64, out_w)
     out_h = max(64, int(round(out_w * aspect)))
-    scratch = dest.parent / "scratch"
-    scratch.mkdir(parents=True, exist_ok=True)
-    rgb = _mercator(settings, src, x0 * 360 - 180, x1 * 360 - 180, y0, y1, out_w, out_h, scratch)
-    return _encode(settings, rgb, dest), actual
+    scratch = _scratch(root)
+    try:
+        rgb = _mercator(settings, src, x0 * 360 - 180, x1 * 360 - 180, y0, y1, out_w, out_h, scratch)
+        return _encode(settings, rgb, dest, scratch), actual
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)

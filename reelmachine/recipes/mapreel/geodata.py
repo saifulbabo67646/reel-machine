@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import json
+import os
+import tempfile
 from pathlib import Path
 
 import httpx
@@ -44,21 +47,48 @@ def _download(url: str, dest: Path) -> None:
                     handle.write(chunk)
 
 
+def _check(key: str, path: Path) -> str | None:
+    """Why a download is not the data it should be (an error page, a captive portal), or None."""
+    if key == "countries":
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            return f"not JSON ({exc})"
+        if not isinstance(data, dict) or not isinstance(data.get("features"), list):
+            return "JSON without a features list"
+        return None
+    with path.open("rb") as handle:
+        if handle.read(2) != b"\xff\xd8":
+            return "not a JPEG"
+    return None
+
+
 def ensure(root: Path, key: str) -> Path:
     name, url = FILES[key]
     path = Path(root) / name
     if path.is_file():
         return path
     path.parent.mkdir(parents=True, exist_ok=True)
-    partial = path.with_name(name + ".partial")
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=name + ".", suffix=".partial")
+    os.close(fd)
+    partial = Path(tmp)  # a name of its own: two jobs fetching at once never write the same file
     try:
-        _download(url, partial)
-    except (httpx.HTTPError, OSError) as exc:
+        try:
+            _download(url, partial)
+        except (httpx.HTTPError, OSError) as exc:
+            raise ProviderUnavailable(
+                f"could not fetch the map data {name!r}: {exc}",
+                hint=f"check the network; it is fetched once into {path.parent}",
+                details={"url": url},
+            ) from exc
+        problem = _check(key, partial)
+        if problem:
+            raise ProviderUnavailable(
+                f"the map data {name!r} downloaded, but it is {problem}",
+                hint=f"the source may be down or behind a login page; try again later, or place the file at {path}",
+                details={"url": url},
+            )
+        os.replace(partial, path)
+    finally:
         partial.unlink(missing_ok=True)
-        raise ProviderUnavailable(
-            f"could not fetch the map data {name!r}: {exc}",
-            hint=f"check the network; it is fetched once into {path.parent}",
-            details={"url": url},
-        ) from exc
-    partial.replace(path)
     return path

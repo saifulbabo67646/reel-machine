@@ -1,5 +1,6 @@
 # tests/test_mapreel_basemap.py
 import dataclasses
+import shutil
 import subprocess
 
 import numpy as np
@@ -73,6 +74,27 @@ def test_detail_layer_wraps_across_the_antimeridian(tmp_path):
     img = _rgb(settings, path)
     mid = img.shape[0] // 2
     assert img[mid, 5, 2] > 150 and img[mid, -5, 0] > 150  # east (blue) on the left, west (red) on the right
+
+
+def test_two_threads_building_different_layers_at_once_each_get_their_own(tmp_path):
+    """Jobs run in threads of one process and share the geo cache: no scratch file may be shared."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    settings = _settings(tmp_path)
+    root = tmp_path / "geo"
+    _seed_textures(settings, root)
+    west, east = (0.10, 0.30, 0.30, 0.50), (0.70, 0.30, 0.90, 0.50)  # all red, all blue
+    for _ in range(3):  # a few rounds, each from an empty layer cache
+        shutil.rmtree(root / "layers", ignore_errors=True)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            (west_path, _), (east_path, _) = pool.map(lambda b: basemap.detail_layer(settings, root, b),
+                                                      [west, east])
+        red, blue = _rgb(settings, west_path), _rgb(settings, east_path)
+        assert red[..., 0].mean() > 150 and red[..., 2].mean() < 100
+        assert blue[..., 2].mean() > 150 and blue[..., 0].mean() < 100
+    layers = root / "layers"
+    assert not list(layers.rglob("*.rgb")) and not list(layers.rglob("*.partial*"))
+    assert not any((layers / "scratch").iterdir())
 
 
 def test_palette_keeps_neighbours_and_cuts_distinct():

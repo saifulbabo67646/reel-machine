@@ -66,12 +66,38 @@ def test_ensure_downloads_once_and_reuses(tmp_path, monkeypatch):
 
     def fake_download(url, dest):
         calls.append(url)
-        dest.write_bytes(b"{}")
+        dest.write_bytes(b'{"features": []}')
 
     monkeypatch.setattr(geodata, "_download", fake_download)
     first = geodata.ensure(tmp_path, "countries")
     second = geodata.ensure(tmp_path, "countries")
-    assert first == second and first.read_bytes() == b"{}" and len(calls) == 1
+    assert first == second and first.read_bytes() == b'{"features": []}' and len(calls) == 1
+    assert sorted(p.name for p in tmp_path.iterdir()) == [first.name]  # no partial left behind
+
+
+@pytest.mark.parametrize("key", ["countries", "world", "detail"])
+def test_ensure_refuses_a_junk_download_and_does_not_cache_it(tmp_path, monkeypatch, key):
+    from reelmachine.core.errors import ProviderUnavailable
+    from reelmachine.recipes.mapreel import geodata
+
+    def html(url, dest):
+        dest.write_bytes(b"<html><body>Service unavailable</body></html>")
+
+    monkeypatch.setattr(geodata, "_download", html)
+    with pytest.raises(ProviderUnavailable) as err:
+        geodata.ensure(tmp_path, key)
+    assert "downloaded" in err.value.message and err.value.hint
+    assert list(tmp_path.iterdir()) == []  # neither the junk nor a partial is kept
+
+
+def test_ensure_refuses_json_without_features(tmp_path, monkeypatch):
+    from reelmachine.core.errors import ProviderUnavailable
+    from reelmachine.recipes.mapreel import geodata
+
+    monkeypatch.setattr(geodata, "_download", lambda url, dest: dest.write_bytes(b'{"error": "rate limited"}'))
+    with pytest.raises(ProviderUnavailable, match="features"):
+        geodata.ensure(tmp_path, "countries")
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_ensure_explains_a_network_failure(tmp_path, monkeypatch):
@@ -86,7 +112,7 @@ def test_ensure_explains_a_network_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(geodata, "_download", broken)
     with pytest.raises(ProviderUnavailable) as err:
         geodata.ensure(tmp_path, "world")
-    assert "once" in err.value.hint and not (tmp_path / geodata.FILES["world"][0]).exists()
+    assert "once" in err.value.hint and list(tmp_path.iterdir()) == []
 
 
 def test_a_territory_sharing_its_countrys_iso_code_does_not_replace_it(tmp_path):
