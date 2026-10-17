@@ -22,6 +22,7 @@ USER_AGENT = "reel-machine/mapreel"
 #: key -> (file name in the cache, URL)
 FILES: dict[str, tuple[str, str]] = {
     "countries": ("ne_10m_admin_0_countries.geojson", f"{_NE}/ne_10m_admin_0_countries.geojson"),
+    "regions": ("ne_10m_admin_1_states_provinces.geojson", f"{_NE}/ne_10m_admin_1_states_provinces.geojson"),
     "world": ("blue-marble-5400.jpg", f"{_BM}/world.topo.bathy.200412.3x5400x2700.jpg"),
     "detail": ("blue-marble-21600.jpg", f"{_BM}/world.topo.bathy.200412.3x21600x10800.jpg"),
 }
@@ -30,7 +31,7 @@ NATURAL_EARTH = Licence(name="Public domain", url="https://www.naturalearthdata.
                         attribution=f"Made with Natural Earth ({NE_VERSION})")
 BLUE_MARBLE = Licence(name="Public domain", url="https://visibleearth.nasa.gov/image-use-policy",
                       attribution="NASA Earth Observatory, Blue Marble: Next Generation (Reto Stöckli)")
-LICENCES: dict[str, Licence] = {"countries": NATURAL_EARTH, "world": BLUE_MARBLE, "detail": BLUE_MARBLE}
+LICENCES: dict[str, Licence] = {"countries": NATURAL_EARTH, "regions": NATURAL_EARTH, "world": BLUE_MARBLE, "detail": BLUE_MARBLE}
 
 
 def geo_cache(settings: Settings) -> Path:
@@ -49,7 +50,7 @@ def _download(url: str, dest: Path) -> None:
 
 def _check(key: str, path: Path) -> str | None:
     """Why a download is not the data it should be (an error page, a captive portal), or None."""
-    if key == "countries":
+    if key in ("countries", "regions"):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
