@@ -435,3 +435,21 @@ class McpTools:
         }
         return {"schemaVersion": SCHEMA_VERSION, "query": query, "kind": kind, "assets": found,
                 "hint": f"use one as {hints[kind]}" if found else "nothing matched; try a simpler word"}
+
+    @_guard
+    def find_places(self, ctx: Any, query: str, limit: int = 8) -> dict[str, Any]:
+        """Countries for mapreel segments, by code or by any of their names."""
+        from ..recipes.mapreel.places import atlas_for
+
+        self._caller(ctx)
+        found = atlas_for(self.engine.settings).search(query, limit=max(1, min(int(limit), 50)))
+        return {
+            "schemaVersion": SCHEMA_VERSION,
+            "query": query,
+            "places": found,
+            "hint": (
+                'use the code in a mapreel segment: {"kind": "country", "country": "<code>"} or '
+                '{"kind": "highlight", "countries": ["<code>", ...]}; an ambiguous name needs its code'
+                if found else "nothing matched; try the English name or an ISO 3166 alpha-3 code like 'ITA'"
+            ),
+        }

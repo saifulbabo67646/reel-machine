@@ -1,6 +1,6 @@
 # MCP reference
 
-reel-machine exposes its engine to agents through one MCP server with eleven tools, over
+reel-machine exposes its engine to agents through one MCP server with fourteen tools, over
 two transports: `stdio` (a local agent) and `streamable-http` (a hosted deployment).
 
 ```
@@ -228,6 +228,16 @@ a result in a cast member as `{"asset": {"model": "polyhaven:wooden_bowl_01", "s
 
 ```json
 {"query": "wooden bowl"}
+```
+
+### `find_places`
+
+Countries for a `mapreel` script, by code or by any name (`Holland` -> `NLD`). A name that
+means more than one country (`Korea`) comes back with `ambiguous: true` on each candidate;
+use the code. The Natural Earth data is fetched once on first use.
+
+```json
+{"query": "korea"}
 ```
 
 ### `find_assets`

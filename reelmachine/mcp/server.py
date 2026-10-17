@@ -114,6 +114,11 @@ DESCRIPTIONS: dict[str, str] = {
         "\"texture\" (floors, walls, counters). Read-only and free.\n"
         "Example: {\"query\": \"kitchen\", \"kind\": \"sky\"}"
     ),
+    "find_places": (
+        "Find countries for a mapreel script by name or code ('Holland', 'Korea', 'ITA'). Returns ISO "
+        "codes and flags names that mean more than one country. Fetches the map data once on first use.\n"
+        "Example: {\"query\": \"korea\"}"
+    ),
     "find_models": (
         "Search the CC0 3D model catalogue (Poly Haven, Khronos samples) for an explainer3d "
         "cast: bowls, food, rocks, plants, tools, a photoreal fish. Returns model sources "
@@ -226,6 +231,10 @@ def build_server(
     @server.tool(name="find_models", description=DESCRIPTIONS["find_models"])
     def find_models(ctx: Context, query: str, limit: int = 12) -> dict[str, Any]:
         return tools.find_models(ctx, query, limit)
+
+    @server.tool(name="find_places", description=DESCRIPTIONS["find_places"])
+    def find_places(ctx: Context, query: str, limit: int = 8) -> dict[str, Any]:
+        return tools.find_places(ctx, query, limit)
 
     @server.custom_route("/artifacts/{caller}/{job}/{name}", methods=["GET"], name="artifact")
     async def artifact_route(request: Any) -> Any:  # pragma: no cover - exercised over HTTP
