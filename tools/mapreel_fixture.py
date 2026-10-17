@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from reelmachine.recipes.mapreel.geodata import FILES  # noqa: E402
 from reelmachine.recipes.mapreel.geometry import simplify  # noqa: E402
 
-KEEP = {"ITA", "FRA", "USA", "RUS", "FJI", "KOR", "PRK", "NLD", "GBR", "JPN", "SGP", "NOR", "CHE", "DNK", "ZAF", "LSO"}
+KEEP = {"ITA", "FRA", "USA", "RUS", "FJI", "KOR", "PRK", "NLD", "GBR", "JPN", "SGP", "NOR", "CHE", "DNK", "ZAF", "LSO", "SWE", "VNM"}
 PROPS = ("ISO_A3_EH", "ADM0_A3", "ISO_A2_EH", "NAME", "NAME_LONG", "NAME_EN", "ADMIN", "FORMAL_EN",
          "BRK_NAME", "ABBREV", "NAME_ALT", "LABEL_X", "LABEL_Y")
 OUT = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "mapreel" / "countries.geojson"

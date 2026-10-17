@@ -1,0 +1,295 @@
+{
+  "title": "Foods only locals love",
+  "mode": "storyboard",
+  "voice": "fake:default",
+  "segments": [
+    {
+      "kind": "highlight",
+      "countries": [
+        "NLD",
+        "GBR",
+        "NOR",
+        "JPN",
+        "ITA"
+      ],
+      "legend": "Foods only locals love",
+      "narration": "Five foods you'd never eat. Number one is banned for sale."
+    },
+    {
+      "kind": "rank",
+      "rank": 5,
+      "country": "NLD",
+      "source": "https://en.wikipedia.org/wiki/Hagelslag",
+      "stat": {
+        "value": "750,000",
+        "label": "hagelslag sandwiches a day",
+        "source": "https://en.wikipedia.org/wiki/Hagelslag"
+      },
+      "narration": "Number five, the Netherlands: 750,000 a day. Hagelslag: chocolate sprinkles on bread.",
+      "items": [
+        {
+          "name": "Hagelslag",
+          "emoji": "🍫",
+          "source": "https://en.wikipedia.org/wiki/Hagelslag"
+        },
+        {
+          "name": "Sprinkles",
+          "emoji": "✨",
+          "source": "https://en.wikipedia.org/wiki/Hagelslag"
+        },
+        {
+          "name": "Bread",
+          "emoji": "🍞",
+          "source": "https://en.wikipedia.org/wiki/Hagelslag"
+        }
+      ]
+    },
+    {
+      "kind": "rank",
+      "rank": 4,
+      "country": "GBR",
+      "source": "https://en.wikipedia.org/wiki/Marmite",
+      "narration": "Number four, Britain: Marmite, made from beer leftovers. Love it? Hate it?",
+      "items": [
+        {
+          "name": "Marmite",
+          "emoji": "🫙",
+          "source": "https://en.wikipedia.org/wiki/Marmite"
+        },
+        {
+          "name": "Beer",
+          "emoji": "🍺",
+          "source": "https://en.wikipedia.org/wiki/Marmite"
+        },
+        {
+          "name": "Love it",
+          "emoji": "❤️",
+          "source": "https://en.wikipedia.org/wiki/Marmite"
+        },
+        {
+          "name": "Hate it",
+          "emoji": "💔",
+          "source": "https://en.wikipedia.org/wiki/Marmite"
+        }
+      ]
+    },
+    {
+      "kind": "country",
+      "country": "FRA",
+      "narration": "Bonus, France: snails. And frog legs, about 4,000 tonnes every year.",
+      "items": [
+        {
+          "name": "Snails",
+          "emoji": "🐌",
+          "source": "https://en.wikipedia.org/wiki/Escargot"
+        },
+        {
+          "name": "Frog legs",
+          "emoji": "🐸",
+          "source": "https://en.wikipedia.org/wiki/Frog_legs"
+        },
+        {
+          "name": "4,000 tonnes",
+          "say": "about 4,000",
+          "emoji": "⚖️",
+          "source": "https://en.wikipedia.org/wiki/Frog_legs"
+        },
+        {
+          "name": "Every year",
+          "emoji": "📅",
+          "source": "https://en.wikipedia.org/wiki/Frog_legs"
+        }
+      ]
+    },
+    {
+      "kind": "rank",
+      "rank": 3,
+      "country": "NOR",
+      "source": "https://en.wikipedia.org/wiki/Lutefisk",
+      "narration": "Number three, Norway: lutefisk. Dried fish, cured in lye, for Christmas.",
+      "items": [
+        {
+          "name": "Lutefisk",
+          "emoji": "🐟",
+          "source": "https://en.wikipedia.org/wiki/Lutefisk"
+        },
+        {
+          "name": "Dried fish",
+          "say": "fish",
+          "emoji": "🎣",
+          "source": "https://en.wikipedia.org/wiki/Lutefisk"
+        },
+        {
+          "name": "Lye",
+          "emoji": "🧪",
+          "source": "https://en.wikipedia.org/wiki/Lutefisk"
+        },
+        {
+          "name": "Christmas",
+          "emoji": "🎄",
+          "source": "https://en.wikipedia.org/wiki/Lutefisk"
+        }
+      ]
+    },
+    {
+      "kind": "versus",
+      "countries": [
+        "VNM",
+        "KOR",
+        "JPN"
+      ],
+      "stats": [
+        {
+          "value": "81",
+          "label": "instant noodles per person, 2024",
+          "source": "https://www.koreatimes.co.kr/amp/southkorea/society/20251009/koreans-per-capita-ramyeon-consumption-ranks-2nd-after-vietnam"
+        },
+        {
+          "value": "79",
+          "label": "instant noodles per person, 2024",
+          "source": "https://www.koreatimes.co.kr/amp/southkorea/society/20251009/koreans-per-capita-ramyeon-consumption-ranks-2nd-after-vietnam"
+        },
+        {
+          "value": "47",
+          "label": "instant noodles per person, 2024",
+          "source": "https://www.koreatimes.co.kr/amp/southkorea/society/20251009/koreans-per-capita-ramyeon-consumption-ranks-2nd-after-vietnam"
+        }
+      ],
+      "narration": "Noodles a head? Vietnam: 81. South Korea: 79. Japan: 47."
+    },
+    {
+      "kind": "rank",
+      "rank": 2,
+      "country": "JPN",
+      "source": "https://en.wikipedia.org/wiki/Natt%C5%8D",
+      "narration": "Number two, Japan: natto. Fermented soybeans. Sticky. Powerful smell. Often for breakfast.",
+      "items": [
+        {
+          "name": "Natto",
+          "emoji": "🫘",
+          "source": "https://en.wikipedia.org/wiki/Natt%C5%8D"
+        },
+        {
+          "name": "Soybeans",
+          "say": "fermented soybeans",
+          "emoji": "🫛",
+          "source": "https://en.wikipedia.org/wiki/Natt%C5%8D"
+        },
+        {
+          "name": "Sticky",
+          "emoji": "🕸️",
+          "source": "https://en.wikipedia.org/wiki/Natt%C5%8D"
+        },
+        {
+          "name": "Smell",
+          "emoji": "👃",
+          "source": "https://en.wikipedia.org/wiki/Natt%C5%8D"
+        },
+        {
+          "name": "Breakfast",
+          "emoji": "🍚",
+          "source": "https://en.wikipedia.org/wiki/Natt%C5%8D"
+        }
+      ]
+    },
+    {
+      "kind": "regions",
+      "country": "JPN",
+      "narration": "Now, every region has its own. Hokkaido: jingisukan, grilled mutton. Osaka: takoyaki, octopus balls. Tokyo: monjayaki.",
+      "regions": [
+        {
+          "region": "JP-01",
+          "say": "Hokkaido",
+          "items": [
+            {
+              "name": "Jingisukan",
+              "emoji": "🐑",
+              "source": "https://en.wikipedia.org/wiki/Jingisukan"
+            },
+            {
+              "name": "Grilled mutton",
+              "emoji": "🍖",
+              "source": "https://en.wikipedia.org/wiki/Jingisukan"
+            }
+          ]
+        },
+        {
+          "region": "JP-27",
+          "say": "Osaka",
+          "items": [
+            {
+              "name": "Takoyaki",
+              "emoji": "🐙",
+              "source": "https://en.wikipedia.org/wiki/Takoyaki"
+            },
+            {
+              "name": "Octopus balls",
+              "emoji": "🧆",
+              "source": "https://en.wikipedia.org/wiki/Takoyaki"
+            }
+          ]
+        },
+        {
+          "region": "JP-13",
+          "say": "Tokyo",
+          "items": [
+            {
+              "name": "Monjayaki",
+              "emoji": "🥞",
+              "source": "https://en.wikipedia.org/wiki/Monjayaki"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "rank",
+      "rank": 1,
+      "country": "ITA",
+      "source": "https://en.wikipedia.org/wiki/Casu_martzu",
+      "narration": "And number one, Italy: casu martzu. Sardinian sheep cheese, with live maggots. Banned for sale.",
+      "items": [
+        {
+          "name": "Casu martzu",
+          "emoji": "🧀",
+          "source": "https://en.wikipedia.org/wiki/Casu_martzu"
+        },
+        {
+          "name": "Sardinia",
+          "say": "Sardinian",
+          "emoji": "🏝️",
+          "source": "https://en.wikipedia.org/wiki/Casu_martzu"
+        },
+        {
+          "name": "Sheep's milk",
+          "say": "sheep",
+          "emoji": "🐑",
+          "source": "https://en.wikipedia.org/wiki/Casu_martzu"
+        },
+        {
+          "name": "Live maggots",
+          "emoji": "🐛",
+          "source": "https://en.wikipedia.org/wiki/Casu_martzu"
+        },
+        {
+          "name": "Banned",
+          "emoji": "🚫",
+          "source": "https://en.wikipedia.org/wiki/Casu_martzu"
+        }
+      ]
+    },
+    {
+      "kind": "highlight",
+      "countries": [
+        "NLD",
+        "GBR",
+        "FRA",
+        "NOR",
+        "KOR",
+        "JPN",
+        "ITA"
+      ],
+      "narration": "Which one would you actually try? Tell me in the comments."
+    }
+  ]
+}

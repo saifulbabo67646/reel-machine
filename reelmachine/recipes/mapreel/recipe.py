@@ -15,38 +15,49 @@ from ..explainer3d.markup import parse_markup, spoken_text
 from .models import MapReelInputs
 from .places import atlas_for
 from .regions import region_atlas_for
+from .guide import GUIDE
 from . import lint
 from .stages import (ComposeStage, GeoStage, ImagesStage, NarrationStage, PrepStage, RenderStage,
                      ScriptStage, SegmentsStage, check_music, estimated_windows, heard_names, resolve_segments)
 
-GUIDE = {
-    "workflow": [
-        "1. Pick a topic people argue about in the comments (brands, dishes, inventions, bans) and research "
-        "every fact you will say; keep the source URL.",
-        "2. Write the hook first: segment 1 opens on a surprise, a number, a challenge or 'you' — never "
-        "'X has…'. Tease a payoff you deliver at the end.",
-        "3. Resolve places with find_places (codes like 'ITA'); one country per 'country' segment, 1-8 items, "
-        "listed in the order the narration names them.",
-        "4. Use a 'highlight' segment for the hook or a reveal (several countries at once with a legend).",
-        "5. probe and fix every failed check; start_job with mode 'storyboard', look at storyboard.jpg, "
-        "then start_job with mode 'build'.",
-    ],
-    "tips": [
-        "Items pop when the voice says their name: write the name in the narration exactly, or give `say` "
-        "for how it is pronounced and `at` (seconds) to force a time.",
-        "Keep a new visual every second: 3-5 items per country segment, segments of 3-5 seconds.",
-        "`image` takes a local file or an https URL; anything unusable shows as a bold text badge.",
-    ],
-}
+WIKI = "https://en.wikipedia.org/wiki/"
+NOODLES = ("https://www.koreatimes.co.kr/amp/southkorea/society/20251009/"
+           "koreans-per-capita-ramyeon-consumption-ranks-2nd-after-vietnam")
 
 EXAMPLE = {
     "mode": "storyboard",
-    "title": "Brands you didn't know were from these countries",
+    "title": "Foods only locals love",
     "segments": [
-        {"kind": "highlight", "countries": ["USA", "ITA", "FRA"], "legend": "Fashion superpowers",
-         "narration": "Only *3 countries* dress the whole world. Number one will surprise you."},
-        {"kind": "country", "country": "ITA", "narration": "Italy has Gucci, Prada and Versace.",
-         "items": [{"name": "Gucci"}, {"name": "Prada"}, {"name": "Versace"}]},
+        {"kind": "highlight", "countries": ["FRA", "VNM", "KOR", "JPN", "ITA"], "legend": "Foods only locals love",
+         "narration": "Foods you'd never eat. Number one is banned for sale."},
+        {"kind": "country", "country": "FRA", "narration": "France: snails. And frog legs, about 4,000 tonnes every year.",
+         "items": [{"name": "Snails", "emoji": "🐌", "source": WIKI + "Escargot"},
+                   {"name": "Frog legs", "emoji": "🐸", "source": WIKI + "Frog_legs"},
+                   {"name": "4,000 tonnes", "say": "about 4,000", "emoji": "⚖️", "source": WIKI + "Frog_legs"},
+                   {"name": "Every year", "emoji": "📅", "source": WIKI + "Frog_legs"}]},
+        {"kind": "versus", "countries": ["VNM", "KOR", "JPN"],
+         "stats": [{"value": "81", "label": "instant noodles per person, 2024", "source": NOODLES},
+                   {"value": "79", "label": "instant noodles per person, 2024", "source": NOODLES},
+                   {"value": "47", "label": "instant noodles per person, 2024", "source": NOODLES}],
+         "narration": "Noodles a head? Vietnam: 81. South Korea: 79. Japan: 47."},
+        {"kind": "regions", "country": "JPN",
+         "narration": "Now, every region has its own. Hokkaido: jingisukan, grilled mutton. "
+                      "Osaka: takoyaki, octopus balls. Tokyo: monjayaki.",
+         "regions": [{"region": "JP-01", "say": "Hokkaido",
+                      "items": [{"name": "Jingisukan", "emoji": "🐑", "source": WIKI + "Jingisukan"},
+                                {"name": "Grilled mutton", "emoji": "🍖", "source": WIKI + "Jingisukan"}]},
+                     {"region": "JP-27", "say": "Osaka",
+                      "items": [{"name": "Takoyaki", "emoji": "🐙", "source": WIKI + "Takoyaki"},
+                                {"name": "Octopus balls", "emoji": "🧆", "source": WIKI + "Takoyaki"}]},
+                     {"region": "JP-13", "say": "Tokyo",
+                      "items": [{"name": "Monjayaki", "emoji": "🥞", "source": WIKI + "Monjayaki"}]}]},
+        {"kind": "rank", "rank": 1, "country": "ITA", "source": WIKI + "Casu_martzu",
+         "narration": "And number one, Italy: casu martzu. Sardinian sheep cheese, with live maggots. Banned for sale.",
+         "items": [{"name": "Casu martzu", "emoji": "🧀"}, {"name": "Sardinia", "say": "Sardinian", "emoji": "🏝️"},
+                   {"name": "Sheep's milk", "say": "sheep", "emoji": "🐑"}, {"name": "Live maggots", "emoji": "🐛"},
+                   {"name": "Banned", "emoji": "🚫"}]},
+        {"kind": "highlight", "countries": ["FRA", "VNM", "KOR", "JPN", "ITA"],
+         "narration": "Which one would you actually try? Tell me in the comments."},
     ],
 }
 

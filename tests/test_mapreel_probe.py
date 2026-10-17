@@ -167,3 +167,71 @@ def test_a_weak_opener_only_warns_in_a_storyboard_or_with_lint_warn(tmp_path):
         report = _probe(tmp_path / name, seg, **extra)
         assert next(c for c in report.checks if c.name == "hook").ok, extra
         assert any(f["rule"] == "weak-opener" and f["severity"] == "warning" for f in report.details["lint"])
+
+
+# -- the guide and the examples ---------------------------------------------------------
+
+EXAMPLES = Path(__file__).parents[1] / "examples" / "mapreel"
+KINDS = {"country", "highlight", "rank", "versus", "regions"}
+
+
+def test_the_guide_has_every_section_an_agent_needs():
+    from reelmachine.recipes.mapreel.guide import GUIDE
+
+    assert MapReelRecipe.spec.guide is GUIDE
+    for key in ("workflow", "kinds", "hooks", "rehooks", "endings", "topics", "lint", "tips"):
+        assert GUIDE[key], key
+    assert any("find_places" in step and "country=" in step for step in GUIDE["workflow"])
+    assert len(GUIDE["hooks"]) == 5 and len(GUIDE["rehooks"]) == 10 and len(GUIDE["endings"]) == 4
+    assert len(GUIDE["topics"]) >= 30 and len(set(GUIDE["topics"])) == len(GUIDE["topics"])
+    assert all(any(line.startswith(kind) for line in GUIDE["kinds"]) for kind in KINDS)
+    rules = ("weak-opener", "unpaid-loop", "beat-gap", "no-rehook", "monotony", "length", "unsourced", "no-ending")
+    assert all(any(line.startswith(rule) for line in GUIDE["lint"]) for rule in rules)
+    assert any('lint: "warn"' in line for line in GUIDE["lint"])
+    assert any("source" in tip for tip in GUIDE["tips"])
+
+
+def _example_ctx(tmp_path):
+    ctx = _ctx(tmp_path)
+    shutil.copy2(FIXTURE.parent / "regions.geojson", geodata.geo_cache(ctx.config) / geodata.FILES["regions"][0])
+    return ctx
+
+
+def _strict(tmp_path, script):
+    inputs = MapReelInputs.model_validate({**script, "mode": "build", "lint": "strict"})
+    return MapReelRecipe().probe(inputs, _example_ctx(tmp_path))
+
+
+def test_the_recipe_example_uses_every_shot_and_probes_clean(tmp_path):
+    example = MapReelRecipe.spec.example
+    assert {s["kind"] for s in example["segments"]} == KINDS
+    report = _strict(tmp_path, example)
+    assert report.ok, report.checks
+    assert report.details["lint"] == []
+
+
+def test_the_food_example_uses_every_shot_with_sources_and_passes_every_lint_rule(tmp_path):
+    import json
+
+    food = json.loads((EXAMPLES / "food.json").read_text(encoding="utf-8"))
+    kinds = [s["kind"] for s in food["segments"]]
+    assert set(kinds) == KINDS and 8 <= len(kinds) <= 10 and food["voice"] == "fake:default"
+    assert kinds[0] == "highlight" and kinds[-1] == "highlight"
+    assert any(s["kind"] == "rank" and s["rank"] == 1 for s in food["segments"])
+    items = [it for s in food["segments"] for it in
+             [*s.get("items", []), *(i for r in s.get("regions", []) for i in r.get("items", []))]]
+    assert items and all(it.get("emoji") for it in items)
+    stats = [st for s in food["segments"] for st in [*([s["stat"]] if s.get("stat") else []), *s.get("stats", [])]]
+    assert stats and all(st.get("source", "").startswith("https://") for st in stats)
+    report = _strict(tmp_path, food)
+    assert report.ok, report.checks
+    assert report.details["lint"] == []
+
+
+def test_the_brands_example_still_probes_with_no_lint_error(tmp_path):
+    import json
+
+    brands = json.loads((EXAMPLES / "brands.json").read_text(encoding="utf-8"))
+    report = _strict(tmp_path, brands)
+    assert report.ok, report.checks
+    assert not [f for f in report.details["lint"] if f["severity"] == "error"]
