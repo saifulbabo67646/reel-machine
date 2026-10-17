@@ -105,6 +105,10 @@ class VersusSegment(_Segment):
     def _one_stat_each(self) -> "VersusSegment":
         if len(self.stats) != len(self.countries):
             raise ValueError("versus needs one stat per country")
+        # as written ("JPN" twice); a name and a code for one country ("Japan", "JPN") is caught on resolution
+        written = [c.strip().casefold() for c in self.countries]
+        if len(set(written)) != len(written):
+            raise ValueError("versus needs different countries: one is listed twice")
         return self
 
 

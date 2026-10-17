@@ -68,6 +68,10 @@ def resolve_segments(inputs: MapReelInputs, atlas: Atlas) -> list[ResolvedSegmen
                 field = "country" if segment.kind in ("country", "rank") else f"countries[{j}]"
                 exc.details["path"] = f"segments[{index}].{field}"
                 raise
+            if segment.kind == "versus" and place.code in codes:  # "Japan" and "JPN": one panel twice
+                raise InvalidInput(f"versus needs different countries: {query!r} is {place.name} again",
+                                   hint="compare two or three different countries",
+                                   details={"path": f"segments[{index}].countries[{j}]"})
             codes.append(place.code)
             names[place.code] = place.name
         resolved.append((seg_id, index, segment, codes, names))

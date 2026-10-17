@@ -157,7 +157,9 @@ function drawItem(ctx, item, ms, images) {
   ctx.restore();
 }
 
-function caption(ctx, words, seconds, y = H * 0.71) {
+const CAPTION_Y = H * 0.71, CAPTION_HALF = 43; // the caption band: 60 px text and its 10 px stroke, plus air
+
+function caption(ctx, words, seconds) {
   const i = activeWord(words, seconds);
   if (i < 0) return;
   const w = words[i];
@@ -168,9 +170,9 @@ function caption(ctx, words, seconds, y = H * 0.71) {
   ctx.lineWidth = 10;
   ctx.strokeStyle = "rgba(0,0,0,0.85)";
   ctx.lineJoin = "round";
-  ctx.strokeText(w.text, W / 2, y);
+  ctx.strokeText(w.text, W / 2, CAPTION_Y);
   ctx.fillStyle = w.hot ? "#ffe14a" : "#ffffff";
-  ctx.fillText(w.text, W / 2, y);
+  ctx.fillText(w.text, W / 2, CAPTION_Y);
   ctx.restore();
 }
 
@@ -277,7 +279,8 @@ function statCard(ctx, stat, ms, colour, at = null) {
 const PANEL_CARD_INSET = 60, VS_R = 95, VS_GAP = 14;
 
 // The country's name across the top of its panel: white, dark-stroked, shrunk to the panel's width,
-// and never higher than `minY` (the panel under the VS disc keeps its name clear of it).
+// never higher than `minY` (the panel under the VS disc keeps its name clear of it) and never on the
+// caption band (with three panels the third name would sit on it: it moves just below).
 function panelName(ctx, name, rect, minY) {
   const [rx, ry, rw, rh] = rect;
   ctx.save();
@@ -289,7 +292,10 @@ function panelName(ctx, name, rect, minY) {
   ctx.lineJoin = "round";
   ctx.lineWidth = 10;
   ctx.strokeStyle = "rgba(0,0,0,0.85)";
-  const y = Math.max(ry + 0.12 * rh, minY + size / 2);
+  let y = Math.max(ry + 0.12 * rh, minY + size / 2);
+  if (y + size / 2 > CAPTION_Y - CAPTION_HALF && y - size / 2 < CAPTION_Y + CAPTION_HALF) {
+    y = CAPTION_Y + CAPTION_HALF + VS_GAP + size / 2;
+  }
   ctx.strokeText(name, rx + rw / 2, y);
   ctx.fillStyle = "#ffffff";
   ctx.fillText(name, rx + rw / 2, y);
@@ -356,8 +362,7 @@ function drawVersus(ctx, doc, images, seconds) {
   ctx.fillStyle = "#ffffff";
   for (const panel of doc.panels.slice(1)) ctx.fillRect(0, panel.rect[1] - 3, W, 6);
   if (discY !== null) vsDisc(ctx, doc.vs, discY, ms);
-  // three panels: the caption sits on the second boundary, between a stat card and the next name
-  caption(ctx, doc.words, seconds, doc.panels.length > 2 ? doc.panels[2].rect[1] : H * 0.71);
+  caption(ctx, doc.words, seconds);
 }
 
 export function drawFrame(ctx, doc, images, seconds) {

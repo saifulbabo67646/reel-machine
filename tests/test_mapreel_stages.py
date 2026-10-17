@@ -229,3 +229,15 @@ def test_segments_after_a_versus_fly_from_its_union_frame(tmp_path, monkeypatch)
     assert after["camera"]["from"] == pytest.approx(frames["seg-1"])
     assert "layers/prev-detail.jpg" not in [layer["url"] for layer in docs["seg-2"]["layers"]]
     assert docs["seg-2"]["previous"] == []
+
+
+def test_a_versus_naming_one_country_twice_fails_on_resolution():
+    from reelmachine.core.errors import InvalidInput
+    from reelmachine.recipes.mapreel.places import Atlas
+
+    inputs = MapReelInputs.model_validate({"segments": [{
+        "kind": "versus", "countries": ["Japan", "JPN"], "narration": "Japan versus Japan.",
+        "stats": [{"value": "1"}, {"value": "2"}]}]})
+    with pytest.raises(InvalidInput, match="different countries") as caught:
+        stages.resolve_segments(inputs, Atlas.load(FIXTURE))
+    assert caught.value.details["path"] == "segments[0].countries[1]"

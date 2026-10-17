@@ -94,3 +94,10 @@ def test_bad_versus_segments_are_refused(bad):
 def test_a_mismatched_versus_says_why():
     with pytest.raises(ValidationError, match="versus needs one stat per country"):
         MapReelInputs.model_validate({"segments": [_versus(stats=[{"value": "1"}] * 3)]})
+
+
+@pytest.mark.parametrize("countries", [["JPN", "JPN"], ["Japan", " japan ", "USA"]])
+def test_a_versus_refuses_the_same_country_twice(countries):
+    with pytest.raises(ValidationError, match="versus needs different countries"):
+        MapReelInputs.model_validate({"segments": [_versus(countries=countries,
+                                                           stats=[{"value": "1"}] * len(countries))]})
