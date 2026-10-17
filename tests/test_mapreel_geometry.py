@@ -81,3 +81,14 @@ def test_item_anchors_fall_back_to_a_column_for_a_sliver():
     sliver = [np.array([[500.0, 900.0], [520.0, 900.0], [520.0, 920.0], [500.0, 920.0]])]
     anchors = g.item_anchors(sliver, 3)
     assert len(anchors) == 3 and len({round(y) for _, y in anchors}) == 3
+
+
+def test_item_anchors_keep_clear_of_the_border():
+    """Farthest-point spreading used to put badges right on the coast (half the text off the
+    country). Where the place is wide enough, every anchor keeps a badge's half-width inside."""
+    for code in ("USA", "FRA", "ITA"):
+        shape = g.shape_of(ATLAS.resolve(code))
+        frame = g.frame_for(shape.main)
+        rings = [g.to_screen(frame, r) for r in shape.rings]
+        for x, y in g.item_anchors(rings, 4):
+            assert all(g.inside(rings, x + dx, y + dy) for dx, dy in ((-70, 0), (70, 0), (0, -30), (0, 30))), code

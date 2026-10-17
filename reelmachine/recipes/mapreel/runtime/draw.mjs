@@ -1,6 +1,6 @@
 // reelmachine/recipes/mapreel/runtime/draw.mjs
 // Draws one frame of a map segment on a 2D canvas.
-import { cameraAt, fillAlpha, popState, activeWord } from "./pure.mjs";
+import { cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines } from "./pure.mjs";
 
 const W = 1080, H = 1920;
 const FONT = '"Arial Black", "Helvetica Neue", Arial, sans-serif';
@@ -68,7 +68,10 @@ function ghostName(ctx, cam, place, alpha, seconds) {
   ctx.globalAlpha = 0.22 * alpha;
   ctx.translate(px + seconds * 12, py);
   ctx.rotate(-0.14);
-  ctx.font = `900 ${Math.round(W * 0.16)}px ${FONT}`;
+  const base = Math.round(W * 0.16);
+  ctx.font = `900 ${base}px ${FONT}`;
+  // a long name ("United States of America") shrinks to stay on screen rather than run off it
+  ctx.font = `900 ${fitFontPx(base, ctx.measureText(place.name).width, W * 0.92)}px ${FONT}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#ffffff";
@@ -93,9 +96,11 @@ function drawItem(ctx, item, ms, images) {
     const k = Math.min(item.size / img.width, (item.size * 0.62) / img.height);
     ctx.drawImage(img, (-img.width * k) / 2, (-img.height * k) / 2, img.width * k, img.height * k);
   } else {
+    const lines = badgeLines(item.name);
+    const widest = () => Math.max(...lines.map((line) => ctx.measureText(line).width));
     let size = Math.round(item.size * 0.24);
     ctx.font = `900 ${size}px ${FONT}`;
-    while (ctx.measureText(item.name).width > item.size * 1.1 && size > 28) {
+    while (widest() > item.size * 1.1 && size > 28) {
       size -= 4;
       ctx.font = `900 ${size}px ${FONT}`;
     }
@@ -110,7 +115,8 @@ function drawItem(ctx, item, ms, images) {
     ctx.shadowBlur = 14;
     ctx.shadowOffsetY = 0;
     ctx.fillStyle = "#111111";
-    ctx.fillText(item.name, 0, item.emoji ? size * 0.25 : 0);
+    const top = (item.emoji ? size * 0.25 : 0) - ((lines.length - 1) * size * 1.05) / 2;
+    lines.forEach((line, k) => ctx.fillText(line, 0, top + k * size * 1.05));
   }
   ctx.restore();
 }

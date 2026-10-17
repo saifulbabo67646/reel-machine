@@ -67,3 +67,21 @@ export function activeWord(words, seconds) {
   }
   return -1;
 }
+
+// A font size that keeps text measured at `basePx` within `maxWidth` (never larger than base).
+export function fitFontPx(basePx, measuredWidth, maxWidth) {
+  if (!(measuredWidth > maxWidth)) return basePx;
+  return Math.max(1, Math.floor((basePx * maxWidth) / measuredWidth));
+}
+
+// A text badge's lines: a long multi-word name breaks at the space nearest its middle, so it
+// can be drawn twice as large ("Comme des Garçons" -> "Comme des" / "Garçons").
+export function badgeLines(name) {
+  const text = String(name || "");
+  if (text.length <= 8) return [text];
+  let best = -1;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === " " && (best < 0 || Math.abs(i - text.length / 2) < Math.abs(best - text.length / 2))) best = i;
+  }
+  return best < 0 ? [text] : [text.slice(0, best), text.slice(best + 1)];
+}

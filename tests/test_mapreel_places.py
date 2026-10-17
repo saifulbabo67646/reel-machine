@@ -87,3 +87,24 @@ def test_ensure_explains_a_network_failure(tmp_path, monkeypatch):
     with pytest.raises(ProviderUnavailable) as err:
         geodata.ensure(tmp_path, "world")
     assert "once" in err.value.hint and not (tmp_path / geodata.FILES["world"][0]).exists()
+
+
+def test_a_territory_sharing_its_countrys_iso_code_does_not_replace_it(tmp_path):
+    """Natural Earth gives Clipperton I. ISO_A3_EH 'FRA'; listed after France it used to win 'FRA'."""
+    import json
+
+    def feature(name, adm0, iso3, iso2, lon):
+        ring = [[lon, 0], [lon + 1, 0], [lon + 1, 1], [lon, 1], [lon, 0]]
+        return {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [ring]},
+                "properties": {"NAME": name, "ADMIN": name, "ADM0_A3": adm0, "ISO_A3_EH": iso3,
+                               "ISO_A2_EH": iso2, "LABEL_X": lon, "LABEL_Y": 0.5}}
+
+    path = tmp_path / "countries.geojson"
+    path.write_text(json.dumps({"type": "FeatureCollection", "features": [
+        feature("France", "FRA", "FRA", "FR", 2), feature("Clipperton I.", "CLP", "FRA", "FR", -109),
+        feature("S. Sudan", "SDS", "SSD", "SS", 30)]}))
+    atlas = Atlas.load(path)
+    for query in ("FRA", "France", "FR"):
+        assert atlas.resolve(query).name == "France"
+    assert atlas.resolve("Clipperton I.").code == "CLP"
+    assert atlas.resolve("SSD").name == "S. Sudan"  # a lone ISO code that differs from ADM0_A3 still wins

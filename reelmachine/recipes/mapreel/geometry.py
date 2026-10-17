@@ -178,6 +178,10 @@ def inside(rings_px: list[np.ndarray], x: float | np.ndarray, y: float | np.ndar
     return hit if np.ndim(x) else bool(hit[0])
 
 
+#: (x, y) clearances from the border an item anchor tries for, widest first
+INSETS = ((110.0, 45.0), (70.0, 30.0), (35.0, 15.0))
+
+
 def item_anchors(rings_px: list[np.ndarray], n: int, *, step: float = 24.0) -> list[tuple[float, float]]:
     """`n` points inside the place and inside the safe area, spread as far apart as possible
     (greedy farthest-point). A place too small to hold them gets a column at its centre."""
@@ -187,6 +191,14 @@ def item_anchors(rings_px: list[np.ndarray], n: int, *, step: float = 24.0) -> l
     gx, gy = gx.ravel(), gy.ravel()
     mask = inside(rings_px, gx, gy)
     pts = np.column_stack([gx[mask], gy[mask]])
+    for mx, my in INSETS:  # keep a badge's width clear of the border where the place allows
+        deep = pts
+        for f in (0.5, 1.0):  # half and full clearance, so a narrow inlet is not jumped over
+            for dx, dy in ((-mx, 0), (mx, 0), (0, -my), (0, my)):
+                deep = deep[inside(rings_px, deep[:, 0] + dx * f, deep[:, 1] + dy * f)]
+        if len(deep) >= n * 4:
+            pts = deep
+            break
     if len(pts) < n * 4:
         allpts = np.concatenate(rings_px)
         cx = float(np.clip(allpts[:, 0].mean(), sx0 * WIDTH + 180, sx1 * WIDTH - 180))

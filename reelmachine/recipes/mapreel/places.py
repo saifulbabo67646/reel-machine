@@ -46,9 +46,13 @@ class Place:
     level: str = "country"
 
 
-def _code(props: dict[str, Any]) -> str:
+def _code(props: dict[str, Any], adm0: set[str]) -> str:
+    """The ISO code, unless the feature is a territory sharing its country's ISO code
+    (Clipperton I. carries ISO_A3_EH 'FRA', Coral Sea Is. 'AUS'): those keep their own ADM0_A3."""
     code = props.get("ISO_A3_EH") or "-99"
-    return props["ADM0_A3"] if code == "-99" else code
+    if code == "-99" or (code != props["ADM0_A3"] and code in adm0):
+        return props["ADM0_A3"]
+    return code
 
 
 def _rings(geometry: dict[str, Any]) -> tuple[tuple[Ring, ...], ...]:
@@ -113,14 +117,16 @@ def _load(path: str, _mtime: int) -> Atlas:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     places: dict[str, Place] = {}
     keys: dict[str, set[str]] = {}
+    adm0 = {f["properties"]["ADM0_A3"] for f in data["features"] if f.get("geometry")}
     for feature in data["features"]:
         props, geometry = feature["properties"], feature.get("geometry")
         if not geometry:
             continue
-        code = _code(props)
+        code = _code(props, adm0)
+        owns_iso = code == props.get("ISO_A3_EH")  # a territory must not answer to its country's codes
         label = (float(props.get("LABEL_X") or 0.0), float(props.get("LABEL_Y") or 0.0))
         places[code] = Place(code=code, name=props.get("NAME") or code, polygons=_rings(geometry), label=label)
-        for field in ("ISO_A3_EH", "ADM0_A3", "ISO_A2_EH"):
+        for field in ("ISO_A3_EH", "ADM0_A3", "ISO_A2_EH") if owns_iso else ("ADM0_A3",):
             value = props.get(field)
             if value and value != "-99":
                 keys.setdefault(norm(value), set()).add(code)

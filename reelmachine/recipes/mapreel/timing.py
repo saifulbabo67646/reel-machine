@@ -65,10 +65,13 @@ def pop_times(spoken: Sequence[int | None], *, overrides: Sequence[int | None],
         raw.append(forced if forced is not None else (None if said is None else speech_start_ms + said))
     spread = [i for i, (said, forced) in enumerate(zip(spoken, overrides)) if said is None and forced is None]
     floor = FLY_MS - 100
-    for i in spread:  # interpolate between known neighbours, else across the speech
-        prev = next((raw[j] for j in range(i - 1, -1, -1) if raw[j] is not None), floor)
-        nxt = next((raw[j] for j in range(i + 1, n) if raw[j] is not None), speech_end_ms)
-        raw[i] = int(prev + (nxt - prev) / 2)
+    known = list(raw)
+    for i in spread:  # a run of unmatched entries spreads evenly between its known neighbours
+        lo = next((j for j in range(i - 1, -1, -1) if known[j] is not None), -1)
+        hi = next((j for j in range(i + 1, n) if known[j] is not None), n)
+        prev = known[lo] if lo >= 0 else floor
+        nxt = known[hi] if hi < n else speech_end_ms
+        raw[i] = int(prev + (nxt - prev) * (i - lo) / (hi - lo))
     times: list[int] = []
     last = floor - POP_GAP_MS
     for value in raw:

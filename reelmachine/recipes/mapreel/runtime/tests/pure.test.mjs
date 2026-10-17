@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut } from "../pure.mjs";
+import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines } from "../pure.mjs";
 
 const A = { x: 0.2, y: 0.4, s: 1080 };
 const B = { x: 0.55, y: 0.35, s: 20000 };
@@ -56,4 +56,17 @@ test("the active word is the one being said, held briefly after", () => {
   assert.equal(activeWord(words, 0.55), 0);
   assert.equal(activeWord(words, 0.7), 1);
   assert.equal(activeWord(words, 2), -1);
+});
+
+test("a long ghosted name shrinks to fit; a short one keeps its size", () => {
+  assert.equal(fitFontPx(173, 600, 994), 173);
+  const px = fitFontPx(173, 2600, 994);
+  assert.ok(px < 173 && (2600 * px) / 173 <= 994);
+});
+
+test("a long multi-word badge breaks near its middle; short or single words stay whole", () => {
+  assert.deepEqual(badgeLines("Comme des Garçons"), ["Comme des", "Garçons"]);
+  assert.deepEqual(badgeLines("Calvin Klein"), ["Calvin", "Klein"]);
+  assert.deepEqual(badgeLines("Fjällräven"), ["Fjällräven"]);
+  assert.deepEqual(badgeLines("H&M"), ["H&M"]);
 });

@@ -43,3 +43,12 @@ def test_pop_times_wait_for_the_flight_and_keep_a_gap():
 def test_overrides_win():
     times, spread = pop_times([500, 900], overrides=[2000, None], speech_start_ms=0, speech_end_ms=3000)
     assert times[0] == 2000 and spread == []
+
+
+def test_a_run_of_unheard_names_spreads_evenly():
+    """A highlight whose countries are never named: fills spread across the speech, not
+    bunched at the end by halving the remaining gap each time."""
+    times, spread = pop_times([None] * 4, overrides=[None] * 4, speech_start_ms=250, speech_end_ms=5000)
+    assert spread == [0, 1, 2, 3]
+    gaps = [b - a for a, b in zip(times, times[1:])]
+    assert max(gaps) - min(gaps) <= 1 and times[0] < 2000 and times[-1] < 4500
