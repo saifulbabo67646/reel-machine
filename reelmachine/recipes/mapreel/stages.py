@@ -28,14 +28,14 @@ from ..explainer3d.music import synth_music
 from ..explainer3d.stages import speak_line
 from ..explainer3d.timing import fit_windows, shot_windows
 from ..explainer3d.video import join_shots, mux
-from . import basemap, compose, geodata, palette
+from . import basemap, compose, geodata, kinds, palette
 from .geometry import Frame, shape_of, visible_bbox
 from .models import (
     ComposeOutput, GeoOutput, ImagesOutput, MapReelInputs, NarrationOutput, PrepOutput, RenderOutput,
     ResolvedSegment, ScriptOutput, SegmentProject, SegmentsOutput, Track, Window,
 )
 from .places import Atlas, atlas_for
-from .timing import FLY_MS, MIN_SEGMENT_MS, match, match_any, pop_times
+from .timing import FLY_MS, MIN_SEGMENT_MS
 
 IMAGE_MAX_BYTES = 8 * 1024 * 1024
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
@@ -299,41 +299,12 @@ class SegmentsStage:
             speech_start = window.speech_offset_ms
             speech_end = window.speech_offset_ms + window.speech_ms
             last_ms = window.duration_ms - POP_TAIL_MS
-            spoken = payload.spoken[i]
-            shapes = {c: shape_of(atlas.places[c]) for c in seg.codes}
             landed = Frame(**target)
-
-            # places fill when named (highlight) or as the camera lands (country)
-            if spec.kind == "highlight":
-                # any name the place goes by, or what the script itself wrote for it
-                heard = match_any([atlas.heard_as(c, query) for c, query in zip(seg.codes, spec.countries)], spoken)
-                fills, _ = pop_times(heard, overrides=[None] * len(seg.codes),
-                                     speech_start_ms=speech_start, speech_end_ms=speech_end)
-                fills = [min(t, last_ms) for t in fills]
-            else:
-                fills = [max(300, fly - 200)]
-            places = [compose.place_entry(c, seg.names[c], seg.colours[c], shapes[c], landed, fills[k],
-                                          atlas.places[c].label) for k, c in enumerate(seg.codes)]
-
-            items_in: list[dict[str, Any]] = []
-            items: list[dict[str, Any]] = []
-            if spec.kind == "country":
-                heard_items = match([it.say or it.name for it in spec.items], spoken)
-                overrides = [None if it.at is None else int(it.at * 1000) for it in spec.items]
-                times, spread = pop_times(heard_items, overrides=overrides,
-                                          speech_start_ms=speech_start, speech_end_ms=speech_end)
-                for j, (item, at) in enumerate(zip(spec.items, times)):
-                    if at > last_ms:
-                        warnings.append(f"{seg.id} {item.name}: pops at {at / 1000:.2f}s, after the segment "
-                                        f"ends; moved to {last_ms / 1000:.2f}s")
-                        at = last_ms
-                    local = payload.images.get(f"{seg.id}/{j}")
-                    items_in.append({"name": item.name, "emoji": item.emoji, "atMs": at,
-                                     "image": f"images/{Path(local).name}" if local else None, "_local": local})
-                for j in spread:
-                    warnings.append(f"{seg.id} {spec.items[j].name}: not heard in the narration; "
-                                    "its pop is spread evenly (add `say` or `at`)")
-                items = compose.item_entries(items_in, shapes[seg.codes[0]], landed)
+            built = kinds.build(seg, spec, kinds.KindContext(
+                atlas=atlas, landed=landed, fly_ms=fly, speech_start=speech_start, speech_end=speech_end,
+                last_ms=last_ms, spoken=payload.spoken[i], images=payload.images))
+            warnings.extend(built.warnings)
+            places, items = built.places, built.items
 
             words = [{"text": w.text, "start": (w.start_ms - window.start_ms) / 1000,
                       "end": (w.end_ms - window.start_ms) / 1000, "hot": hot}
@@ -353,21 +324,19 @@ class SegmentsStage:
                 duration_ms=window.duration_ms, camera=camera, layers=layers, places=places,
                 previous=[{"colour": p["colour"], "rings": _shifted(p["rings"], -wrap)} for p in previous_places]
                 if fly else [],
-                items=items, words=words, legend=getattr(spec, "legend", None))
-            for it in items_in:
-                if it["_local"]:
-                    links[it["image"]] = Path(it["_local"])
+                items=items, words=words, extras=built.extras)
+            links.update(built.links)
             directory = compose.write_project(doc, ctx.workdir / "projects" / seg.id, links)
             projects.append(SegmentProject(segment_id=seg.id, index=i, dir=str(directory),
                                            key=compose.project_key(doc, links), nominal_ms=window.duration_ms))
             if fly:
                 cues.append({"at_ms": window.start_ms, "sfx": "whoosh"})
-            cues.extend({"at_ms": window.start_ms + it["atMs"], "sfx": "pop"} for it in items)
+            cues.extend({"at_ms": window.start_ms + at, "sfx": sfx} for at, sfx in built.cues)
             resolved.append({"id": seg.id, "kind": spec.kind, "codes": seg.codes, "colours": seg.colours,
                              "window": window.model_dump(), "camera": camera,
                              "places": [{"code": p["code"], "fillMs": p["fillMs"]} for p in places],
                              "items": [{"name": it["name"], "atMs": it["atMs"], "image": it["image"],
-                                        "x": it["x"], "y": it["y"]} for it in items]})
+                                        "x": it["x"], "y": it["y"]} for it in items], **built.resolved})
             previous_frame, previous_id, previous_places = frame, seg.id, places
             previous_end = compose.drifted_end(camera, window.duration_ms)
         (_artifacts(ctx) / "script.resolved.json").write_text(

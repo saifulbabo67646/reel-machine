@@ -105,9 +105,12 @@ def drifted_end(camera: dict[str, Any], duration_ms: int) -> dict[str, float]:
 
 def segment_document(*, duration_ms: int, camera: dict[str, Any], layers: list[dict[str, Any]],
                      places: list[dict[str, Any]], previous: list[dict[str, Any]], items: list[dict[str, Any]],
-                     words: list[dict[str, Any]], legend: str | None) -> dict[str, Any]:
-    return {"width": WIDTH, "height": HEIGHT, "duration": duration_ms / 1000, "camera": camera, "layers": layers,
-            "places": places, "previous": previous, "items": items, "words": words, "legend": legend}
+                     words: list[dict[str, Any]], legend: str | None = None,
+                     extras: dict[str, Any] | None = None) -> dict[str, Any]:
+    """`extras` (a kind's own keys: a legend, a rank badge, a stat card) are merged in last."""
+    doc = {"width": WIDTH, "height": HEIGHT, "duration": duration_ms / 1000, "camera": camera, "layers": layers,
+           "places": places, "previous": previous, "items": items, "words": words, "legend": legend}
+    return {**doc, **(extras or {})}
 
 
 _CSS = "html,body{margin:0;background:#000}#root{position:relative;width:100%;height:100%;overflow:hidden}" \
