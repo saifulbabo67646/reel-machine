@@ -1,6 +1,6 @@
 // reelmachine/recipes/mapreel/runtime/draw.mjs
 // Draws one frame of a map segment on a 2D canvas.
-import { cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines } from "./pure.mjs";
+import { cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre } from "./pure.mjs";
 
 const W = 1080, H = 1920;
 const FONT = '"Arial Black", "Helvetica Neue", Arial, sans-serif';
@@ -61,17 +61,24 @@ function fillPlace(ctx, cam, place, alpha) {
   ctx.restore();
 }
 
-function ghostName(ctx, cam, place, alpha, seconds) {
+const GHOST_ANGLE = -0.14, GHOST_DRIFT = 12; // radians; px per second
+
+function ghostName(ctx, cam, place, alpha, seconds, duration) {
   if (alpha <= 0) return;
   const [px, py] = toScreen(cam, place.label.x, place.label.y);
-  ctx.save();
-  ctx.globalAlpha = 0.22 * alpha;
-  ctx.translate(px + seconds * 12, py);
-  ctx.rotate(-0.14);
+  const drift = duration * GHOST_DRIFT;
+  const cos = Math.cos(GHOST_ANGLE), sin = Math.abs(Math.sin(GHOST_ANGLE));
   const base = Math.round(W * 0.16);
+  ctx.save();
   ctx.font = `900 ${base}px ${FONT}`;
-  // a long name ("United States of America") shrinks to stay on screen rather than run off it
-  ctx.font = `900 ${fitFontPx(base, ctx.measureText(place.name).width, W * 0.92)}px ${FONT}`;
+  // a long name ("United States of America") shrinks so that, rotated and drifting, it stays on screen
+  const room = Math.min(W * 0.92, (W - 16 - drift - base * sin) / cos);
+  const size = fitFontPx(base, ctx.measureText(place.name).width, room);
+  ctx.font = `900 ${size}px ${FONT}`;
+  const at = ghostCentre(px, py, ctx.measureText(place.name).width, size, GHOST_ANGLE, drift, W, H);
+  ctx.globalAlpha = 0.22 * alpha;
+  ctx.translate(at.x + seconds * GHOST_DRIFT, at.y);
+  ctx.rotate(GHOST_ANGLE);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#ffffff";
@@ -161,7 +168,7 @@ export function drawFrame(ctx, doc, images, seconds) {
   const fadeOut = 1 - Math.min(1, ms / Math.max(1, doc.camera.flyMs * 0.8));
   for (const place of doc.previous || []) fillPlace(ctx, cam, place, fadeOut);
   for (const place of doc.places) fillPlace(ctx, cam, place, fillAlpha(place.fillMs, ms));
-  if (doc.places.length === 1) ghostName(ctx, cam, doc.places[0], fillAlpha(doc.places[0].fillMs, ms), seconds);
+  if (doc.places.length === 1) ghostName(ctx, cam, doc.places[0], fillAlpha(doc.places[0].fillMs, ms), seconds, doc.duration || 0);
   for (const item of doc.items) drawItem(ctx, item, ms, images);
   legend(ctx, doc.legend);
   caption(ctx, doc.words, seconds);

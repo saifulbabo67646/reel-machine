@@ -123,7 +123,9 @@ def _load(path: str, _mtime: int) -> Atlas:
         if not geometry:
             continue
         code = _code(props, adm0)
-        owns_iso = code == props.get("ISO_A3_EH")  # a territory must not answer to its country's codes
+        iso = props.get("ISO_A3_EH")
+        # a territory must not answer to its country's codes; a place with no ISO-3 (Kosovo, XK) keeps its ISO-2
+        owns_iso = code == iso or iso in (None, "", "-99")
         label = (float(props.get("LABEL_X") or 0.0), float(props.get("LABEL_Y") or 0.0))
         places[code] = Place(code=code, name=props.get("NAME") or code, polygons=_rings(geometry), label=label)
         for field in ("ISO_A3_EH", "ADM0_A3", "ISO_A2_EH") if owns_iso else ("ADM0_A3",):

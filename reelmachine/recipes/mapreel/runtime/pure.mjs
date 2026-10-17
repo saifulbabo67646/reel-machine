@@ -85,3 +85,13 @@ export function badgeLines(name) {
   }
   return best < 0 ? [text] : [text.slice(0, best), text.slice(best + 1)];
 }
+
+// Where to centre a ghosted name so its rotated box stays on screen for the whole segment while it
+// drifts right by `driftPx`. Returns the centre at the segment's start.
+export function ghostCentre(px, py, textW, textH, angle, driftPx, W, H, margin = 8) {
+  const c = Math.abs(Math.cos(angle)), s = Math.abs(Math.sin(angle));
+  const hx = (c * textW) / 2 + (s * textH) / 2;
+  const hy = (s * textW) / 2 + (c * textH) / 2;
+  const fit = (v, lo, hi) => (lo > hi ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, v)));
+  return { x: fit(px, margin + hx, W - margin - hx - driftPx), y: fit(py, margin + hy, H - margin - hy) };
+}

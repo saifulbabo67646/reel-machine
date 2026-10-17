@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from .geometry import HEIGHT, WIDTH, Frame, Shape, frame_for, item_anchors, merc, simplify_for, to_screen
+from .geometry import HEIGHT, WIDTH, Frame, Shape, frame_for, item_layout, merc, simplify, simplify_for, to_screen
 
 HERE = Path(__file__).resolve().parent
 RUNTIME_DIR = HERE / "runtime"
@@ -65,12 +65,13 @@ def item_entries(items: list[dict[str, Any]], shape: Shape | None, frame: Frame)
         return []
     if shape is None:
         anchors = [(WIDTH / 2, HEIGHT * (0.25 + 0.45 * i / max(1, len(items) - 1))) for i in range(len(items))]
+        gap = min((np.hypot(a[0] - b[0], a[1] - b[1]) for i, a in enumerate(anchors) for b in anchors[i + 1:]),
+                  default=ITEM_SIZE * 2)
+        size = int(max(180, min(ITEM_SIZE, gap * 0.95)))
     else:
-        rings_px = [to_screen(frame, _near(frame, shape, r)) for r in shape.rings]
-        anchors = item_anchors(rings_px, len(items))
-    gap = min((np.hypot(a[0] - b[0], a[1] - b[1]) for i, a in enumerate(anchors) for b in anchors[i + 1:]),
-              default=ITEM_SIZE * 2)
-    size = int(max(180, min(ITEM_SIZE, gap * 0.95)))
+        # a pixel of tolerance on screen: the same answer, a fraction of the vertices to test
+        rings_px = [simplify(to_screen(frame, _near(frame, shape, r)), 1.0) for r in shape.rings]
+        anchors, size = item_layout([r for r in rings_px if len(r) >= 3], len(items), max_size=ITEM_SIZE)
     return [{"name": it["name"], "image": it.get("image"), "emoji": it.get("emoji"), "atMs": int(it["atMs"]),
              "x": round(x, 1), "y": round(y, 1), "size": size} for it, (x, y) in zip(items, anchors)]
 

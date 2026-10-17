@@ -178,41 +178,103 @@ def inside(rings_px: list[np.ndarray], x: float | np.ndarray, y: float | np.ndar
     return hit if np.ndim(x) else bool(hit[0])
 
 
-#: (x, y) clearances from the border an item anchor tries for, widest first
-INSETS = ((110.0, 45.0), (70.0, 30.0), (35.0, 15.0))
+#: a badge's footprint around its anchor, as fractions of its size: the text may be
+#: size * 1.1 wide (draw.mjs) and two lines tall
+BADGE_HALF_W, BADGE_HALF_H = 0.55, 0.3
+BADGE_MAX, BADGE_MIN, BADGE_STEP = 300, 180, 20
+COLUMN_SPACING = 220.0
 
 
-def item_anchors(rings_px: list[np.ndarray], n: int, *, step: float = 24.0) -> list[tuple[float, float]]:
-    """`n` points inside the place and inside the safe area, spread as far apart as possible
-    (greedy farthest-point). A place too small to hold them gets a column at its centre."""
+def _boxes_overlap(a: tuple[float, float], b: tuple[float, float], size: float) -> bool:
+    return abs(a[0] - b[0]) < 2 * BADGE_HALF_W * size and abs(a[1] - b[1]) < 2 * BADGE_HALF_H * size
+
+
+def _box_points(x: np.ndarray, y: np.ndarray, hw: float, hh: float) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Corners and edge midpoints of each box."""
+    return [(x + fx * hw, y + fy * hh) for fx in (-1, 0, 1) for fy in (-1, 0, 1) if fx or fy]
+
+
+def item_layout(rings_px: list[np.ndarray], n: int, *, max_size: int = BADGE_MAX, min_size: int = BADGE_MIN,
+                step: float = 24.0, cell: float = 12.0) -> tuple[list[tuple[float, float]], int]:
+    """`n` badge anchors and one badge size. Every badge box (size*1.1 x size*0.6) lies inside
+    the place and the safe area, and no two boxes overlap; anchors spread as far apart as they
+    can (greedy farthest-point). The size steps down to `min_size` until they fit. A place too
+    small even then gets a column at its centre, which may overhang."""
     sx0, sy0, sx1, sy1 = SAFE
-    gx, gy = np.meshgrid(np.arange(sx0 * WIDTH + 140, sx1 * WIDTH - 140, step),
-                         np.arange(sy0 * HEIGHT + 100, sy1 * HEIGHT - 100, step))
+    # inside-mask on a fine raster over the safe area; a summed-area table answers "is this whole box inside"
+    rx = np.arange(sx0 * WIDTH, sx1 * WIDTH + cell, cell)
+    ry = np.arange(sy0 * HEIGHT, sy1 * HEIGHT + cell, cell)
+    mx, my = np.meshgrid(rx, ry)
+    out = (~inside(rings_px, mx.ravel(), my.ravel())).reshape(mx.shape).astype(np.int32)
+    table = np.zeros((out.shape[0] + 1, out.shape[1] + 1), dtype=np.int32)
+    table[1:, 1:] = out.cumsum(0).cumsum(1)
+    for size in range(max_size, min_size - 1, -BADGE_STEP):
+        hw, hh = BADGE_HALF_W * size, BADGE_HALF_H * size
+        gx, gy = np.meshgrid(np.arange(sx0 * WIDTH + hw, sx1 * WIDTH - hw + 1e-9, step),
+                             np.arange(sy0 * HEIGHT + hh, sy1 * HEIGHT - hh + 1e-9, step))
+        gx, gy = gx.ravel(), gy.ravel()
+        if not len(gx):
+            continue
+        # raster cells covering the box, one cell wider on every side
+        c0 = np.clip(np.floor((gx - hw - rx[0]) / cell).astype(int), 0, len(rx) - 1)
+        c1 = np.clip(np.ceil((gx + hw - rx[0]) / cell).astype(int), 0, len(rx) - 1) + 1
+        r0 = np.clip(np.floor((gy - hh - ry[0]) / cell).astype(int), 0, len(ry) - 1)
+        r1 = np.clip(np.ceil((gy + hh - ry[0]) / cell).astype(int), 0, len(ry) - 1) + 1
+        outside = table[r1, c1] - table[r0, c1] - table[r1, c0] + table[r0, c0]
+        keep = outside == 0
+        gx, gy = gx[keep], gy[keep]
+        if len(gx):  # exact check of the box outline
+            ok = np.ones(len(gx), dtype=bool)
+            for px, py in _box_points(gx, gy, hw, hh):
+                ok &= inside(rings_px, px, py)
+            gx, gy = gx[ok], gy[ok]
+        if len(gx) < n:
+            continue
+        pts = np.column_stack([gx, gy])
+        centre = pts.mean(axis=0)
+        first = int(np.argmin(np.hypot(*(pts - centre).T)))
+        chosen = [pts[first]]
+        dist = np.hypot(*(pts - pts[first]).T)
+        free = ~((np.abs(pts[:, 0] - pts[first][0]) < 2 * hw) & (np.abs(pts[:, 1] - pts[first][1]) < 2 * hh))
+        while len(chosen) < n and free.any():
+            k = int(np.argmax(np.where(free, dist, -1.0)))
+            chosen.append(pts[k])
+            dist = np.minimum(dist, np.hypot(*(pts - pts[k]).T))
+            free &= ~((np.abs(pts[:, 0] - pts[k][0]) < 2 * hw) & (np.abs(pts[:, 1] - pts[k][1]) < 2 * hh))
+        if len(chosen) < n:
+            continue
+        chosen.sort(key=lambda p: (p[1], p[0]))  # read top to bottom, as they are spoken
+        return [(float(x), float(y)) for x, y in chosen], size
+    # too narrow for whole badges even at min_size (Italy's boot, Japan): best effort at min_size,
+    # anchors inside the place, boxes still disjoint, the least overhang first
+    size = min_size
+    hw, hh = BADGE_HALF_W * size, BADGE_HALF_H * size
+    gx, gy = np.meshgrid(np.arange(sx0 * WIDTH + hw, sx1 * WIDTH - hw + 1e-9, step),
+                         np.arange(sy0 * HEIGHT + hh, sy1 * HEIGHT - hh + 1e-9, step))
     gx, gy = gx.ravel(), gy.ravel()
-    mask = inside(rings_px, gx, gy)
-    pts = np.column_stack([gx[mask], gy[mask]])
-    for mx, my in INSETS:  # keep a badge's width clear of the border where the place allows
-        deep = pts
-        for f in (0.5, 1.0):  # half and full clearance, so a narrow inlet is not jumped over
-            for dx, dy in ((-mx, 0), (mx, 0), (0, -my), (0, my)):
-                deep = deep[inside(rings_px, deep[:, 0] + dx * f, deep[:, 1] + dy * f)]
-        if len(deep) >= n * 4:
-            pts = deep
-            break
-    if len(pts) < n * 4:
-        allpts = np.concatenate(rings_px)
-        cx = float(np.clip(allpts[:, 0].mean(), sx0 * WIDTH + 180, sx1 * WIDTH - 180))
-        cy = float(np.clip(allpts[:, 1].mean(), sy0 * HEIGHT + 200, sy1 * HEIGHT - 200))
-        spacing = 220.0
-        top = cy - spacing * (n - 1) / 2
-        return [(cx, top + i * spacing) for i in range(n)]
-    centre = pts.mean(axis=0)
-    first = int(np.argmin(np.hypot(*(pts - centre).T)))
-    chosen = [pts[first]]
-    dist = np.hypot(*(pts - pts[first]).T)
-    while len(chosen) < n:
-        k = int(np.argmax(dist))
-        chosen.append(pts[k])
-        dist = np.minimum(dist, np.hypot(*(pts - pts[k]).T))
-    chosen.sort(key=lambda p: (p[1], p[0]))  # read top to bottom, as they are spoken
-    return [(float(x), float(y)) for x, y in chosen]
+    ok = inside(rings_px, gx, gy) if len(gx) else np.zeros(0, dtype=bool)
+    gx, gy = gx[ok], gy[ok]
+    if len(gx) >= n:
+        c0 = np.clip(np.floor((gx - hw - rx[0]) / cell).astype(int), 0, len(rx) - 1)
+        c1 = np.clip(np.ceil((gx + hw - rx[0]) / cell).astype(int), 0, len(rx) - 1) + 1
+        r0 = np.clip(np.floor((gy - hh - ry[0]) / cell).astype(int), 0, len(ry) - 1)
+        r1 = np.clip(np.ceil((gy + hh - ry[0]) / cell).astype(int), 0, len(ry) - 1) + 1
+        outside = table[r1, c1] - table[r0, c1] - table[r1, c0] + table[r0, c0]
+        chosen: list[tuple[float, float]] = []
+        for k in np.argsort(outside, kind="stable"):
+            p = (float(gx[k]), float(gy[k]))
+            if all(not _boxes_overlap(p, q, size) for q in chosen):
+                chosen.append(p)
+                if len(chosen) == n:
+                    chosen.sort(key=lambda q: (q[1], q[0]))
+                    return chosen, size
+    allpts = np.concatenate(rings_px)
+    cx = float(np.clip(allpts[:, 0].mean(), sx0 * WIDTH + 180, sx1 * WIDTH - 180))
+    cy = float(np.clip(allpts[:, 1].mean(), sy0 * HEIGHT + 200, sy1 * HEIGHT - 200))
+    top = cy - COLUMN_SPACING * (n - 1) / 2
+    size = int(max(min_size, min(max_size, COLUMN_SPACING * 0.95)))
+    return [(cx, top + i * COLUMN_SPACING) for i in range(n)], size
+
+
+def item_anchors(rings_px: list[np.ndarray], n: int, **kwargs) -> list[tuple[float, float]]:
+    return item_layout(rings_px, n, **kwargs)[0]

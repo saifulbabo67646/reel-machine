@@ -102,9 +102,11 @@ def test_a_territory_sharing_its_countrys_iso_code_does_not_replace_it(tmp_path)
     path = tmp_path / "countries.geojson"
     path.write_text(json.dumps({"type": "FeatureCollection", "features": [
         feature("France", "FRA", "FRA", "FR", 2), feature("Clipperton I.", "CLP", "FRA", "FR", -109),
-        feature("S. Sudan", "SDS", "SSD", "SS", 30)]}))
+        feature("S. Sudan", "SDS", "SSD", "SS", 30), feature("Kosovo", "KOS", "-99", "XK", 20)]}))
     atlas = Atlas.load(path)
     for query in ("FRA", "France", "FR"):
         assert atlas.resolve(query).name == "France"
     assert atlas.resolve("Clipperton I.").code == "CLP"
     assert atlas.resolve("SSD").name == "S. Sudan"  # a lone ISO code that differs from ADM0_A3 still wins
+    for query in ("XK", "KOS", "Kosovo"):  # no ISO-3 at all: its own ISO-2 and ADM0 codes still find it
+        assert atlas.resolve(query).code == "KOS"

@@ -74,7 +74,7 @@ def test_item_anchors_fall_inside_the_country_and_spread_out():
     assert len(anchors) == 4
     assert all(g.inside(rings, x, y) for x, y in anchors)
     gaps = [np.hypot(a[0] - b[0], a[1] - b[1]) for i, a in enumerate(anchors) for b in anchors[i + 1:]]
-    assert min(gaps) > 150
+    assert min(gaps) >= 2 * g.BADGE_HALF_H * g.BADGE_MIN  # at least a badge's height apart
 
 
 def test_item_anchors_fall_back_to_a_column_for_a_sliver():
@@ -83,12 +83,43 @@ def test_item_anchors_fall_back_to_a_column_for_a_sliver():
     assert len(anchors) == 3 and len({round(y) for _, y in anchors}) == 3
 
 
-def test_item_anchors_keep_clear_of_the_border():
-    """Farthest-point spreading used to put badges right on the coast (half the text off the
-    country). Where the place is wide enough, every anchor keeps a badge's half-width inside."""
-    for code in ("USA", "FRA", "ITA"):
-        shape = g.shape_of(ATLAS.resolve(code))
-        frame = g.frame_for(shape.main)
-        rings = [g.to_screen(frame, r) for r in shape.rings]
-        for x, y in g.item_anchors(rings, 4):
-            assert all(g.inside(rings, x + dx, y + dy) for dx, dy in ((-70, 0), (70, 0), (0, -30), (0, 30))), code
+@pytest.mark.parametrize("code,n", [("FRA", 4), ("FRA", 3), ("USA", 4), ("ITA", 1)])
+def test_every_badge_box_lies_inside_the_place_and_no_two_overlap(code, n):
+    """A badge is up to size*1.1 wide (draw.mjs) and about size*0.6 tall: every corner and edge
+    midpoint of that box is inside the place, and the boxes are pairwise disjoint."""
+    shape = g.shape_of(ATLAS.resolve(code))
+    frame = g.frame_for(shape.main)
+    rings = [g.to_screen(frame, r) for r in shape.rings]
+    anchors, size = g.item_layout(rings, n)
+    assert len(anchors) == n and g.BADGE_MIN <= size <= g.BADGE_MAX
+    hw, hh = g.BADGE_HALF_W * size, g.BADGE_HALF_H * size
+    for x, y in anchors:
+        for fx in (-1, 0, 1):
+            for fy in (-1, 0, 1):
+                assert g.inside(rings, x + fx * hw, y + fy * hh), (code, x, y, fx, fy)
+    for i, a in enumerate(anchors):
+        for b in anchors[i + 1:]:
+            assert abs(a[0] - b[0]) >= 2 * hw or abs(a[1] - b[1]) >= 2 * hh, (code, a, b)
+
+
+def test_a_badge_shrinks_before_it_overhangs():
+    """A place too narrow for the largest badge gets a smaller one, not an overhanging one."""
+    strip = [np.array([[300.0, 300.0], [560.0, 300.0], [560.0, 1500.0], [300.0, 1500.0]])]  # 260 px wide
+    anchors, size = g.item_layout(strip, 3)
+    assert size * 2 * g.BADGE_HALF_W <= 260 and size >= g.BADGE_MIN
+    assert all(300 <= x - g.BADGE_HALF_W * size and x + g.BADGE_HALF_W * size <= 560 for x, _ in anchors)
+
+
+@pytest.mark.parametrize("code", ["ITA", "JPN"])
+def test_a_place_too_narrow_for_whole_badges_gets_disjoint_badges_centred_on_it(code):
+    """Italy's boot cannot hold two whole 180-px badges at its framing: badges stay at the floor
+    size, each anchored on the place, still never overlapping one another."""
+    shape = g.shape_of(ATLAS.resolve(code))
+    frame = g.frame_for(shape.main)
+    rings = [g.to_screen(frame, r) for r in shape.rings]
+    anchors, size = g.item_layout(rings, 4)
+    assert size == g.BADGE_MIN and len(anchors) == 4
+    assert all(g.inside(rings, x, y) for x, y in anchors)
+    for i, a in enumerate(anchors):
+        for b in anchors[i + 1:]:
+            assert not g._boxes_overlap(a, b, size)

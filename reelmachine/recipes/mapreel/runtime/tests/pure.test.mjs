@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines } from "../pure.mjs";
+import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre } from "../pure.mjs";
 
 const A = { x: 0.2, y: 0.4, s: 1080 };
 const B = { x: 0.55, y: 0.35, s: 20000 };
@@ -69,4 +69,16 @@ test("a long multi-word badge breaks near its middle; short or single words stay
   assert.deepEqual(badgeLines("Calvin Klein"), ["Calvin", "Klein"]);
   assert.deepEqual(badgeLines("Fjällräven"), ["Fjällräven"]);
   assert.deepEqual(badgeLines("H&M"), ["H&M"]);
+});
+
+test("a ghosted name near the edge is pulled on screen, drift and rotation included", () => {
+  const W = 1080, H = 1920, angle = -0.14, w = 900, h = 120, drift = 60;
+  const c = Math.cos(angle), s = Math.abs(Math.sin(angle));
+  const hx = (c * w) / 2 + (s * h) / 2, hy = (s * w) / 2 + (c * h) / 2;
+  for (const [px, py] of [[1000, 900], [40, 900], [540, 20], [540, 1900]]) {
+    const at = ghostCentre(px, py, w, h, angle, drift, W, H);
+    assert.ok(at.x - hx >= 0 && at.x + drift + hx <= W, `x ${at.x} from ${px}`);
+    assert.ok(at.y - hy >= 0 && at.y + hy <= H, `y ${at.y} from ${py}`);
+  }
+  assert.deepEqual(ghostCentre(500, 900, 300, 120, angle, drift, W, H), { x: 500, y: 900 }); // already fine
 });
