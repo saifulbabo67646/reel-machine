@@ -236,8 +236,16 @@ Countries for a `mapreel` script, by code or by any name (`Holland` -> `NLD`). A
 means more than one country (`Korea`) comes back with `ambiguous: true` on each candidate;
 use the code. The Natural Earth data is fetched once on first use.
 
+With `country` (a code or name), it finds that country's states, prefectures or provinces
+instead: `level: "region"`, ISO 3166-2 codes (`US-TX`, `JP-13`), `parent` the country's code.
+An empty `query` lists them all, up to `limit`. A code-shaped query without `country`
+(`US-TX`) also searches regions. Country results carry `regions: true` when the country has
+admin-1 data, but only once the larger regions file (about 40 MB) is already cached; a plain
+country search never downloads it.
+
 ```json
 {"query": "korea"}
+{"query": "texas", "country": "USA"}
 ```
 
 ### `find_assets`

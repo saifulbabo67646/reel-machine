@@ -437,19 +437,40 @@ class McpTools:
                 "hint": f"use one as {hints[kind]}" if found else "nothing matched; try a simpler word"}
 
     @_guard
-    def find_places(self, ctx: Any, query: str, limit: int = 8) -> dict[str, Any]:
-        """Countries for mapreel segments, by code or by any of their names."""
+    def find_places(self, ctx: Any, query: str, limit: int = 8, country: str | None = None) -> dict[str, Any]:
+        """Countries, or with `country` that country's states/prefectures/provinces, for mapreel segments."""
+        import re
+
+        from ..recipes.mapreel import geodata
         from ..recipes.mapreel.places import atlas_for
+        from ..recipes.mapreel.regions import region_atlas_for
 
         self._caller(ctx)
-        found = atlas_for(self.engine.settings).search(query, limit=max(1, min(int(limit), 50)))
-        return {
-            "schemaVersion": SCHEMA_VERSION,
-            "query": query,
-            "places": found,
-            "hint": (
+        settings, limit = self.engine.settings, max(1, min(int(limit), 50))
+        atlas = atlas_for(settings)
+        if country:
+            code = atlas.resolve(country).code
+            found = region_atlas_for(settings).search(query, code, limit)
+        else:
+            found = atlas.search(query, limit=limit)
+            cached = (geodata.geo_cache(settings) / geodata.FILES["regions"][0]).is_file()
+            if re.fullmatch(r"[A-Za-z]{2}-[A-Za-z0-9]{0,3}", (query or "").strip()):  # 'US-TX', 'JP-'
+                found += region_atlas_for(settings).search_all(query, limit - len(found))
+            elif cached:  # never a download for a plain country search
+                with_regions = region_atlas_for(settings).countries()
+                for place in found:
+                    if place["code"] in with_regions:
+                        place["regions"] = True
+        if country:
+            hint = (
+                'use the code in a regions segment: {"kind": "regions", "country": "<country>", "regions": ["<code>", ...]}'
+                if found else "nothing matched in that country; leave query empty to list its regions"
+            )
+        else:
+            hint = (
                 'use the code in a mapreel segment: {"kind": "country", "country": "<code>"} or '
-                '{"kind": "highlight", "countries": ["<code>", ...]}; an ambiguous name needs its code'
+                '{"kind": "highlight", "countries": ["<code>", ...]}; an ambiguous name needs its code; '
+                'a place with "regions": true has states/prefectures: call again with country=<code>'
                 if found else "nothing matched; try the English name or an ISO 3166 alpha-3 code like 'ITA'"
-            ),
-        }
+            )
+        return {"schemaVersion": SCHEMA_VERSION, "query": query, "places": found, "hint": hint}

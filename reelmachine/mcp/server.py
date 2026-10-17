@@ -116,8 +116,11 @@ DESCRIPTIONS: dict[str, str] = {
     ),
     "find_places": (
         "Find countries for a mapreel script by name or code ('Holland', 'Korea', 'ITA'). Returns ISO "
-        "codes and flags names that mean more than one country. Fetches the map data once on first use.\n"
-        "Example: {\"query\": \"korea\"}"
+        "codes and flags names that mean more than one country. With `country`, finds that country's "
+        "states, prefectures or provinces instead (ISO 3166-2 codes like US-TX, JP-13); an empty query "
+        "lists them all, and a country marked \"regions\": true has some. Fetches the map data once on "
+        "first use (regions: a larger file, only when asked for).\n"
+        "Example: {\"query\": \"texas\", \"country\": \"USA\"}"
     ),
     "find_models": (
         "Search the CC0 3D model catalogue (Poly Haven, Khronos samples) for an explainer3d "
@@ -233,8 +236,8 @@ def build_server(
         return tools.find_models(ctx, query, limit)
 
     @server.tool(name="find_places", description=DESCRIPTIONS["find_places"])
-    def find_places(ctx: Context, query: str, limit: int = 8) -> dict[str, Any]:
-        return tools.find_places(ctx, query, limit)
+    def find_places(ctx: Context, query: str, limit: int = 8, country: str | None = None) -> dict[str, Any]:
+        return tools.find_places(ctx, query, limit, country)
 
     @server.custom_route("/artifacts/{caller}/{job}/{name}", methods=["GET"], name="artifact")
     async def artifact_route(request: Any) -> Any:  # pragma: no cover - exercised over HTTP
