@@ -66,23 +66,32 @@ export function countText(count, p, raw = "") {
 // The stat card sits right of the rank badge (which ends at x 315): centred in x 330..1048, never wider.
 // valueW / labelW are measured at the base fonts (104 / 40 px); each font shrinks until its text fits.
 export const CARD_X0 = 330, CARD_X1 = 1048, CARD_PAD = 40;
-export function cardLayout(valueW, labelW) {
-  const room = CARD_X1 - CARD_X0 - 2 * CARD_PAD;
+// x0 / x1: the span the card is centred in and never wider than (a versus panel passes its own).
+export function cardLayout(valueW, labelW, x0 = CARD_X0, x1 = CARD_X1) {
+  const room = x1 - x0 - 2 * CARD_PAD;
   const valuePx = fitFontPx(104, valueW, room), labelPx = fitFontPx(40, labelW, room);
-  const width = Math.min(CARD_X1 - CARD_X0, Math.max(valueW * valuePx / 104, labelW * labelPx / 40) + 2 * CARD_PAD);
-  return { cx: (CARD_X0 + CARD_X1) / 2, width, valuePx, labelPx };
+  const width = Math.min(x1 - x0, Math.max(valueW * valuePx / 104, labelW * labelPx / 40) + 2 * CARD_PAD);
+  return { cx: (x0 + x1) / 2, width, valuePx, labelPx };
 }
 
-// A place's on-screen bounding box under a camera: {x0, y0, x1, y1, w, h} in px.
-export function ringsBox(rings, cam) {
+// A versus panel's horizontal offset: a whole screen off to its side (dir -1 left, +1 right) until enterMs,
+// sliding home over SLIDE_MS.
+export const SLIDE_MS = 350;
+export function slideOffset(enterMs, ms, dir) {
+  return dir * W * (1 - easeInOut(clamp01((ms - enterMs) / SLIDE_MS)));
+}
+
+// A place's on-screen bounding box under a camera: {x0, y0, x1, y1, w, h} in px. `view` is the camera's
+// screen centre: the screen's by default, a panel's in a versus.
+export function ringsBox(rings, cam, view = { cx: W / 2, cy: H / 2 }) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const ring of rings) {
     for (const [x, y] of ring) {
       x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
     }
   }
-  const px0 = (x0 - cam.x) * cam.s + W / 2, px1 = (x1 - cam.x) * cam.s + W / 2;
-  const py0 = (y0 - cam.y) * cam.s + H / 2, py1 = (y1 - cam.y) * cam.s + H / 2;
+  const px0 = (x0 - cam.x) * cam.s + view.cx, px1 = (x1 - cam.x) * cam.s + view.cx;
+  const py0 = (y0 - cam.y) * cam.s + view.cy, py1 = (y1 - cam.y) * cam.s + view.cy;
   return { x0: px0, y0: py0, x1: px1, y1: py1, w: px1 - px0, h: py1 - py0 };
 }
 

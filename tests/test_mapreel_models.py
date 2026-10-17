@@ -69,3 +69,28 @@ def test_bad_rank_segments_are_refused(bad):
 def test_a_rank_with_no_items_validates():
     seg = MapReelInputs.model_validate({"segments": [_rank(stat={"value": "70%", "label": "of the world's olive oil"})]}).segments[0]
     assert seg.kind == "rank" and seg.items == [] and seg.stat.value == "70%" and seg.stat.source is None
+
+
+def _versus(**extra):
+    return {"kind": "versus", "countries": ["JPN", "USA"], "narration": "Japan versus America.",
+            "stats": [{"value": "125M"}, {"value": "335M"}], **extra}
+
+
+def test_a_versus_takes_one_stat_per_country():
+    seg = MapReelInputs.model_validate({"segments": [_versus()]}).segments[0]
+    assert seg.kind == "versus" and seg.countries == ["JPN", "USA"] and [s.value for s in seg.stats] == ["125M", "335M"]
+
+
+@pytest.mark.parametrize("bad", [
+    _versus(stats=[{"value": "125M"}]),                                                      # one stat short
+    _versus(countries=["JPN", "USA", "FRA", "ITA"], stats=[{"value": "1"}] * 4),             # four countries
+    _versus(countries=["JPN"], stats=[{"value": "1"}]),                                      # one country
+])
+def test_bad_versus_segments_are_refused(bad):
+    with pytest.raises(ValidationError):
+        MapReelInputs.model_validate({"segments": [bad]})
+
+
+def test_a_mismatched_versus_says_why():
+    with pytest.raises(ValidationError, match="versus needs one stat per country"):
+        MapReelInputs.model_validate({"segments": [_versus(stats=[{"value": "1"}] * 3)]})

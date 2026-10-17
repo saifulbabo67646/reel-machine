@@ -2,27 +2,31 @@
 // Draws one frame of a map segment on a 2D canvas.
 import {
   cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, clamp01, POP_MS, cardLayout,
+  slideOffset,
 } from "./pure.mjs";
 
 const W = 1080, H = 1920;
 const FONT = '"Arial Black", "Helvetica Neue", Arial, sans-serif';
 
-function toScreen(cam, x, y) {
-  return [(x - cam.x) * cam.s + W / 2, (y - cam.y) * cam.s + H / 2];
+// `view` is where the camera's centre lands on screen: the screen's centre, or a versus panel's
+const SCREEN = { cx: W / 2, cy: H / 2 };
+
+function toScreen(cam, x, y, view = SCREEN) {
+  return [(x - cam.x) * cam.s + view.cx, (y - cam.y) * cam.s + view.cy];
 }
 
-function tracePlace(ctx, cam, rings) {
+function tracePlace(ctx, cam, rings, view = SCREEN) {
   ctx.beginPath();
   for (const ring of rings) {
     ring.forEach(([x, y], i) => {
-      const [px, py] = toScreen(cam, x, y);
+      const [px, py] = toScreen(cam, x, y, view);
       if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     });
     ctx.closePath();
   }
 }
 
-function drawLayers(ctx, cam, layers, images) {
+function drawLayers(ctx, cam, layers, images, view = SCREEN) {
   ctx.fillStyle = "#0b2236";
   ctx.fillRect(0, 0, W, H);
   for (const layer of layers) {
@@ -31,8 +35,8 @@ function drawLayers(ctx, cam, layers, images) {
     const [x0, y0, x1, y1] = layer.bbox;
     for (const shift of [-1, 0, 1]) { // the world repeats east and west
       if (layer.bbox[2] - layer.bbox[0] < 0.999 && shift !== 0) continue;
-      const [px0, py0] = toScreen(cam, x0 + shift, y0);
-      const [px1, py1] = toScreen(cam, x1 + shift, y1);
+      const [px0, py0] = toScreen(cam, x0 + shift, y0, view);
+      const [px1, py1] = toScreen(cam, x1 + shift, y1, view);
       if (px1 < 0 || px0 > W) continue;
       ctx.drawImage(img, px0, py0, px1 - px0, py1 - py0);
     }
@@ -41,13 +45,14 @@ function drawLayers(ctx, cam, layers, images) {
 
 const MARK_BELOW = 70, MARK_R = 46; // px: a place smaller than this on both sides gets a ring
 
-function fillPlace(ctx, cam, place, alpha, seconds = 0) {
+function fillPlace(ctx, cam, place, alpha, seconds = 0, view = SCREEN) {
   if (alpha <= 0) return;
-  const box = ringsBox(place.rings, cam);
+  const box = ringsBox(place.rings, cam, view);
   if (box.w < MARK_BELOW && box.h < MARK_BELOW) markPlace(ctx, box, place.colour, alpha, seconds);
   ctx.save();
+  ctx.lineJoin = "round"; // a mitred join on a jagged coast (Brittany, Chesapeake) is a long bright spike
   ctx.globalAlpha = 0.8 * alpha;
-  tracePlace(ctx, cam, place.rings);
+  tracePlace(ctx, cam, place.rings, view);
   ctx.fillStyle = place.colour;
   ctx.fill("evenodd");
   ctx.globalAlpha = alpha;
@@ -59,8 +64,9 @@ function fillPlace(ctx, cam, place, alpha, seconds = 0) {
   ctx.stroke();
   ctx.restore();
   ctx.save();
+  ctx.lineJoin = "round";
   ctx.globalAlpha = 0.7 * alpha;
-  tracePlace(ctx, cam, place.rings);
+  tracePlace(ctx, cam, place.rings, view);
   ctx.lineWidth = 2;
   ctx.strokeStyle = "rgba(255,255,255,0.8)";
   ctx.stroke();
@@ -151,7 +157,7 @@ function drawItem(ctx, item, ms, images) {
   ctx.restore();
 }
 
-function caption(ctx, words, seconds) {
+function caption(ctx, words, seconds, y = H * 0.71) {
   const i = activeWord(words, seconds);
   if (i < 0) return;
   const w = words[i];
@@ -162,9 +168,9 @@ function caption(ctx, words, seconds) {
   ctx.lineWidth = 10;
   ctx.strokeStyle = "rgba(0,0,0,0.85)";
   ctx.lineJoin = "round";
-  ctx.strokeText(w.text, W / 2, H * 0.71);
+  ctx.strokeText(w.text, W / 2, y);
   ctx.fillStyle = w.hot ? "#ffe14a" : "#ffffff";
-  ctx.fillText(w.text, W / 2, H * 0.71);
+  ctx.fillText(w.text, W / 2, y);
   ctx.restore();
 }
 
@@ -229,7 +235,9 @@ function rankBadge(ctx, rank, ms) {
 const STAT_TOP = 150, STAT_PAD = 28, COUNT_MS = 700;
 
 // A white card, top right of the rank badge: the stat's value in the place colour counting up, its label below.
-function statCard(ctx, stat, ms, colour) {
+// `at` ({x0, x1, cy, scale, maxY}) places it elsewhere: centred in x0..x1 at height cy, scaled, its bottom
+// never below maxY (a versus panel).
+function statCard(ctx, stat, ms, colour, at = null) {
   const pop = popState(stat.atMs, ms);
   if (!pop.visible) return;
   ctx.save();
@@ -237,12 +245,13 @@ function statCard(ctx, stat, ms, colour) {
   const valueW = ctx.measureText(stat.value).width; // measured at its final text, so the card never jitters
   ctx.font = `700 40px ${FONT}`;
   const labelW = stat.label ? ctx.measureText(stat.label).width : 0;
-  const { cx, width, valuePx, labelPx } = cardLayout(valueW, labelW);
+  const { cx, width, valuePx, labelPx } = at ? cardLayout(valueW, labelW, at.x0, at.x1) : cardLayout(valueW, labelW);
   const height = STAT_PAD * 2 + valuePx + (stat.label ? 12 + labelPx : 0);
+  const scale = pop.scale * (at ? at.scale : 1);
   ctx.globalAlpha = pop.alpha;
   if (pop.blur > 0.2) ctx.filter = `blur(${pop.blur.toFixed(1)}px)`;
-  ctx.translate(cx, STAT_TOP + height / 2);
-  ctx.scale(pop.scale, pop.scale);
+  ctx.translate(cx, at ? Math.min(at.cy, at.maxY - (height * at.scale) / 2) : STAT_TOP + height / 2);
+  ctx.scale(scale, scale);
   ctx.shadowColor = "rgba(0,0,0,0.45)";
   ctx.shadowBlur = 18;
   ctx.shadowOffsetY = 6;
@@ -265,7 +274,94 @@ function statCard(ctx, stat, ms, colour) {
   ctx.restore();
 }
 
+const PANEL_CARD_INSET = 60, VS_R = 95, VS_GAP = 14;
+
+// The country's name across the top of its panel: white, dark-stroked, shrunk to the panel's width,
+// and never higher than `minY` (the panel under the VS disc keeps its name clear of it).
+function panelName(ctx, name, rect, minY) {
+  const [rx, ry, rw, rh] = rect;
+  ctx.save();
+  ctx.font = `900 72px ${FONT}`;
+  const size = fitFontPx(72, ctx.measureText(name).width, rw * 0.9);
+  ctx.font = `900 ${size}px ${FONT}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = "rgba(0,0,0,0.85)";
+  const y = Math.max(ry + 0.12 * rh, minY + size / 2);
+  ctx.strokeText(name, rx + rw / 2, y);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(name, rx + rw / 2, y);
+  ctx.restore();
+}
+
+// One versus panel, sliding in from its side (even k from the left, odd from the right): its own map,
+// its country filled, its name on top and its stat card counting up near the bottom.
+// `discY`: the boundary the VS disc sits on; the panels either side keep their card and name clear of it.
+function drawPanel(ctx, doc, panel, k, ms, seconds, images, discY) {
+  const [rx, ry, rw, rh] = panel.rect;
+  const dx = slideOffset(panel.enterMs, ms, k % 2 ? 1 : -1);
+  if (Math.abs(dx) >= W) return;
+  const view = { cx: rx + rw / 2, cy: ry + rh / 2 };
+  ctx.save();
+  ctx.translate(dx, 0);
+  ctx.beginPath();
+  ctx.rect(rx, ry, rw, rh);
+  ctx.clip();
+  // the world under the panel's sharp layer: a panel whose layer failed still shows a map
+  drawLayers(ctx, panel.camera, [...doc.layers, ...panel.layers], images, view);
+  fillPlace(ctx, panel.camera, panel.place, fillAlpha(0, ms), seconds, view);
+  const below = discY !== null && ry === discY, above = discY !== null && ry + rh === discY;
+  panelName(ctx, panel.name, panel.rect, below ? discY + VS_R + VS_GAP : -Infinity);
+  statCard(ctx, panel.stat, ms, panel.place.colour,
+           { x0: rx + PANEL_CARD_INSET, x1: rx + rw - PANEL_CARD_INSET, cy: ry + 0.8 * rh, scale: Math.min(1, rh / 960),
+             maxY: above ? discY - VS_R - VS_GAP : ry + rh });
+  ctx.restore();
+}
+
+// The VS disc, slammed onto the first boundary between panels.
+function vsDisc(ctx, vs, y, ms) {
+  const pop = popState(vs.atMs, ms);
+  if (!pop.visible) return;
+  ctx.save();
+  ctx.globalAlpha = pop.alpha;
+  if (pop.blur > 0.2) ctx.filter = `blur(${pop.blur.toFixed(1)}px)`;
+  ctx.translate(W / 2, y);
+  ctx.scale(pop.scale, pop.scale);
+  ctx.beginPath();
+  ctx.arc(0, 0, VS_R, 0, Math.PI * 2);
+  ctx.shadowColor = "rgba(0,0,0,0.5)";
+  ctx.shadowBlur = 24;
+  ctx.fillStyle = "#111111";
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = "#ffffff";
+  ctx.stroke();
+  ctx.font = `900 80px ${FONT}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText("VS", 0, 4);
+  ctx.restore();
+}
+
+function drawVersus(ctx, doc, images, seconds) {
+  const ms = seconds * 1000;
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(0, 0, W, H);
+  const discY = doc.vs && doc.panels.length > 1 ? doc.panels[1].rect[1] : null;
+  doc.panels.forEach((panel, k) => drawPanel(ctx, doc, panel, k, ms, seconds, images, discY));
+  ctx.fillStyle = "#ffffff";
+  for (const panel of doc.panels.slice(1)) ctx.fillRect(0, panel.rect[1] - 3, W, 6);
+  if (discY !== null) vsDisc(ctx, doc.vs, discY, ms);
+  // three panels: the caption sits on the second boundary, between a stat card and the next name
+  caption(ctx, doc.words, seconds, doc.panels.length > 2 ? doc.panels[2].rect[1] : H * 0.71);
+}
+
 export function drawFrame(ctx, doc, images, seconds) {
+  if (doc.panels && doc.panels.length) return drawVersus(ctx, doc, images, seconds);
   const ms = seconds * 1000;
   const cam = cameraAt(doc.camera, ms);
   drawLayers(ctx, cam, doc.layers, images);

@@ -176,3 +176,20 @@ def test_a_rank_segment_carries_a_badge_and_a_stat(tmp_path):
     duration = seg["window"]["duration_ms"]
     assert seg["rank"]["n"] == 1 and seg["rank"]["gold"] and 0 < seg["rank"]["atMs"] < duration
     assert seg["stat"]["value"] == "70%" and 0 < seg["stat"]["atMs"] < duration
+
+
+def test_a_versus_segment_splits_the_screen_and_the_next_one_flies_on(tmp_path):
+    script = {"mode": "storyboard", "segments": [
+        {"kind": "versus", "countries": ["JPN", "USA"], "narration": "Japan has 125M people. America has 335M.",
+         "stats": [{"value": "125M", "label": "people"}, {"value": "335M", "label": "people"}]},
+        {"kind": "country", "country": "Italy", "narration": "Italy has Gucci.", "items": [{"name": "Gucci"}]}]}
+    job = _run(tmp_path, script)
+    assert job.state == JobState.SUCCEEDED, job.error
+    versus, after = json.loads(_artifacts(job)["script.resolved.json"].read_text())["segments"]
+    assert versus["kind"] == "versus" and versus["codes"] == ["JPN", "USA"]
+    duration = versus["window"]["duration_ms"]
+    assert len(versus["panels"]) == 2
+    times = [p["stat"]["atMs"] for p in versus["panels"]]
+    assert all(0 < t < duration for t in times) and times[0] < times[1]
+    assert _layers(tmp_path, versus["id"]) == ["layers/world.jpg"]
+    assert after["camera"]["flyMs"] > 0 and "layers/prev-detail.jpg" not in _layers(tmp_path, after["id"])

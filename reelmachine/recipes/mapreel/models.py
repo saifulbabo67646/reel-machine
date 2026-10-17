@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ...core.assets import Licence
 from ...core.stage import StageOutput
@@ -94,7 +94,22 @@ class RankSegment(_Segment):
     items: list[Item] = Field(default_factory=list, max_length=8)
 
 
-Segment = Annotated[Union[CountrySegment, HighlightSegment, RankSegment], Field(discriminator="kind")]
+class VersusSegment(_Segment):
+    """Two or three countries side by side, one per panel, each with its stat."""
+
+    kind: Literal["versus"]
+    countries: list[str] = Field(min_length=2, max_length=3)
+    stats: list[Stat] = Field(min_length=2, max_length=3)
+
+    @model_validator(mode="after")
+    def _one_stat_each(self) -> "VersusSegment":
+        if len(self.stats) != len(self.countries):
+            raise ValueError("versus needs one stat per country")
+        return self
+
+
+Segment = Annotated[Union[CountrySegment, HighlightSegment, RankSegment, VersusSegment],
+                    Field(discriminator="kind")]
 
 
 class MapReelInputs(BaseModel):
@@ -139,6 +154,8 @@ class GeoOutput(ScriptOutput):
     layers: dict[str, str]                 # segment id -> detail layer file
     detail_bboxes: dict[str, list[float]]
     frames: dict[str, dict[str, float]]    # segment id -> landed frame {x, y, s}
+    # versus segment id -> one panel per country: {"frame": {x, y, s}, "layer": path, "bbox": [..], "rect": [x, y, w, h]}
+    panels: dict[str, list[dict]] = Field(default_factory=dict)
 
 
 class ImagesOutput(GeoOutput):

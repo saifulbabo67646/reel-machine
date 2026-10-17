@@ -10,7 +10,7 @@ from typing import Any
 
 from ...core.timeline import WordSpan
 from . import compose
-from .geometry import SAFE, Frame, shape_of
+from .geometry import HEIGHT, SAFE, WIDTH, Frame, shape_of
 from .models import ResolvedSegment
 from .places import Atlas
 from .timing import match, match_any, pop_times
@@ -19,6 +19,16 @@ from .timing import match, match_any, pop_times
 RANK_SAFE = (0.08, 0.24, 0.92, 0.80)
 RANK_AFTER_FILL_MS = 150   # the badge lands just after the country fills ...
 STAT_AFTER_FILL_MS = 600   # ... and an unheard stat a beat after that
+#: a versus panel's country sits between its name (top) and its stat card (bottom), as fractions of the panel
+PANEL_SAFE = (0.08, 0.20, 0.92, 0.70)
+PANEL_ENTER_MS = 120       # panel k slides in at k * this
+VS_AT_MS = 250             # the VS disc slams down once the first panel is in
+
+
+def panel_rects(n: int) -> list[tuple[int, int, int, int]]:
+    """A versus's panels: n full-width rows, top to bottom, as (x, y, w, h) px."""
+    h = HEIGHT // n
+    return [(0, k * h, WIDTH, h) for k in range(n)]
 
 
 @dataclass
@@ -33,6 +43,7 @@ class KindContext:
     last_ms: int
     spoken: list[WordSpan]
     images: dict[str, str | None]
+    panels: list[dict[str, Any]] = field(default_factory=list)  # a versus: the geo stage's panels
 
 
 @dataclass
@@ -124,7 +135,38 @@ def build_rank(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:
     return built
 
 
-BUILDERS = {"country": build_country, "highlight": build_highlight, "rank": build_rank}
+def build_versus(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:
+    """Countries side by side, one per panel, sliding in under a VS slam; each stat counts up when said.
+    No flight: the segment cuts in, and the document's own places, items and detail layer stay empty."""
+    # a stat pops on its value or, failing that, on its country's name; values and names never share a word
+    alternatives = []
+    for code, query, stat in zip(seg.codes, spec.countries, spec.stats):
+        alternatives += [[stat.value], ctx.atlas.heard_as(code, query)]
+    found = match_any(alternatives, ctx.spoken)
+    heard = [value if value is not None else name for value, name in zip(found[::2], found[1::2])]
+    times, _ = pop_times(heard, overrides=[None] * len(heard), speech_start_ms=ctx.speech_start,
+                         speech_end_ms=ctx.speech_end)
+    built = Built()
+    built.extras["vs"] = built.resolved["vs"] = {"atMs": VS_AT_MS}
+    built.cues += [(0, "whoosh"), (VS_AT_MS, "boom")]
+    panels, resolved = [], []
+    for k, (code, stat, at, panel) in enumerate(zip(seg.codes, spec.stats, times, ctx.panels)):
+        frame = Frame(**panel["frame"])
+        url = f"layers/panel-{k}.jpg"
+        built.links[url] = Path(panel["layer"])
+        card = {"value": stat.value, "label": stat.label, "atMs": min(at, ctx.last_ms), "count": count_spec(stat.value)}
+        place = compose.place_entry(code, seg.names[code], seg.colours[code], shape_of(ctx.atlas.places[code]),
+                                    frame, 0, ctx.atlas.places[code].label)
+        panels.append({"rect": list(panel["rect"]), "camera": frame.to_dict(),
+                       "layers": [{"url": url, "bbox": list(panel["bbox"])}], "place": place,
+                       "name": seg.names[code], "stat": card, "enterMs": k * PANEL_ENTER_MS})
+        resolved.append({"code": code, "rect": list(panel["rect"]), "camera": frame.to_dict(), "stat": card})
+        built.cues.append((card["atMs"], "thud"))
+    built.extras["panels"], built.resolved["panels"] = panels, resolved
+    return built
+
+
+BUILDERS = {"country": build_country, "highlight": build_highlight, "rank": build_rank, "versus": build_versus}
 
 
 def build(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:

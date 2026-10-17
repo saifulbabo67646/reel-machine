@@ -88,3 +88,60 @@ def test_a_stat_heard_before_the_badge_waits_for_it(atlas):
     assert built.extras["stat"]["atMs"] == 850
     late = _rank(atlas, stat={"value": "70%"}, narration="70% is Italy's.", speech_start=0, last_ms=500)
     assert late.extras["stat"]["atMs"] == 500  # still clamped to the segment's last pop
+
+
+def test_panel_rects_stack_full_width_rows():
+    assert kinds.panel_rects(2) == [(0, 0, 1080, 960), (0, 960, 1080, 960)]
+    assert kinds.panel_rects(3) == [(0, 0, 1080, 640), (0, 640, 1080, 640), (0, 1280, 1080, 640)]
+
+
+def _versus(atlas, narration, stats=("125M", "335M"), countries=("JPN", "USA"), speech_start=1000, last_ms=7700):
+    from reelmachine.recipes.mapreel.geometry import frame_for
+
+    spec = MapReelInputs.model_validate({"segments": [{
+        "kind": "versus", "countries": list(countries), "narration": narration,
+        "stats": [{"value": v, "label": "people"} for v in stats]}]}).segments[0]
+    codes = [atlas.resolve(c).code for c in countries]
+    seg = ResolvedSegment(id="seg-1", index=0, kind="versus", codes=codes,
+                          names={c: atlas.places[c].name for c in codes},
+                          colours=dict(zip(codes, ("#8a2be2", "#e0201b", "#1e90ff"))))
+    rects = kinds.panel_rects(len(codes))
+    panels = []
+    for k, (code, rect) in enumerate(zip(codes, rects)):
+        frame = frame_for(shape_of(atlas.places[code]).main, view=(rect[2], rect[3]), safe=kinds.PANEL_SAFE)
+        panels.append({"frame": frame.to_dict(), "layer": f"/tmp/panel-{k}.jpg", "bbox": [0, 0, 1, 1],
+                       "rect": list(rect)})
+    union = compose.segment_frame([shape_of(atlas.places[c]) for c in codes], 1.0)
+    ctx = kinds.KindContext(atlas=atlas, landed=union, fly_ms=0, speech_start=speech_start, speech_end=5000,
+                            last_ms=last_ms, spoken=_said(narration), images={}, panels=panels)
+    return kinds.build(seg, spec, ctx)
+
+
+def test_a_versus_stat_pops_when_its_value_is_heard(atlas):
+    built = _versus(atlas, "Japan has 125M people and America has 335M people")
+    panels = built.extras["panels"]
+    assert [p["stat"]["atMs"] for p in panels] == [1000 + 2 * 400, 1000 + 7 * 400]
+    assert [p["stat"]["value"] for p in panels] == ["125M", "335M"]
+    assert panels[0]["stat"]["count"] == kinds.count_spec("125M")
+    assert [p["enterMs"] for p in panels] == [0, 120]
+    assert [p["rect"] for p in panels] == [[0, 0, 1080, 960], [0, 960, 1080, 960]]
+    assert panels[1]["layers"] == [{"url": "layers/panel-1.jpg", "bbox": [0, 0, 1, 1]}]
+    assert built.links == {"layers/panel-0.jpg": Path("/tmp/panel-0.jpg"), "layers/panel-1.jpg": Path("/tmp/panel-1.jpg")}
+    assert panels[0]["name"] == "Japan" and panels[0]["place"]["code"] == "JPN" and panels[0]["place"]["rings"]
+    assert built.places == [] and built.items == []
+    assert built.extras["vs"] == {"atMs": 250}
+    assert sorted(built.cues) == sorted([(0, "whoosh"), (250, "boom"), (1800, "thud"), (3800, "thud")])
+    assert [p["stat"]["atMs"] for p in built.resolved["panels"]] == [1800, 3800]
+
+
+def test_a_versus_stat_pops_on_its_country_name_when_its_value_is_not_said(atlas):
+    built = _versus(atlas, "Japan is small but the United States of America is huge")
+    assert [p["stat"]["atMs"] for p in built.extras["panels"]] == [1000, 1000 + 5 * 400]
+
+
+def test_an_unheard_versus_stat_is_spread_and_clamped(atlas):
+    built = _versus(atlas, "One of these is bigger than the other one")
+    times = [p["stat"]["atMs"] for p in built.extras["panels"]]
+    assert times[0] < times[1] <= 7700
+    late = _versus(atlas, "One of these is bigger than the other one", last_ms=900)
+    assert all(p["stat"]["atMs"] <= 900 for p in late.extras["panels"])

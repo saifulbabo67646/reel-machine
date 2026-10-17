@@ -171,3 +171,61 @@ def test_a_flight_takes_the_short_way_round(tmp_path, monkeypatch):
     assert prev["bbox"] == pytest.approx([-0.2, 0.3, -0.05, 0.45])
     jpn = docs["seg-1"]["places"][0]["rings"][0][0]
     assert doc["previous"][0]["rings"][0][0] == pytest.approx([jpn[0] - 1, jpn[1]])
+
+
+def test_segments_after_a_versus_fly_from_its_union_frame(tmp_path, monkeypatch):
+    from reelmachine.core.timeline import WordSpan
+    from reelmachine.recipes.mapreel import compose, kinds
+    from reelmachine.recipes.mapreel.geometry import frame_for, shape_of
+    from reelmachine.recipes.mapreel.models import NarrationOutput, Window
+    from reelmachine.recipes.mapreel.places import Atlas
+
+    atlas = Atlas.load(FIXTURE)
+    monkeypatch.setattr(stages, "atlas_for", lambda settings: atlas)
+    inputs = MapReelInputs.model_validate({"segments": [
+        {"kind": "versus", "countries": ["JPN", "USA"], "narration": "Japan has 125M, America 335M.",
+         "stats": [{"value": "125M"}, {"value": "335M"}]},
+        {"kind": "country", "country": "ITA", "narration": "Italy.", "items": [{"name": "Gucci"}]}]})
+    segs = [ResolvedSegment(id="seg-1", index=0, kind="versus", codes=["JPN", "USA"],
+                            names={"JPN": "Japan", "USA": "United States of America"},
+                            colours={"JPN": "#8a2be2", "USA": "#e0201b"}),
+            ResolvedSegment(id="seg-2", index=1, kind="country", codes=["ITA"], names={"ITA": "Italy"},
+                            colours={"ITA": "#1e90ff"})]
+    frames = {s.id: compose.segment_frame([shape_of(atlas.places[c]) for c in s.codes], 1.0).to_dict()
+              for s in segs}
+    layer = tmp_path / "layer.jpg"
+    layer.write_bytes(b"jpg")
+    panels = {"seg-1": [{"frame": frame_for(shape_of(atlas.places[c]).main, view=(r[2], r[3]),
+                                            safe=kinds.PANEL_SAFE).to_dict(),
+                         "layer": str(layer), "bbox": [0, 0, 1, 1], "rect": list(r)}
+                        for c, r in zip(["JPN", "USA"], kinds.panel_rects(2))]}
+    said = [[WordSpan(text=w, start_ms=i * 400, end_ms=i * 400 + 300)
+             for i, w in enumerate("Japan has 125M, America 335M.".split())],
+            [WordSpan(text="Italy.", start_ms=0, end_ms=300)]]
+    payload = NarrationOutput(
+        inputs=inputs, segments=segs, world=str(layer), layers={"seg-2": str(layer)},
+        detail_bboxes={"seg-2": [0.5, 0.3, 0.6, 0.4]}, frames=frames, panels=panels,
+        images={"seg-2/0": None}, audio_asset="a.wav", duration_ms=10000,
+        windows=[Window(start_ms=0, duration_ms=5000, speech_offset_ms=1000, speech_ms=2000),
+                 Window(start_ms=5000, duration_ms=5000, speech_offset_ms=1000, speech_ms=2000)],
+        words=said, hot=[[False] * len(w) for w in said], spoken=said, provider="fake")
+    docs = {}
+    write = stages.compose.write_project
+    monkeypatch.setattr(stages.compose, "write_project",
+                        lambda doc, dest, links: docs.setdefault(Path(dest).name, doc) and write(doc, dest, links))
+    ctx = SimpleNamespace(workdir=tmp_path / "stage", config=None)
+    out = stages.SegmentsStage().run(ctx, payload)
+    resolved = json.loads((tmp_path / "stage" / "artifacts" / "script.resolved.json").read_text())
+    versus, after = resolved["segments"]
+    # the versus cuts in: no flight, no previous fade, only the world layer under its panels
+    assert versus["camera"]["flyMs"] == 0
+    assert docs["seg-1"]["previous"] == [] and docs["seg-1"]["places"] == [] and docs["seg-1"]["items"] == []
+    assert [layer["url"] for layer in docs["seg-1"]["layers"]] == ["layers/world.jpg"]
+    assert [p["layers"][0]["url"] for p in docs["seg-1"]["panels"]] == ["layers/panel-0.jpg", "layers/panel-1.jpg"]
+    assert (tmp_path / "stage" / "projects" / "seg-1" / "layers" / "panel-1.jpg").is_file()
+    assert [c["sfx"] for c in out.cues if c["at_ms"] < 5000].count("whoosh") == 1
+    # the next segment flies from the union frame, undrifted, starting on the world layer
+    assert after["camera"]["flyMs"] > 0
+    assert after["camera"]["from"] == pytest.approx(frames["seg-1"])
+    assert "layers/prev-detail.jpg" not in [layer["url"] for layer in docs["seg-2"]["layers"]]
+    assert docs["seg-2"]["previous"] == []

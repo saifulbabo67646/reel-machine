@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout } from "../pure.mjs";
+import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, slideOffset } from "../pure.mjs";
 
 const A = { x: 0.2, y: 0.4, s: 1080 };
 const B = { x: 0.55, y: 0.35, s: 20000 };
@@ -113,4 +113,27 @@ test("the stat card sits right of the rank badge and its text shrinks to fit", (
     assert.ok(v * c.valuePx / 104 <= c.width - 80 + 1e-9 && l * c.labelPx / 40 <= c.width - 80 + 1e-9);
   }
   assert.ok(cardLayout(900, 0).valuePx < 104 && cardLayout(0, 1200).labelPx < 40);
+});
+
+test("a versus panel slides in from its side and settles", () => {
+  assert.equal(slideOffset(120, 0, -1), -1080);   // before it enters: a whole screen off to the left
+  assert.equal(slideOffset(120, 120, 1), 1080);   // entering from the right
+  const mid = slideOffset(0, 175, -1);
+  assert.ok(mid > -1080 && mid < 0 && Math.abs(mid + 540) < 1e-9); // eased: half way at half time
+  assert.ok(slideOffset(0, 350, -1) === 0);   // home (-0 counts)
+  assert.equal(slideOffset(120, 2000, 1), 0);
+});
+
+test("a camera's screen centre can be a panel's", () => {
+  const cam = { x: 0.5, y: 0.5, s: 1000 };
+  const rings = [[[0.49, 0.49], [0.51, 0.51]]];
+  const box = ringsBox(rings, cam, { cx: 540, cy: 480 });
+  assert.ok(Math.abs(box.x0 - 530) < 1e-6 && Math.abs(box.y0 - 470) < 1e-6 && Math.abs(box.y1 - 490) < 1e-6);
+});
+
+test("a card can be laid out across any span", () => {
+  assert.deepEqual(cardLayout(300, 0), cardLayout(300, 0, 330, 1048));
+  const c = cardLayout(2000, 0, 60, 1020);
+  assert.equal(c.cx, 540);
+  assert.ok(c.width <= 960 + 1e-9 && 2000 * c.valuePx / 104 <= 960 - 80 + 1e-9);
 });

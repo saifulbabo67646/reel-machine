@@ -15,7 +15,7 @@ function load(url) {
 try {
   const doc = JSON.parse(document.getElementById("segment-data").textContent);
   const { drawFrame } = await import("./draw.mjs");
-  const layerUrls = doc.layers.map((l) => l.url);
+  const layerUrls = [...doc.layers, ...(doc.panels || []).flatMap((p) => p.layers)].map((l) => l.url);
   const itemUrls = doc.items.filter((i) => i.image).map((i) => i.image);
   const loaded = await Promise.all([...layerUrls, ...itemUrls].map(load));
   const images = new Map(loaded.filter(([, img]) => img));

@@ -29,7 +29,7 @@ from ..explainer3d.stages import speak_line
 from ..explainer3d.timing import fit_windows, shot_windows
 from ..explainer3d.video import join_shots, mux
 from . import basemap, compose, geodata, kinds, palette
-from .geometry import SAFE, Frame, shape_of, visible_bbox
+from .geometry import SAFE, Frame, frame_for, shape_of, visible_bbox
 from .models import (
     ComposeOutput, GeoOutput, ImagesOutput, MapReelInputs, NarrationOutput, PrepOutput, RenderOutput,
     ResolvedSegment, ScriptOutput, SegmentProject, SegmentsOutput, Track, Window,
@@ -121,23 +121,38 @@ class GeoStage:
         root = geodata.geo_cache(settings)
         atlas = atlas_for(settings)
         world = basemap.world_layer(settings, root)
-        frames, layers, bboxes = {}, {}, {}
+        frames, layers, bboxes, panels = {}, {}, {}, {}
         previous = None
         for seg, spec in zip(payload.segments, payload.inputs.segments):
             ctx.cancel.raise_if_cancelled()
-            if spec.camera.hold and previous is not None:
+            if spec.camera.hold and previous is not None and spec.kind != "versus":
                 frame = previous
             else:
                 # a rank sits lower, under its badge and stat card
                 safe = kinds.RANK_SAFE if spec.kind == "rank" else SAFE
                 frame = compose.segment_frame([shape_of(atlas.places[c]) for c in seg.codes], spec.camera.zoom,
                                               safe=safe)
+            # a versus is drawn in its panels; its full-screen union frame is only where the next segment flies from
             frames[seg.id] = frame.to_dict()
-            path, bbox = basemap.detail_layer(settings, root, visible_bbox(frame, margin=0.25))
-            layers[seg.id], bboxes[seg.id] = str(path), list(bbox)
+            if spec.kind == "versus":
+                panels[seg.id] = self._panels(settings, root, atlas, seg.codes, spec.camera.zoom)
+            else:
+                path, bbox = basemap.detail_layer(settings, root, visible_bbox(frame, margin=0.25))
+                layers[seg.id], bboxes[seg.id] = str(path), list(bbox)
             previous = frame
         return GeoOutput(**payload.model_dump(), world=str(world), layers=layers, detail_bboxes=bboxes,
-                         frames=frames)
+                         frames=frames, panels=panels)
+
+    @staticmethod
+    def _panels(settings: Settings, root: Path, atlas: Atlas, codes: list[str], zoom: float) -> list[dict]:
+        """One panel per country: its own frame for the panel's view, and a sharp layer of what it shows."""
+        out = []
+        for code, rect in zip(codes, kinds.panel_rects(len(codes))):
+            view = (rect[2], rect[3])
+            frame = frame_for(shape_of(atlas.places[code]).main, zoom=zoom, view=view, safe=kinds.PANEL_SAFE)
+            path, bbox = basemap.detail_layer(settings, root, visible_bbox(frame, margin=0.25, view=view))
+            out.append({"frame": frame.to_dict(), "layer": str(path), "bbox": list(bbox), "rect": list(rect)})
+        return out
 
 
 def _download(ref: str, dest_dir: Path) -> Path:
@@ -285,9 +300,10 @@ class SegmentsStage:
         previous_frame, previous_end, previous_id, previous_places = None, None, None, []
         for i, (seg, spec, window) in enumerate(zip(payload.segments, inputs.segments, payload.windows)):
             frame = payload.frames[seg.id]
+            versus = spec.kind == "versus"
             # fly or hold is decided on the undrifted frames; the camera itself starts where the previous
-            # segment's drift left it, so a cut never snaps the zoom back
-            if previous_frame is None:
+            # segment's drift left it, so a cut never snaps the zoom back. A versus cuts in, never flies
+            if previous_frame is None or versus:
                 start, target, fly = frame, frame, 0
             elif previous_frame == frame:
                 start, target, fly = previous_end, previous_end, 0  # held: keep drifting from there
@@ -305,16 +321,22 @@ class SegmentsStage:
             landed = Frame(**target)
             built = kinds.build(seg, spec, kinds.KindContext(
                 atlas=atlas, landed=landed, fly_ms=fly, speech_start=speech_start, speech_end=speech_end,
-                last_ms=last_ms, spoken=payload.spoken[i], images=payload.images))
+                last_ms=last_ms, spoken=payload.spoken[i], images=payload.images,
+                panels=payload.panels.get(seg.id, [])))
             warnings.extend(built.warnings)
             places, items = built.places, built.items
 
             words = [{"text": w.text, "start": (w.start_ms - window.start_ms) / 1000,
                       "end": (w.end_ms - window.start_ms) / 1000, "hot": hot}
                      for w, hot in zip(payload.words[i], payload.hot[i])]
-            details = [{"url": "layers/detail.jpg", "bbox": payload.detail_bboxes[seg.id]}]
-            links = {"layers/world.jpg": Path(payload.world), "layers/detail.jpg": Path(payload.layers[seg.id])}
-            if fly:  # the flight leaves a sharp country, not the blurry world layer magnified
+            links = {"layers/world.jpg": Path(payload.world)}
+            details = []
+            if not versus:  # a versus's sharp layers are its panels' (built.links)
+                details.append({"url": "layers/detail.jpg", "bbox": payload.detail_bboxes[seg.id]})
+                links["layers/detail.jpg"] = Path(payload.layers[seg.id])
+            # the flight leaves a sharp country, not the blurry world layer magnified; after a versus there is
+            # no one country to leave, so it starts on the world layer
+            if fly and previous_id in payload.layers:
                 x0, y0, x1, y1 = payload.detail_bboxes[previous_id]
                 details.insert(0, {"url": "layers/prev-detail.jpg", "bbox": [x0 - wrap, y0, x1 - wrap, y1]})
                 links["layers/prev-detail.jpg"] = Path(payload.layers[previous_id])
@@ -322,7 +344,7 @@ class SegmentsStage:
                 # so on a zoom out (a country back to the world) the previous country stays above
                 details.sort(key=lambda layer: -_long_side(layer["bbox"]))
             layers = [{"url": "layers/world.jpg", "bbox": [0, 0, 1, 1]}, *details]
-            camera = {"from": start, "to": target, "flyMs": fly, "drift": compose.DRIFT}
+            camera = {"from": start, "to": target, "flyMs": fly, "drift": 0 if versus else compose.DRIFT}
             doc = compose.segment_document(
                 duration_ms=window.duration_ms, camera=camera, layers=layers, places=places,
                 previous=[{"colour": p["colour"], "rings": _shifted(p["rings"], -wrap)} for p in previous_places]
@@ -341,7 +363,8 @@ class SegmentsStage:
                              "items": [{"name": it["name"], "atMs": it["atMs"], "image": it["image"],
                                         "x": it["x"], "y": it["y"]} for it in items], **built.resolved})
             previous_frame, previous_id, previous_places = frame, seg.id, places
-            previous_end = compose.drifted_end(camera, window.duration_ms)
+            # the camera never drifts under a versus's panels: the next segment flies from its union frame
+            previous_end = dict(frame) if versus else compose.drifted_end(camera, window.duration_ms)
         (_artifacts(ctx) / "script.resolved.json").write_text(
             json.dumps({"segments": resolved, "warnings": warnings}, indent=2, ensure_ascii=False),
             encoding="utf-8")

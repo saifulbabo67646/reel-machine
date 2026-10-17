@@ -172,8 +172,9 @@ def to_screen(frame: Frame, pts: np.ndarray) -> np.ndarray:
                             (pts[:, 1] - frame.y) * frame.s + HEIGHT / 2])
 
 
-def visible_bbox(frame: Frame, margin: float = 0.0) -> tuple[float, float, float, float]:
-    hw, hh = WIDTH / 2 / frame.s * (1 + margin), HEIGHT / 2 / frame.s * (1 + margin)
+def visible_bbox(frame: Frame, margin: float = 0.0,
+                 view: tuple[int, int] = (WIDTH, HEIGHT)) -> tuple[float, float, float, float]:
+    hw, hh = view[0] / 2 / frame.s * (1 + margin), view[1] / 2 / frame.s * (1 + margin)
     return frame.x - hw, frame.y - hh, frame.x + hw, frame.y + hh
 
 
