@@ -1,0 +1,21 @@
+{
+  "title": "Brands you didn't know were from these countries",
+  "mode": "storyboard",
+  "voice": "fake:default",
+  "segments": [
+    {"kind": "highlight", "countries": ["USA", "ITA", "FRA", "JPN", "SWE"], "legend": "Who dresses the world?",
+     "narration": "*Five countries* make almost everything you wear. Number five will surprise you."},
+    {"kind": "country", "country": "USA", "narration": "The United States has Nike, Levi's, Calvin Klein and Ralph Lauren.",
+     "items": [{"name": "Nike"}, {"name": "Levi's"}, {"name": "Calvin Klein"}, {"name": "Ralph Lauren"}]},
+    {"kind": "country", "country": "ITA", "narration": "Italy has Gucci, Prada, Versace and Armani.",
+     "items": [{"name": "Gucci"}, {"name": "Prada"}, {"name": "Versace"}, {"name": "Armani", "say": "Armani"}]},
+    {"kind": "country", "country": "FRA", "narration": "France has Louis Vuitton, Chanel, Dior and Yves Saint Laurent.",
+     "items": [{"name": "Louis Vuitton"}, {"name": "Chanel"}, {"name": "Dior"}, {"name": "YSL", "say": "Yves Saint Laurent"}]},
+    {"kind": "country", "country": "JPN", "narration": "Japan has Uniqlo, Comme des Garçons and Onitsuka Tiger.",
+     "items": [{"name": "Uniqlo"}, {"name": "Comme des Garçons", "say": "Comme des Garçons"}, {"name": "Onitsuka Tiger"}]},
+    {"kind": "country", "country": "SWE", "narration": "And number five? *Sweden*. H&M, Acne Studios and Fjällräven.",
+     "items": [{"name": "H&M"}, {"name": "Acne Studios"}, {"name": "Fjällräven", "emoji": "🦊"}]},
+    {"kind": "highlight", "countries": ["USA", "ITA", "FRA", "JPN", "SWE"],
+     "narration": "Which country did I miss? Tell me in the comments."}
+  ]
+}
