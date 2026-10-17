@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, slideOffset, tagCentre } from "../pure.mjs";
+import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, slideOffset, tagCentre, leaderLine } from "../pure.mjs";
 
 const A = { x: 0.2, y: 0.4, s: 1080 };
 const B = { x: 0.55, y: 0.35, s: 20000 };
@@ -149,4 +149,14 @@ test("a region's name tag stays on screen and off the caption band", () => {
   // on the band: to its nearer side
   assert.equal(tagCentre(540, 1340, 300, 52, W, H, band).y, 1320 - 26);
   assert.equal(tagCentre(540, 1390, 300, 52, W, H, band).y, 1406 + 26);
+});
+
+test("a tag far from its region gets a leader from its box edge to the region", () => {
+  const box = { x: 540, y: 800, hw: 100, hh: 26 };
+  assert.equal(leaderLine(box, 560, 820), null); // on its region: none
+  assert.equal(leaderLine(box, 540, 860), null); // 34 px below the box: still close enough
+  const down = leaderLine(box, 540, 1000);
+  assert.deepEqual(down, { x0: 540, y0: 826, x1: 540, y1: 1000 });
+  const side = leaderLine(box, 300, 800);
+  assert.deepEqual(side, { x0: 440, y0: 800, x1: 300, y1: 800 });
 });

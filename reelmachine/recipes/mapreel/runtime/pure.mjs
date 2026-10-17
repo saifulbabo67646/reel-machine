@@ -148,3 +148,12 @@ export function tagCentre(px, py, w, h, W, H, band = null, margin = 8) {
   }
   return at;
 }
+
+// A leader from a name tag's box ({x, y, hw, hh}: centre and half sizes) to its region's point (ax, ay): from the
+// box edge nearest the point. None (null) while the point is within `minPx` of the box.
+export function leaderLine(box, ax, ay, minPx = 40) {
+  const px = Math.max(box.x - box.hw, Math.min(box.x + box.hw, ax));
+  const py = Math.max(box.y - box.hh, Math.min(box.y + box.hh, ay));
+  if (Math.hypot(ax - px, ay - py) <= minPx) return null;
+  return { x0: px, y0: py, x1: ax, y1: ay };
+}

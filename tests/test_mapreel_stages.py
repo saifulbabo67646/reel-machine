@@ -241,3 +241,43 @@ def test_a_versus_naming_one_country_twice_fails_on_resolution():
     with pytest.raises(InvalidInput, match="different countries") as caught:
         stages.resolve_segments(inputs, Atlas.load(FIXTURE))
     assert caught.value.details["path"] == "segments[0].countries[1]"
+
+
+def test_the_segment_after_a_regions_segment_fades_out_what_was_on_screen(tmp_path, monkeypatch):
+    from reelmachine.core.timeline import WordSpan
+    from reelmachine.recipes.mapreel import compose
+    from reelmachine.recipes.mapreel.geometry import shape_of
+    from reelmachine.recipes.mapreel.models import NarrationOutput, Window
+    from reelmachine.recipes.mapreel.places import Atlas
+    from reelmachine.recipes.mapreel.regions import RegionAtlas
+
+    atlas, regions = Atlas.load(FIXTURE), RegionAtlas.load(FIXTURE.parent / "regions.geojson")
+    monkeypatch.setattr(stages, "atlas_for", lambda settings: atlas)
+    monkeypatch.setattr(stages, "region_atlas_for", lambda settings: regions)
+    inputs = MapReelInputs.model_validate({"segments": [
+        {"kind": "regions", "country": "USA", "narration": "Texas and California.",
+         "regions": [{"region": "Texas"}, {"region": "California"}]},
+        {"kind": "country", "country": "ITA", "narration": "Italy.", "items": [{"name": "Gucci"}]}]})
+    segs = stages.resolve_segments(inputs, atlas, lambda: regions)
+    frames = {s.id: compose.segment_frame([shape_of(atlas.places[c]) for c in s.codes], 1.0).to_dict() for s in segs}
+    layer = tmp_path / "layer.jpg"
+    layer.write_bytes(b"jpg")
+    said = [[WordSpan(text=w, start_ms=i * 400, end_ms=i * 400 + 300) for i, w in enumerate("Texas and California.".split())],
+            [WordSpan(text="Italy.", start_ms=0, end_ms=300)]]
+    payload = NarrationOutput(
+        inputs=inputs, segments=segs, world=str(layer), layers={s.id: str(layer) for s in segs},
+        detail_bboxes={s.id: [0, 0, 1, 1] for s in segs}, frames=frames,
+        images={"seg-2/0": None}, audio_asset="a.wav", duration_ms=10000,
+        windows=[Window(start_ms=0, duration_ms=5000, speech_offset_ms=1000, speech_ms=2000),
+                 Window(start_ms=5000, duration_ms=5000, speech_offset_ms=1000, speech_ms=2000)],
+        words=said, hot=[[False] * len(w) for w in said], spoken=said, provider="fake")
+    docs = {}
+    write = stages.compose.write_project
+    monkeypatch.setattr(stages.compose, "write_project",
+                        lambda doc, dest, links: docs.setdefault(Path(dest).name, doc) and write(doc, dest, links))
+    stages.SegmentsStage().run(SimpleNamespace(workdir=tmp_path / "stage", config=None), payload)
+    shown, previous = docs["seg-1"], docs["seg-2"]["previous"]
+    assert docs["seg-2"]["camera"]["flyMs"] > 0
+    # the faint country at its faint share, then every filled state at full: all fading out together
+    assert previous == [{"colour": shown["places"][0]["colour"], "rings": shown["places"][0]["rings"], "alpha": 0.25},
+                        *({"colour": r["colour"], "rings": r["rings"]} for r in shown["regions"])]

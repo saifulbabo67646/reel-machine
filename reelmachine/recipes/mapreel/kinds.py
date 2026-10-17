@@ -24,6 +24,7 @@ STAT_AFTER_FILL_MS = 600   # ... and an unheard stat a beat after that
 PANEL_SAFE = (0.08, 0.20, 0.92, 0.70)
 PANEL_ENTER_MS = 120       # panel k slides in at k * this
 VS_AT_MS = 250             # the VS disc slams down once the first panel is in
+COUNTRY_FAINT = 0.25       # a regions segment's country under its states (runtime/draw.mjs)
 REGION_ITEM_MAX, REGION_ITEM_MIN = 220, 120  # a state's items are smaller than a country's: they share it
 
 
@@ -58,6 +59,9 @@ class Built:
     resolved: dict[str, Any] = field(default_factory=dict)     # merged into the script.resolved entry
     warnings: list[str] = field(default_factory=list)
     links: dict[str, Path] = field(default_factory=dict)       # project path -> local file (item images)
+    # what is filled on screen at the cut, for the next segment to fade out (its `previous`); None: `places`.
+    # An entry may carry "alpha", the share of a full fill it was drawn at
+    shown: list[dict[str, Any]] | None = None
 
 
 def _place(seg: ResolvedSegment, code: str, fill: int, ctx: KindContext) -> dict[str, Any]:
@@ -185,20 +189,41 @@ TAG_PX, TAG_GAP = 44, 8  # a region's name tag (runtime/draw.mjs regionTag), and
 Box = tuple[float, float, float, float]  # centre x, centre y, half width, half height (px)
 
 
+#: words a region's tag leaves off: "Ōsaka Prefecture" is "Ōsaka" on the map
+_GENERIC = re.compile(r"\s+(prefecture|province|state|region|governorate|oblast|department|county)$", re.I)
+
+
+def tag_text(name: str) -> str:
+    """A region's tag: its name without a trailing generic word (never down to nothing)."""
+    return _GENERIC.sub("", name).strip() or name
+
+
 def tag_boxes(tags: list[tuple[str, dict[str, float]]], items: list[dict[str, Any]], frame: Frame) -> list[Box]:
-    """Where each region's name tag goes on the landed frame: at its label point, moved up above any item badge
-    or earlier tag it would cover (a state's label point is near its middle, where its first item lands)."""
+    """Where each region's name tag goes on the landed frame: at its label point or, when it would cover an item
+    badge or an earlier tag, beside what it hits (left, then right) and only then above it. A state's label
+    point is near its middle, where its first item lands."""
     taken: list[Box] = [(it["x"], it["y"], BADGE_HALF_W * it["size"], BADGE_HALF_H * it["size"]) for it in items]
     out = []
-    for name, label in tags:
-        x, y = (label["x"] - frame.x) * frame.s + WIDTH / 2, (label["y"] - frame.y) * frame.s + HEIGHT / 2
-        half_w, half_h = 0.4 * TAG_PX * len(name) + 4, TAG_PX / 2 + 4  # Arial Black runs about 0.8 em a letter
-        x = min(max(x, 8 + half_w), WIDTH - 8 - half_w)  # on screen, as the runtime keeps it
+    for text, label in tags:
+        half_w, half_h = 0.4 * TAG_PX * len(text) + 4, TAG_PX / 2 + 4  # Arial Black runs about 0.8 em a letter
+        lo, hi = 8 + half_w, WIDTH - 8 - half_w  # on screen, as the runtime keeps it
+
+        def hits(x: float, y: float) -> list[Box]:
+            return [b for b in taken if abs(b[0] - x) < half_w + b[2] and abs(b[1] - y) < half_h + b[3]]
+
+        x = min(max((label["x"] - frame.x) * frame.s + WIDTH / 2, lo), hi)
+        y = (label["y"] - frame.y) * frame.s + HEIGHT / 2
         for _ in range(len(taken) + 1):
-            hits = [b for b in taken if abs(b[0] - x) < half_w + b[2] and abs(b[1] - y) < half_h + b[3]]
-            if not hits:
+            blocking = hits(x, y)
+            if not blocking:
                 break
-            y = min(b[1] - b[3] for b in hits) - half_h - TAG_GAP
+            sides = (min(b[0] - b[2] for b in blocking) - half_w - TAG_GAP,
+                     max(b[0] + b[2] for b in blocking) + half_w + TAG_GAP)
+            beside = next((nx for nx in sides if lo <= nx <= hi and not hits(nx, y)), None)
+            if beside is not None:
+                x = beside
+                break
+            y = min(b[1] - b[3] for b in blocking) - half_h - TAG_GAP
         box = (x, y, half_w, half_h)
         taken.append(box)
         out.append(box)
@@ -231,9 +256,14 @@ def build_regions(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:
         first = (entry.items[0].say or entry.items[0].name) if entry.items else None
         alternatives.append([p for p in (entry.say, info["name"], written, first) if p])
     heard = match_any(alternatives, ctx.spoken)
-    fills, _ = pop_times(heard, overrides=[None] * len(heard), speech_start_ms=ctx.speech_start,
-                         speech_end_ms=ctx.speech_end)
-    fills = [min(t, ctx.last_ms) for t in fills]
+    fills, spread = pop_times(heard, overrides=[None] * len(heard), speech_start_ms=ctx.speech_start,
+                              speech_end_ms=ctx.speech_end)
+    # no state fills before the faint country and its borders are there
+    backdrop = built.places[0]["fillMs"]
+    fills = [min(max(t, backdrop), ctx.last_ms) for t in fills]
+    for k in spread:
+        built.warnings.append(f"{seg.id} {seg.regions[k]['name']}: not heard in the narration; "
+                              "its fill is spread evenly (add `say`)")
     floors = [fill for entry, fill in zip(spec.regions, fills) for _ in entry.items]
     items_in = _timed(seg, spec.items, ctx, built, floors=floors)
     regions, start = [], 0
@@ -244,15 +274,22 @@ def build_regions(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:
                                            place.label))
         mine = items_in[start:start + len(entry.items)]
         start += len(entry.items)
-        built.items += compose.item_entries(mine, _main_body(shape), ctx.landed, max_size=REGION_ITEM_MAX,
-                                            min_size=REGION_ITEM_MIN)
+        laid = compose.item_entries(mine, _main_body(shape), ctx.landed, max_size=REGION_ITEM_MAX,
+                                    min_size=REGION_ITEM_MIN)
+        for item in laid:  # a plate in the state's colour: a small state's item reads over sea or dark land
+            item["plate"] = info["colour"]
+        built.items += laid
+        regions[-1]["tag"] = entry.say or tag_text(info["name"])  # the script's own words stay as written
         built.cues.append((fill, "pop"))
     built.cues.extend((it["atMs"], "pop") for it in built.items)
-    boxes = tag_boxes([(r["name"], r["label"]) for r in regions], built.items, ctx.landed)
+    boxes = tag_boxes([(r["tag"], r["label"]) for r in regions], built.items, ctx.landed)
     for region, (x, y, _, _) in zip(regions, boxes):
+        region["anchor"] = region["label"]  # the region's own label point: a tag moved off it gets a leader
         region["label"] = {"x": ctx.landed.x + (x - WIDTH / 2) / ctx.landed.s,
                            "y": ctx.landed.y + (y - HEIGHT / 2) / ctx.landed.s}
     built.extras["regions"] = regions
+    # at the cut the next segment fades out what was on screen: the faint country and the filled states
+    built.shown = [{**built.places[0], "alpha": COUNTRY_FAINT}, *regions]
     built.resolved["regions"] = [{"code": r["code"], "name": r["name"], "colour": r["colour"], "fillMs": r["fillMs"]}
                                  for r in regions]
     return built

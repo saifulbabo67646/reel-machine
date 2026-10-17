@@ -230,10 +230,17 @@ def test_items_lie_inside_their_region(atlas, region_atlas):
 def test_a_region_name_tag_never_covers_an_item(atlas, region_atlas):
     from reelmachine.recipes.mapreel.geometry import BADGE_HALF_H
 
+    from reelmachine.recipes.mapreel.geometry import BADGE_HALF_W
+
     built, landed = _regions(atlas, region_atlas, "Texas has BBQ and California has avocados.")
-    for region, item in zip(built.extras["regions"], built.items):
+    for region in built.extras["regions"]:
+        tag_x = (region["label"]["x"] - landed.x) * landed.s + 540
         tag_y = (region["label"]["y"] - landed.y) * landed.s + 960
-        assert tag_y + kinds.TAG_PX / 2 <= item["y"] - BADGE_HALF_H * item["size"], (region["name"], tag_y, item)
+        half_w = 0.4 * kinds.TAG_PX * len(region["tag"])
+        for item in built.items:
+            apart_x = abs(tag_x - item["x"]) >= half_w + BADGE_HALF_W * item["size"]
+            apart_y = abs(tag_y - item["y"]) >= kinds.TAG_PX / 2 + BADGE_HALF_H * item["size"]
+            assert apart_x or apart_y, (region["tag"], tag_x, tag_y, item)
 
 
 def test_region_name_tags_never_cover_each_other():
@@ -268,3 +275,49 @@ def test_a_small_region_keeps_its_items_on_its_main_body(atlas, region_atlas):
     x0, y0, x1, y1 = to_screen(landed, np.array([[tokyo.main[0], tokyo.main[1]], [tokyo.main[2], tokyo.main[3]]])).ravel()
     # the badge's anchor is over Tokyo itself, not the islands a thousand km south
     assert x0 - 60 <= sushi["x"] <= x1 + 60 and y0 - 60 <= sushi["y"] <= y1 + 60, (sushi, (x0, y0, x1, y1))
+
+
+def test_a_blocked_tag_moves_sideways_before_it_stacks_up():
+    from reelmachine.recipes.mapreel.geometry import Frame
+
+    frame = Frame(0.5, 0.5, 2000.0)
+    item = {"x": 540.0, "y": 960.0, "size": 120}
+    (box,) = kinds.tag_boxes([("Tokyo", {"x": 0.5, "y": 0.5})], [item], frame)
+    assert box[1] == 960.0 and abs(box[0] - 540) >= box[2] + 0.55 * 120  # same height, beside the badge
+    # no room either side: up it goes
+    wide = {"x": 540.0, "y": 960.0, "size": 900}
+    (box,) = kinds.tag_boxes([("Tokyo", {"x": 0.5, "y": 0.5})], [wide], frame)
+    assert box[1] < 960 - 0.3 * 900
+
+
+def test_tags_are_short_names_and_items_sit_on_plates(atlas, region_atlas):
+    built, _ = _regions(atlas, region_atlas, "Texas has BBQ and the Golden State has avocados.",
+                        regions=[{"region": "Texas", "items": [{"name": "BBQ"}]},
+                                 {"region": "US-CA", "say": "the Golden State", "items": [{"name": "Avocado"}]}])
+    assert [r["tag"] for r in built.extras["regions"]] == ["Texas", "the Golden State"]
+    # every region item has a plate in its region's colour, so it reads over sea or dark land
+    assert [it["plate"] for it in built.items] == ["#e0201b", "#3333ff"]
+    # the tag's anchor stays on the region's label point, wherever the tag itself moved
+    assert all({"x", "y"} == set(r["anchor"]) for r in built.extras["regions"])
+
+
+@pytest.mark.parametrize("name, tag", [("Ōsaka Prefecture", "Ōsaka"), ("Punjab Province", "Punjab"),
+                                       ("Moscow Oblast", "Moscow"), ("Texas", "Texas"), ("Prefecture", "Prefecture")])
+def test_a_generic_suffix_is_dropped_from_a_tag(name, tag):
+    assert kinds.tag_text(name) == tag
+
+
+def test_an_unheard_region_is_warned_and_no_state_fills_before_the_country(atlas, region_atlas):
+    built, _ = _regions(atlas, region_atlas, "Texas first, then the west.", speech_start=0,
+                        regions=[{"region": "Texas"}, {"region": "US-CA"}])
+    country = built.places[0]["fillMs"]
+    assert all(r["fillMs"] >= country for r in built.extras["regions"])
+    assert any("California" in w and "not heard" in w and "say" in w for w in built.warnings)
+    assert not any("Texas" in w for w in built.warnings)
+
+
+def test_a_regions_segment_hands_its_fills_to_the_next_segments_fade(atlas, region_atlas):
+    built, _ = _regions(atlas, region_atlas, "Texas has BBQ and California has avocados.")
+    shown = built.shown
+    assert shown[0]["code"] == "USA" and shown[0]["alpha"] == 0.25
+    assert [p["code"] for p in shown[1:]] == ["US-TX", "US-CA"] and all("alpha" not in p for p in shown[1:])

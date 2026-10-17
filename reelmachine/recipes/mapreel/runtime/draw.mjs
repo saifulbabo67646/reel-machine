@@ -2,7 +2,7 @@
 // Draws one frame of a map segment on a 2D canvas.
 import {
   cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, clamp01, POP_MS, cardLayout,
-  slideOffset, tagCentre,
+  slideOffset, tagCentre, leaderLine,
 } from "./pure.mjs";
 
 const W = 1080, H = 1920;
@@ -107,23 +107,45 @@ function borders(ctx, cam, rings, alpha) {
 
 const TAG_PX = 44, TAG_STROKE = 8;
 
-// A region's name at its label point as it fills: white, dark-stroked, kept on screen and off the captions.
+// A region's name at its tag point as it fills: white, dark-stroked, kept on screen and off the captions. A tag
+// moved off its region (clear of an item or another tag) points back at it: a thin leader and a dot.
 function regionTag(ctx, cam, region, alpha) {
   if (alpha <= 0) return;
+  const text = region.tag || region.name;
   const [px, py] = toScreen(cam, region.label.x, region.label.y);
   ctx.save();
   ctx.font = `900 ${TAG_PX}px ${FONT}`;
-  const w = ctx.measureText(region.name).width + TAG_STROKE, h = TAG_PX + TAG_STROKE;
+  const w = ctx.measureText(text).width + TAG_STROKE, h = TAG_PX + TAG_STROKE;
   const at = tagCentre(px, py, w, h, W, H, { y0: CAPTION_Y - CAPTION_HALF, y1: CAPTION_Y + CAPTION_HALF });
   ctx.globalAlpha = alpha;
+  const anchor = region.anchor ? toScreen(cam, region.anchor.x, region.anchor.y) : null;
+  const lead = anchor && leaderLine({ x: at.x, y: at.y, hw: w / 2, hh: h / 2 }, anchor[0], anchor[1]);
+  if (lead) {
+    ctx.lineCap = "round";
+    for (const [width, colour] of [[6, "rgba(0,0,0,0.7)"], [2.5, "#ffffff"]]) {
+      ctx.beginPath();
+      ctx.moveTo(lead.x0, lead.y0);
+      ctx.lineTo(lead.x1, lead.y1);
+      ctx.lineWidth = width;
+      ctx.strokeStyle = colour;
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(lead.x1, lead.y1, 7, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(0,0,0,0.7)";
+    ctx.stroke();
+  }
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.lineJoin = "round";
   ctx.lineWidth = TAG_STROKE;
   ctx.strokeStyle = "rgba(0,0,0,0.85)";
-  ctx.strokeText(region.name, at.x, at.y);
+  ctx.strokeText(text, at.x, at.y);
   ctx.fillStyle = "#ffffff";
-  ctx.fillText(region.name, at.x, at.y);
+  ctx.fillText(text, at.x, at.y);
   ctx.restore();
 }
 
@@ -184,11 +206,24 @@ function drawItem(ctx, item, ms, images) {
       ctx.fillText(item.emoji, 0, -size * 0.95);
       ctx.font = `900 ${size}px ${FONT}`;
     }
-    ctx.shadowColor = "rgba(255,255,255,0.75)";
-    ctx.shadowBlur = 14;
-    ctx.shadowOffsetY = 0;
-    ctx.fillStyle = "#111111";
     const top = (item.emoji ? size * 0.25 : 0) - ((lines.length - 1) * size * 1.05) / 2;
+    if (item.plate) { // a plate in its region's colour, white-edged: readable over sea or dark land
+      const pw = widest() + size * 0.9, ph = lines.length * size * 1.05 + size * 0.5;
+      ctx.beginPath();
+      ctx.roundRect(-pw / 2, top - size * 0.525 - size * 0.25, pw, ph, ph / 2);
+      ctx.fillStyle = item.plate;
+      ctx.fill();
+      ctx.shadowColor = "transparent";
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "#ffffff";
+      ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+    } else {
+      ctx.shadowColor = "rgba(255,255,255,0.75)";
+      ctx.shadowBlur = 14;
+      ctx.shadowOffsetY = 0;
+      ctx.fillStyle = "#111111";
+    }
     lines.forEach((line, k) => ctx.fillText(line, 0, top + k * size * 1.05));
   }
   ctx.restore();
@@ -407,15 +442,16 @@ export function drawFrame(ctx, doc, images, seconds) {
   const cam = cameraAt(doc.camera, ms);
   drawLayers(ctx, cam, doc.layers, images);
   const fadeOut = 1 - Math.min(1, ms / Math.max(1, doc.camera.flyMs * 0.8));
-  for (const place of doc.previous || []) fillPlace(ctx, cam, place, fadeOut, seconds);
+  // each at the share it was drawn at (a regions segment's faint country), all fading together
+  for (const place of doc.previous || []) fillPlace(ctx, cam, place, fadeOut * (place.alpha ?? 1), seconds);
   // a regions segment's country is a faint backdrop under its states
   const faint = doc.countryFaint ? 0.25 : 1;
   for (const place of doc.places) fillPlace(ctx, cam, place, faint * fillAlpha(place.fillMs, ms), seconds);
   const regions = doc.regions || [];
   for (const region of regions) fillPlace(ctx, cam, region, fillAlpha(region.fillMs, ms), seconds);
   if (doc.places.length) borders(ctx, cam, doc.borders, fillAlpha(doc.places[0].fillMs, ms));
-  // the ghost name is the country's only, never a region's
-  if (doc.places.length === 1) ghostName(ctx, cam, doc.places[0], fillAlpha(doc.places[0].fillMs, ms), seconds, doc.duration || 0);
+  // the ghost name is a country's; a regions segment leaves it out, so it never runs through the state tags
+  if (doc.places.length === 1 && !doc.countryFaint) ghostName(ctx, cam, doc.places[0], fillAlpha(doc.places[0].fillMs, ms), seconds, doc.duration || 0);
   for (const region of regions) regionTag(ctx, cam, region, fillAlpha(region.fillMs, ms));
   for (const item of doc.items) drawItem(ctx, item, ms, images);
   legend(ctx, doc.legend);

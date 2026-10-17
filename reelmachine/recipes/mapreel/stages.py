@@ -119,6 +119,15 @@ def _shifted(rings: list[list[list[float]]], dx: int) -> list[list[list[float]]]
     return [[[x + dx, y] for x, y in ring] for ring in rings] if dx else rings
 
 
+def _faded(place: dict[str, Any], wrap: int) -> dict[str, Any]:
+    """A place the previous segment showed, for this one to fade out: moved with the camera's start, and at
+    the share of a full fill it was drawn at (a regions segment's faint country)."""
+    out = {"colour": place["colour"], "rings": _shifted(place["rings"], -wrap)}
+    if "alpha" in place:
+        out["alpha"] = place["alpha"]
+    return out
+
+
 def check_music(inputs: MapReelInputs) -> None:
     """`music` is "auto" (a synthesised bed) or an existing local audio file."""
     if inputs.music and inputs.music != "auto" and not Path(inputs.music).expanduser().is_file():
@@ -385,8 +394,7 @@ class SegmentsStage:
             camera = {"from": start, "to": target, "flyMs": fly, "drift": 0 if versus else compose.DRIFT}
             doc = compose.segment_document(
                 duration_ms=window.duration_ms, camera=camera, layers=layers, places=places,
-                previous=[{"colour": p["colour"], "rings": _shifted(p["rings"], -wrap)} for p in previous_places]
-                if fly else [],
+                previous=[_faded(p, wrap) for p in previous_places] if fly else [],
                 items=items, words=words, extras=built.extras)
             links.update(built.links)
             directory = compose.write_project(doc, ctx.workdir / "projects" / seg.id, links)
@@ -400,7 +408,8 @@ class SegmentsStage:
                              "places": [{"code": p["code"], "fillMs": p["fillMs"]} for p in places],
                              "items": [{"name": it["name"], "atMs": it["atMs"], "image": it["image"],
                                         "x": it["x"], "y": it["y"]} for it in items], **built.resolved})
-            previous_frame, previous_id, previous_places = frame, seg.id, places
+            previous_frame, previous_id = frame, seg.id
+            previous_places = places if built.shown is None else built.shown
             # the camera never drifts under a versus's panels: the next segment flies from its union frame
             previous_end = dict(frame) if versus else compose.drifted_end(camera, window.duration_ms)
         (_artifacts(ctx) / "script.resolved.json").write_text(
