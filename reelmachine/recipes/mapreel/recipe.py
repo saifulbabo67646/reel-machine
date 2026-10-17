@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from ...core.recipe import CostNote, ProbeContext, ProbeReport, ProviderReq, RecipeSpec
+from ...core.recipe import CostNote, ProbeContext, ProbeReport, ProviderReq, RecipeSpec, StageSpec
 from ...core.stage import StageContext
 from .models import MapReelInputs
+from .stages import (ComposeStage, GeoStage, ImagesStage, NarrationStage, PrepStage, RenderStage,
+                     ScriptStage, SegmentsStage)
 
 EXAMPLE = {
     "mode": "storyboard",
@@ -31,7 +33,16 @@ class MapReelRecipe:
         ),
         input_model=MapReelInputs,
         version=1,
-        stages=(),
+        stages=(
+            StageSpec(stage=ScriptStage()),
+            StageSpec(stage=GeoStage(), feeds="script"),
+            StageSpec(stage=ImagesStage(), feeds="geo"),
+            StageSpec(stage=NarrationStage(), feeds="images", uses=("narration",)),
+            StageSpec(stage=SegmentsStage(), feeds="narration"),
+            StageSpec(stage=PrepStage(), feeds="segments", uses=("renderer",)),
+            StageSpec(stage=ComposeStage(), feeds="prep"),
+            StageSpec(stage=RenderStage(), feeds="compose"),
+        ),
         providers={
             "narration": ProviderReq(group="narration", default="fake",
                                      description="Text-to-speech with word timings"),

@@ -7,6 +7,10 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from ...core.assets import Licence
+from ...core.stage import StageOutput
+from ...core.timeline import Timeline, WordSpan
+
 Mode = Literal["build", "storyboard"]
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 
@@ -91,3 +95,99 @@ class MapReelInputs(BaseModel):
 
     def segment_ids(self) -> list[str]:
         return [f"seg-{index}" for index in range(1, len(self.segments) + 1)]
+
+
+# -- stage payloads ------------------------------------------------------------------
+
+
+class ResolvedSegment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    index: int
+    kind: str
+    codes: list[str]
+    names: dict[str, str]
+    colours: dict[str, str]
+
+
+class ScriptOutput(StageOutput):
+    inputs: MapReelInputs
+    segments: list[ResolvedSegment]
+
+
+class GeoOutput(ScriptOutput):
+    world: str
+    layers: dict[str, str]                 # segment id -> detail layer file
+    detail_bboxes: dict[str, list[float]]
+    frames: dict[str, dict[str, float]]    # segment id -> landed frame {x, y, s}
+
+
+class ImagesOutput(GeoOutput):
+    images: dict[str, str | None]          # "<segment id>/<item index>" -> local file, or None for a badge
+    warnings: list[str] = Field(default_factory=list)
+
+
+class Window(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start_ms: int
+    duration_ms: int
+    speech_offset_ms: int
+    speech_ms: int
+
+
+class NarrationOutput(ImagesOutput):
+    audio_asset: str
+    duration_ms: int
+    windows: list[Window]
+    words: list[list[WordSpan]]            # shown words, reel time
+    hot: list[list[bool]]
+    spoken: list[list[WordSpan]]           # the voice's own words, line time
+    provider: str
+    licence: Licence | None = None
+
+
+class SegmentProject(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    segment_id: str
+    index: int
+    dir: str
+    key: str
+    nominal_ms: int
+
+
+class SegmentsOutput(StageOutput):
+    narration: NarrationOutput
+    projects: list[SegmentProject]
+    cues: list[dict] = Field(default_factory=list)
+
+
+class Track(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    segment_id: str
+    path: str
+    render_ms: int
+
+
+class PrepOutput(StageOutput):
+    segments: SegmentsOutput
+    tracks: list[Track] = Field(default_factory=list)
+    storyboard: str = ""
+    renderer: str = ""
+
+
+class ComposeOutput(StageOutput):
+    prep: PrepOutput
+    timeline: Timeline
+    render_options: dict = Field(default_factory=dict)
+
+
+class RenderOutput(StageOutput):
+    video: str
+    srt: str
+    manifest: str
+    duration_ms: int
+    render_mode: str = "hyperframes"

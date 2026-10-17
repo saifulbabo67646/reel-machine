@@ -57,7 +57,7 @@ def _caller_cache(ctx: StageContext) -> Path:
     return settings.cache_dir / "explainer3d"
 
 
-def _speak(ctx: StageContext, provider: Any, text: str, voice: str, language: str) -> tuple[Path, int, list[WordSpan], Licence | None]:
+def speak_line(ctx: StageContext, provider: Any, text: str, voice: str, language: str) -> tuple[Path, int, list[WordSpan], Licence | None]:
     """One line, spoken once per (voice, language, text): cloud voices bill per character."""
     key = hashlib.sha256(json.dumps([getattr(provider, "name", ""), voice, language, text]).encode()).hexdigest()
     folder = _caller_cache(ctx) / "lines" / key[:2]
@@ -76,6 +76,9 @@ def _speak(ctx: StageContext, provider: Any, text: str, voice: str, language: st
         "licence": speech.licence.model_dump() if speech.licence else None,
     }), encoding="utf-8")
     return audio, ms, words, speech.licence
+
+
+_speak = speak_line  # the old private name, kept for callers outside this module
 
 
 def _artifacts(ctx: StageContext) -> Path:
@@ -164,7 +167,7 @@ class NarrationStage:
             if not said:  # a beat shot: no voice, its own duration
                 speeches.append((None, 0, [], tokens))
                 continue
-            spoken, ms, words, line_licence = _speak(ctx, provider, said, inputs.voice, inputs.language)
+            spoken, ms, words, line_licence = speak_line(ctx, provider, said, inputs.voice, inputs.language)
             local = work / f"{shot.id}.wav"
             shutil.copy2(spoken, local)
             speeches.append((local, ms, words, tokens))
