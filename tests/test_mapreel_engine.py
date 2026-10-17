@@ -99,3 +99,14 @@ def test_the_camera_continues_across_a_cut(tmp_path):
     resolved = json.loads(_artifacts(job)["script.resolved.json"].read_text())
     a, b = resolved["segments"]
     assert b["camera"]["from"] == a["camera"]["to"]
+
+
+def test_a_pop_past_the_segment_end_is_clamped_and_warned(tmp_path):
+    script = json.loads(json.dumps(SCRIPT))
+    script["segments"][1]["items"][2]["at"] = 60
+    job = _run(tmp_path, {**script, "mode": "storyboard"})
+    assert job.state == JobState.SUCCEEDED, job.error
+    resolved = json.loads(_artifacts(job)["script.resolved.json"].read_text())
+    seg = resolved["segments"][1]
+    assert seg["items"][2]["atMs"] == seg["window"]["duration_ms"] - 300
+    assert any("Versace" in w and "after the segment ends" in w for w in resolved["warnings"])

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -16,7 +17,7 @@ import httpx
 from ... import ffmpeg
 from ...config import Settings
 from ...core.assets import AssetKind, Provenance
-from ...core.errors import InvalidInput, RendererUnavailable, VoiceUnavailable
+from ...core.errors import InvalidInput, JobCancelled, RendererUnavailable, VoiceUnavailable
 from ...core.stage import StageContext
 from ...core.timeline import Caption, Clip, Timeline, TimedAudioRef, WordSpan
 from ...render.captions import write_srt
@@ -37,6 +38,11 @@ from .timing import FLY_MS, MIN_SEGMENT_MS, match, pop_times
 
 IMAGE_MAX_BYTES = 8 * 1024 * 1024
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
+#: the only content types a downloaded image may have, and the suffix each one is saved with
+IMAGE_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/gif": ".gif",
+               "image/svg+xml": ".svg"}
+POP_TAIL_MS = 300  # nothing pops or fills later than this before its segment's cut
+STABLE_MTIME = 1_000_000_000  # downloads are named by content; a fixed mtime keeps project keys stable
 
 
 def _artifacts(ctx: StageContext) -> Path:
@@ -116,30 +122,42 @@ class GeoStage:
                          frames=frames)
 
 
-def _name_for(ref: str, suffix: str) -> str:
-    """A stable file name: the same image gives the same project, so a render is reused."""
-    return hashlib.sha256(ref.encode()).hexdigest()[:16] + suffix
+def _download(ref: str, dest_dir: Path) -> Path:
+    """An http(s) image, streamed and capped at 8 MB, saved under a name made from its content."""
+    with httpx.stream("GET", ref, timeout=30, follow_redirects=True,
+                      headers={"User-Agent": geodata.USER_AGENT}) as response:
+        response.raise_for_status()
+        kind = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        suffix = IMAGE_TYPES.get(kind)
+        if suffix is None:
+            raise ValueError(f"not an image ({kind or 'no content type'})")
+        chunks, size = [], 0
+        for chunk in response.iter_bytes():
+            size += len(chunk)
+            if size > IMAGE_MAX_BYTES:
+                raise ValueError("larger than 8 MB")
+            chunks.append(chunk)
+    body = b"".join(chunks)
+    path = dest_dir / (hashlib.sha256(body).hexdigest()[:16] + suffix)
+    if not path.is_file():
+        path.write_bytes(body)
+        os.utime(path, (STABLE_MTIME, STABLE_MTIME))
+    return path
 
 
 def _fetch_image(ref: str, dest_dir: Path) -> Path:
     """A local file or an http(s) URL, copied into the job; raises on anything unusable."""
     dest_dir.mkdir(parents=True, exist_ok=True)
     if ref.startswith(("http://", "https://")):
-        response = httpx.get(ref, timeout=30, follow_redirects=True, headers={"User-Agent": geodata.USER_AGENT})
-        response.raise_for_status()
-        kind = response.headers.get("content-type", "")
-        if not kind.startswith("image/") or len(response.content) > IMAGE_MAX_BYTES:
-            raise ValueError(f"not an image under 8 MB ({kind or 'no content type'})")
-        suffix = "." + kind.split("/", 1)[1].split(";")[0].replace("svg+xml", "svg").replace("jpeg", "jpg")
-        path = dest_dir / _name_for(ref, suffix)
-        path.write_bytes(response.content)
-        return path
+        return _download(ref, dest_dir)
     src = Path(ref).expanduser()
     if not src.is_file():
         raise FileNotFoundError(f"no file at {src}")
     if src.suffix.lower() not in IMAGE_SUFFIXES:
         raise ValueError(f"{src.suffix or 'no extension'} is not an image type the renderer draws")
-    path = dest_dir / _name_for(str(src.resolve()), src.suffix.lower())
+    # named by its path; copy2 carries the source's mtime, so an unchanged file keeps its project key
+    name = hashlib.sha256(str(src.resolve()).encode()).hexdigest()[:16] + src.suffix.lower()
+    path = dest_dir / name
     shutil.copy2(src, path)
     return path
 
@@ -164,9 +182,12 @@ class ImagesStage:
                 if item.image.startswith("commons:"):
                     warnings.append(f"{seg.id} {item.name}: Commons images arrive with find_images; shown as a badge")
                     continue
+                ctx.cancel.raise_if_cancelled()
                 try:
                     images[key] = str(_fetch_image(item.image, ctx.workdir / "images"))
-                except (OSError, ValueError, httpx.HTTPError) as exc:
+                except JobCancelled:
+                    raise
+                except Exception as exc:  # an unusable image is a badge, never a failed job
                     warnings.append(f"{seg.id} {item.name}: image not usable ({exc}); shown as a badge")
         return ImagesOutput(**payload.model_dump(), images=images, warnings=warnings)
 
@@ -245,6 +266,7 @@ class SegmentsStage:
             fly = 0 if start == frame else FLY_MS
             speech_start = window.speech_offset_ms
             speech_end = window.speech_offset_ms + window.speech_ms
+            last_ms = window.duration_ms - POP_TAIL_MS
             spoken = payload.spoken[i]
             shapes = {c: shape_of(atlas.places[c]) for c in seg.codes}
             landed = Frame(**frame)
@@ -254,6 +276,7 @@ class SegmentsStage:
                 heard = match([seg.names[c] for c in seg.codes], spoken)
                 fills, _ = pop_times(heard, overrides=[None] * len(seg.codes),
                                      speech_start_ms=speech_start, speech_end_ms=speech_end)
+                fills = [min(t, last_ms) for t in fills]
             else:
                 fills = [max(300, fly - 200)]
             places = [compose.place_entry(c, seg.names[c], seg.colours[c], shapes[c], landed, fills[k],
@@ -267,6 +290,10 @@ class SegmentsStage:
                 times, spread = pop_times(heard_items, overrides=overrides,
                                           speech_start_ms=speech_start, speech_end_ms=speech_end)
                 for j, (item, at) in enumerate(zip(spec.items, times)):
+                    if at > last_ms:
+                        warnings.append(f"{seg.id} {item.name}: pops at {at / 1000:.2f}s, after the segment "
+                                        f"ends; moved to {last_ms / 1000:.2f}s")
+                        at = last_ms
                     local = payload.images.get(f"{seg.id}/{j}")
                     items_in.append({"name": item.name, "emoji": item.emoji, "atMs": at,
                                      "image": f"images/{Path(local).name}" if local else None, "_local": local})
