@@ -1,0 +1,59 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut } from "../pure.mjs";
+
+const A = { x: 0.2, y: 0.4, s: 1080 };
+const B = { x: 0.55, y: 0.35, s: 20000 };
+
+test("a zoom path starts and ends on its frames", () => {
+  const path = zoomPath(A, B);
+  for (const [t, f] of [[0, A], [1, B]]) {
+    const p = path(t);
+    assert.ok(Math.abs(p.x - f.x) < 1e-9 && Math.abs(p.y - f.y) < 1e-9 && Math.abs(p.s - f.s) / f.s < 1e-9);
+  }
+});
+
+test("a long flight pulls back before it lands", () => {
+  const path = zoomPath({ x: 0.1, y: 0.4, s: 20000 }, { x: 0.8, y: 0.4, s: 20000 });
+  assert.ok(path(0.5).s < 20000 / 3);
+});
+
+test("the camera lands at flyMs and then drifts in slightly", () => {
+  const cam = { from: A, to: B, flyMs: 900, drift: 0.04 };
+  assert.deepEqual(cameraAt(cam, 0), A);
+  const landed = cameraAt(cam, 900);
+  assert.ok(Math.abs(landed.s - B.s) / B.s < 1e-6);
+  assert.ok(cameraAt(cam, 4000).s > B.s && cameraAt(cam, 4000).s <= B.s * 1.04 + 1e-6);
+});
+
+test("a held camera does not move", () => {
+  const cam = { from: B, to: B, flyMs: 0, drift: 0 };
+  assert.deepEqual(cameraAt(cam, 0), B);
+  assert.deepEqual(cameraAt(cam, 3000), B);
+});
+
+test("an item is hidden before it pops, overshoots, then settles", () => {
+  assert.equal(popState(1000, 900).visible, false);
+  const mid = popState(1000, 1150);
+  assert.ok(mid.visible && mid.alpha > 0 && mid.blur > 0);
+  const done = popState(1000, 1600);
+  assert.equal(done.alpha, 1);
+  assert.equal(done.blur, 0);
+  assert.ok(Math.abs(done.scale - 1) < 1e-6);
+  assert.ok(backOut(0.7) > 1); // the overshoot
+});
+
+test("fills fade in from their time", () => {
+  assert.equal(fillAlpha(700, 600), 0);
+  assert.ok(fillAlpha(700, 900) > 0 && fillAlpha(700, 900) < 1);
+  assert.equal(fillAlpha(700, 2000), 1);
+});
+
+test("the active word is the one being said, held briefly after", () => {
+  const words = [{ start: 0.2, end: 0.5 }, { start: 0.6, end: 0.9 }];
+  assert.equal(activeWord(words, 0.1), -1);
+  assert.equal(activeWord(words, 0.3), 0);
+  assert.equal(activeWord(words, 0.55), 0);
+  assert.equal(activeWord(words, 0.7), 1);
+  assert.equal(activeWord(words, 2), -1);
+});

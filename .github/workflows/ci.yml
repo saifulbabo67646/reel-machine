@@ -77,5 +77,7 @@ jobs:
         run: uv sync --frozen
       - name: Runtime unit tests
         run: node --test "reelmachine/recipes/explainer3d/runtime/tests/*.test.mjs"
+      - name: mapreel runtime tests
+        run: node --test "reelmachine/recipes/mapreel/runtime/tests/*.test.mjs"
       - name: Recipe tests, including real renders
         run: uv run pytest -q tests/test_explainer3d.py tests/test_explainer3d_engine.py tests/test_explainer3d_render.py tests/test_hyperframes_renderer.py
