@@ -66,3 +66,26 @@ def test_the_guide_explains_the_workflow():
     guide = MapReelRecipe.spec.guide
     assert any("find_places" in step for step in guide["workflow"])
     assert any("hook" in step.lower() for step in guide["workflow"])
+
+
+def test_a_map_data_fetch_failure_still_reports_the_other_checks(tmp_path, monkeypatch):
+    from reelmachine.core.errors import ProviderUnavailable
+    from reelmachine.recipes.mapreel import recipe as mod
+
+    def boom(settings):
+        raise ProviderUnavailable("offline", hint="check the network")
+
+    monkeypatch.setattr(mod, "atlas_for", boom)
+    report = _probe(tmp_path, [{"kind": "country", "country": "ITA", "narration": "x", "items": [{"name": "a"}]}])
+    assert not report.ok
+    names = {c.name: c for c in report.checks}
+    assert not names["map_data"].ok and "offline" in names["map_data"].detail
+    assert "renderer" in names and "voice" in names
+    assert report.details["cost"]["ttsCharacters"] == 1
+
+
+def test_a_target_length_stretches_the_estimates(tmp_path):
+    segs = [{"kind": "country", "country": "ITA", "narration": "Italy is here.", "items": [{"name": "a"}]}] * 3
+    plain = _probe(tmp_path / "a", segs)
+    fitted = _probe(tmp_path / "b", segs, length=30)
+    assert fitted.details["estimatedMs"] >= plain.details["estimatedMs"]

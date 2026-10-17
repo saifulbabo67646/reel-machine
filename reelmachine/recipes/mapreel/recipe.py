@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from ...config import get_settings
-from ...core.errors import InvalidInput
+from ...core.errors import InvalidInput, ProviderUnavailable
 from ...core.manifest import CheckResult
 from ...core.recipe import CostNote, ProbeContext, ProbeReport, ProviderReq, RecipeSpec, StageSpec
 from ...core.stage import StageContext
 from ..doodle.narration import provider_for
 from ..explainer3d.markup import parse_markup, spoken_text
-from ..explainer3d.timing import estimate_speech_ms, shot_windows
+from ..explainer3d.timing import estimate_speech_ms, fit_windows, shot_windows
 from .models import MapReelInputs
 from .places import atlas_for
 from .stages import (ComposeStage, GeoStage, ImagesStage, NarrationStage, PrepStage, RenderStage,
@@ -95,6 +95,8 @@ class MapReelRecipe:
             estimates = [estimate_speech_ms(spoken_text(parse_markup(s.narration)), inputs.language)
                          for s in inputs.segments]
             windows = shot_windows(estimates, min_ms=MIN_SEGMENT_MS)
+            if inputs.length:
+                windows = fit_windows(windows, inputs.length * 1000)
             details["segments"] = [{"id": seg.id, "codes": seg.codes, "estimatedMs": w.duration_ms}
                                    for seg, w in zip(segments, windows)]
             details["estimatedMs"] = windows[-1].end_ms
@@ -103,6 +105,9 @@ class MapReelRecipe:
             path = exc.details.get("path", "")
             checks.append(CheckResult(name="script", ok=False, detail=f"{path}: {exc.message}"))
             details["error"] = {"path": path, "message": exc.message, "hint": exc.hint}
+        except ProviderUnavailable as exc:
+            checks.append(CheckResult(name="map_data", ok=False,
+                                      detail=f"{exc.message} {exc.hint or ''}".strip()))
         details["cost"] = {"ttsCharacters": sum(len(spoken_text(parse_markup(s.narration))) for s in inputs.segments),
                            "voice": inputs.voice}
         providers = ctx.providers
