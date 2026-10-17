@@ -15,7 +15,7 @@ import numpy as np
 from ... import ffmpeg
 from ...config import Settings
 from . import geodata
-from .geometry import MAX_LAT, lat_of
+from .geometry import lat_of
 
 WORLD_PX = 2048
 DETAIL_MAX_PX = 2160

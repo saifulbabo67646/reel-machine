@@ -1,6 +1,5 @@
 # tests/test_mapreel_basemap.py
 import dataclasses
-import shutil
 import subprocess
 
 import numpy as np
@@ -8,6 +7,7 @@ import pytest
 
 from reelmachine.config import get_settings
 from reelmachine.recipes.mapreel import basemap, geodata, palette
+from reelmachine.recipes.mapreel.palette import PALETTE
 
 pytestmark = pytest.mark.slow
 
@@ -23,7 +23,7 @@ def _seed_textures(settings, root):
     for key, (w, h) in {"world": (720, 360), "detail": (1440, 720)}.items():
         src = (f"color=red:size={w // 2}x{h}[l];color=blue:size={w // 2}x{h}[r];[l][r]hstack[m];"
                f"color=green:size={w}x{h // 18}[top];[m][top]overlay=0:0")
-        subprocess.run([settings.ffmpeg, "-v", "error", "-y", "-f", "lavfi", "-i", src, "-frames:v", "1",
+        subprocess.run([settings.ffmpeg, "-v", "error", "-y", "-f", "lavfi", "-i", src, "-frames:v", "1", "-pix_fmt", "yuvj444p",
                         str(root / geodata.FILES[key][0])], check=True)
 
 
@@ -46,6 +46,9 @@ def test_world_layer_is_square_mercator_with_west_red_and_east_blue(tmp_path):
     assert img[mid, 100, 0] > 150 and img[mid, 100, 2] < 100      # west red
     assert img[mid, 1900, 2] > 150 and img[mid, 1900, 0] < 100    # east blue
     assert img[2, 1000, 1] > 100                                   # north edge green (latitudes ≥ 80°)
+    green = img[:, 1000, 1] > 64  # (0,128,0) halfway into the red below it
+    boundary = int(np.argmin(green))  # first non-green row; Mercator y of 80° × 2048 ≈ 230, linear would be ≈ 114
+    assert abs(boundary - 230) <= 5
 
 
 def test_detail_layer_crops_and_caches(tmp_path):
@@ -81,3 +84,15 @@ def test_palette_keeps_neighbours_and_cuts_distinct():
 
 def test_palette_respects_fixed_colours():
     assert palette.assign([["ITA"]], fixed={"ITA": "#123456"})["ITA"] == "#123456"
+
+
+def test_palette_reserves_fixed_colours_for_neighbouring_groups():
+    colours = palette.assign([["FRA"], ["ITA"]], fixed={"ITA": PALETTE[0]})
+    assert colours["ITA"] == PALETTE[0] and colours["FRA"] != colours["ITA"]
+
+
+def test_palette_reappearing_code_keeps_colour_and_is_avoided_by_neighbours():
+    colours = palette.assign([["FRA"], ["DEU"], ["FRA", "ITA"]])
+    assert colours["DEU"] != colours["FRA"] and colours["ITA"] != colours["FRA"]
+    colours = palette.assign([["FRA", "DEU"], ["ITA"], ["FRA"]])
+    assert colours["ITA"] not in (colours["FRA"], colours["DEU"])
