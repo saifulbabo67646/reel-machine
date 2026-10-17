@@ -280,5 +280,5 @@ false. Read-only: no job, no render.
 
 ## What the server deliberately does not expose
 
-No MCP resources, prompts or sampling — tools only, and only the eight above. No tool
+No MCP resources, prompts or sampling — tools only, and only the fourteen listed above. No tool
 returns file bytes. No tool call waits for a render. No secret appears in a result.

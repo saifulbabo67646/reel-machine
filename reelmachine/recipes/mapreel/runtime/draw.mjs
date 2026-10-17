@@ -99,7 +99,7 @@ function drawItem(ctx, item, ms, images) {
   ctx.shadowBlur = 18;
   ctx.shadowOffsetY = 6;
   const img = item.image ? images.get(item.image) : null;
-  if (img) {
+  if (img && img.width && img.height) { // an SVG with no intrinsic size has none: draw the badge
     const k = Math.min(item.size / img.width, (item.size * 0.62) / img.height);
     ctx.drawImage(img, (-img.width * k) / 2, (-img.height * k) / 2, img.width * k, img.height * k);
   } else {
