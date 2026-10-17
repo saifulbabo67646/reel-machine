@@ -10,9 +10,10 @@ from typing import Any
 
 from ...core.timeline import WordSpan
 from . import compose
-from .geometry import HEIGHT, SAFE, WIDTH, Frame, shape_of
+from .geometry import BADGE_HALF_H, BADGE_HALF_W, HEIGHT, SAFE, WIDTH, Frame, Shape, shape_of
 from .models import ResolvedSegment
 from .places import Atlas
+from .regions import RegionAtlas
 from .timing import match, match_any, pop_times
 
 #: a rank segment's country and items sit below the badge (top left) and the stat card (top centre)
@@ -23,6 +24,7 @@ STAT_AFTER_FILL_MS = 600   # ... and an unheard stat a beat after that
 PANEL_SAFE = (0.08, 0.20, 0.92, 0.70)
 PANEL_ENTER_MS = 120       # panel k slides in at k * this
 VS_AT_MS = 250             # the VS disc slams down once the first panel is in
+REGION_ITEM_MAX, REGION_ITEM_MIN = 220, 120  # a state's items are smaller than a country's: they share it
 
 
 def panel_rects(n: int) -> list[tuple[int, int, int, int]]:
@@ -44,6 +46,7 @@ class KindContext:
     spoken: list[WordSpan]
     images: dict[str, str | None]
     panels: list[dict[str, Any]] = field(default_factory=list)  # a versus: the geo stage's panels
+    regions: RegionAtlas | None = None  # a regions segment: the admin-1 data
 
 
 @dataclass
@@ -62,15 +65,18 @@ def _place(seg: ResolvedSegment, code: str, fill: int, ctx: KindContext) -> dict
                                ctx.landed, fill, ctx.atlas.places[code].label)
 
 
-def _items(seg: ResolvedSegment, spec: Any, ctx: KindContext, built: Built,
-           safe: tuple[float, float, float, float] = SAFE) -> None:
-    """The segment's items, popping as each is said, laid out inside its one country."""
-    heard = match([it.say or it.name for it in spec.items], ctx.spoken)
-    overrides = [None if it.at is None else int(it.at * 1000) for it in spec.items]
+def _timed(seg: ResolvedSegment, items: list[Any], ctx: KindContext, built: Built,
+           floors: list[int] | None = None) -> list[dict[str, Any]]:
+    """Each item's pop: when it is said (or its `at`), never before its floor, clamped to the segment's last pop.
+    Image links and warnings go into `built`."""
+    heard = match([it.say or it.name for it in items], ctx.spoken)
+    overrides = [None if it.at is None else int(it.at * 1000) for it in items]
     times, spread = pop_times(heard, overrides=overrides, speech_start_ms=ctx.speech_start,
                               speech_end_ms=ctx.speech_end)
     items_in = []
-    for j, (item, at) in enumerate(zip(spec.items, times)):
+    for j, (item, at) in enumerate(zip(items, times)):
+        if floors is not None:
+            at = max(at, floors[j])
         if at > ctx.last_ms:
             built.warnings.append(f"{seg.id} {item.name}: pops at {at / 1000:.2f}s, after the segment "
                                   f"ends; moved to {ctx.last_ms / 1000:.2f}s")
@@ -81,8 +87,15 @@ def _items(seg: ResolvedSegment, spec: Any, ctx: KindContext, built: Built,
         if local:
             built.links[image] = Path(local)
     for j in spread:
-        built.warnings.append(f"{seg.id} {spec.items[j].name}: not heard in the narration; "
+        built.warnings.append(f"{seg.id} {items[j].name}: not heard in the narration; "
                               "its pop is spread evenly (add `say` or `at`)")
+    return items_in
+
+
+def _items(seg: ResolvedSegment, spec: Any, ctx: KindContext, built: Built,
+           safe: tuple[float, float, float, float] = SAFE) -> None:
+    """The segment's items, popping as each is said, laid out inside its one country."""
+    items_in = _timed(seg, spec.items, ctx, built)
     built.items = compose.item_entries(items_in, shape_of(ctx.atlas.places[seg.codes[0]]), ctx.landed, safe=safe)
     built.cues.extend((it["atMs"], "pop") for it in built.items)
 
@@ -166,7 +179,87 @@ def build_versus(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:
     return built
 
 
-BUILDERS = {"country": build_country, "highlight": build_highlight, "rank": build_rank, "versus": build_versus}
+TAG_PX, TAG_GAP = 44, 8  # a region's name tag (runtime/draw.mjs regionTag), and its air above an item
+
+
+Box = tuple[float, float, float, float]  # centre x, centre y, half width, half height (px)
+
+
+def tag_boxes(tags: list[tuple[str, dict[str, float]]], items: list[dict[str, Any]], frame: Frame) -> list[Box]:
+    """Where each region's name tag goes on the landed frame: at its label point, moved up above any item badge
+    or earlier tag it would cover (a state's label point is near its middle, where its first item lands)."""
+    taken: list[Box] = [(it["x"], it["y"], BADGE_HALF_W * it["size"], BADGE_HALF_H * it["size"]) for it in items]
+    out = []
+    for name, label in tags:
+        x, y = (label["x"] - frame.x) * frame.s + WIDTH / 2, (label["y"] - frame.y) * frame.s + HEIGHT / 2
+        half_w, half_h = 0.4 * TAG_PX * len(name) + 4, TAG_PX / 2 + 4  # Arial Black runs about 0.8 em a letter
+        x = min(max(x, 8 + half_w), WIDTH - 8 - half_w)  # on screen, as the runtime keeps it
+        for _ in range(len(taken) + 1):
+            hits = [b for b in taken if abs(b[0] - x) < half_w + b[2] and abs(b[1] - y) < half_h + b[3]]
+            if not hits:
+                break
+            y = min(b[1] - b[3] for b in hits) - half_h - TAG_GAP
+        box = (x, y, half_w, half_h)
+        taken.append(box)
+        out.append(box)
+    return out
+
+
+def _main_body(shape: Shape) -> Shape:
+    """Only the rings of a shape's main cluster: a state's far islands (Tokyo's reach a thousand km south)
+    never pull its items out to sea."""
+    x0, y0, x1, y1 = shape.main
+    eps = 1e-9
+    rings = [r for r in shape.rings if r[:, 0].min() >= x0 - eps and r[:, 0].max() <= x1 + eps
+             and r[:, 1].min() >= y0 - eps and r[:, 1].max() <= y1 + eps]
+    return Shape(rings=rings or shape.rings, main=shape.main, bbox=shape.main if rings else shape.bbox)
+
+
+def build_regions(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:
+    """A country's states: the country faint under every state border, each named state filling in its own
+    colour when it is heard, its items laid out inside it and popping as they are said (never before it fills)."""
+    country = seg.codes[0]
+    built = Built(places=[_place(seg, country, max(300, ctx.fly_ms - 200), ctx)])
+    built.extras["countryFaint"] = True
+    built.extras["borders"] = [ring for place in ctx.regions.in_country(country)
+                               for ring in compose.place_rings(shape_of(place), ctx.landed)]
+    # a region is heard on its `say`, its name, what the script wrote (unless a code: "US-CA" is not said)
+    # or its first item, whichever comes first
+    alternatives = []
+    for entry, info in zip(spec.regions, seg.regions):
+        written = None if entry.region.strip().upper() == info["code"] else entry.region
+        first = (entry.items[0].say or entry.items[0].name) if entry.items else None
+        alternatives.append([p for p in (entry.say, info["name"], written, first) if p])
+    heard = match_any(alternatives, ctx.spoken)
+    fills, _ = pop_times(heard, overrides=[None] * len(heard), speech_start_ms=ctx.speech_start,
+                         speech_end_ms=ctx.speech_end)
+    fills = [min(t, ctx.last_ms) for t in fills]
+    floors = [fill for entry, fill in zip(spec.regions, fills) for _ in entry.items]
+    items_in = _timed(seg, spec.items, ctx, built, floors=floors)
+    regions, start = [], 0
+    for entry, info, fill in zip(spec.regions, seg.regions, fills):
+        place = ctx.regions.places[info["code"]]
+        shape = shape_of(place)
+        regions.append(compose.place_entry(info["code"], info["name"], info["colour"], shape, ctx.landed, fill,
+                                           place.label))
+        mine = items_in[start:start + len(entry.items)]
+        start += len(entry.items)
+        built.items += compose.item_entries(mine, _main_body(shape), ctx.landed, max_size=REGION_ITEM_MAX,
+                                            min_size=REGION_ITEM_MIN)
+        built.cues.append((fill, "pop"))
+    built.cues.extend((it["atMs"], "pop") for it in built.items)
+    boxes = tag_boxes([(r["name"], r["label"]) for r in regions], built.items, ctx.landed)
+    for region, (x, y, _, _) in zip(regions, boxes):
+        region["label"] = {"x": ctx.landed.x + (x - WIDTH / 2) / ctx.landed.s,
+                           "y": ctx.landed.y + (y - HEIGHT / 2) / ctx.landed.s}
+    built.extras["regions"] = regions
+    built.resolved["regions"] = [{"code": r["code"], "name": r["name"], "colour": r["colour"], "fillMs": r["fillMs"]}
+                                 for r in regions]
+    return built
+
+
+BUILDERS = {"country": build_country, "highlight": build_highlight, "rank": build_rank, "versus": build_versus,
+            "regions": build_regions}
 
 
 def build(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:

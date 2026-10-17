@@ -2,7 +2,7 @@
 // Draws one frame of a map segment on a 2D canvas.
 import {
   cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, clamp01, POP_MS, cardLayout,
-  slideOffset,
+  slideOffset, tagCentre,
 } from "./pure.mjs";
 
 const W = 1080, H = 1920;
@@ -90,6 +90,43 @@ function markPlace(ctx, box, colour, alpha, seconds) {
   ctx.restore();
 }
 
+const CAPTION_Y = H * 0.71, CAPTION_HALF = 43; // the caption band: 60 px text and its 10 px stroke, plus air
+
+// Every state's border in a regions segment: thin white lines over the faint country.
+function borders(ctx, cam, rings, alpha) {
+  if (alpha <= 0 || !rings || !rings.length) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.lineJoin = "round";
+  tracePlace(ctx, cam, rings);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255,255,255,0.55)";
+  ctx.stroke();
+  ctx.restore();
+}
+
+const TAG_PX = 44, TAG_STROKE = 8;
+
+// A region's name at its label point as it fills: white, dark-stroked, kept on screen and off the captions.
+function regionTag(ctx, cam, region, alpha) {
+  if (alpha <= 0) return;
+  const [px, py] = toScreen(cam, region.label.x, region.label.y);
+  ctx.save();
+  ctx.font = `900 ${TAG_PX}px ${FONT}`;
+  const w = ctx.measureText(region.name).width + TAG_STROKE, h = TAG_PX + TAG_STROKE;
+  const at = tagCentre(px, py, w, h, W, H, { y0: CAPTION_Y - CAPTION_HALF, y1: CAPTION_Y + CAPTION_HALF });
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = TAG_STROKE;
+  ctx.strokeStyle = "rgba(0,0,0,0.85)";
+  ctx.strokeText(region.name, at.x, at.y);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(region.name, at.x, at.y);
+  ctx.restore();
+}
+
 const GHOST_ANGLE = -0.14, GHOST_DRIFT = 12; // radians; px per second
 
 function ghostName(ctx, cam, place, alpha, seconds, duration) {
@@ -157,7 +194,6 @@ function drawItem(ctx, item, ms, images) {
   ctx.restore();
 }
 
-const CAPTION_Y = H * 0.71, CAPTION_HALF = 43; // the caption band: 60 px text and its 10 px stroke, plus air
 
 function caption(ctx, words, seconds) {
   const i = activeWord(words, seconds);
@@ -372,8 +408,15 @@ export function drawFrame(ctx, doc, images, seconds) {
   drawLayers(ctx, cam, doc.layers, images);
   const fadeOut = 1 - Math.min(1, ms / Math.max(1, doc.camera.flyMs * 0.8));
   for (const place of doc.previous || []) fillPlace(ctx, cam, place, fadeOut, seconds);
-  for (const place of doc.places) fillPlace(ctx, cam, place, fillAlpha(place.fillMs, ms), seconds);
+  // a regions segment's country is a faint backdrop under its states
+  const faint = doc.countryFaint ? 0.25 : 1;
+  for (const place of doc.places) fillPlace(ctx, cam, place, faint * fillAlpha(place.fillMs, ms), seconds);
+  const regions = doc.regions || [];
+  for (const region of regions) fillPlace(ctx, cam, region, fillAlpha(region.fillMs, ms), seconds);
+  if (doc.places.length) borders(ctx, cam, doc.borders, fillAlpha(doc.places[0].fillMs, ms));
+  // the ghost name is the country's only, never a region's
   if (doc.places.length === 1) ghostName(ctx, cam, doc.places[0], fillAlpha(doc.places[0].fillMs, ms), seconds, doc.duration || 0);
+  for (const region of regions) regionTag(ctx, cam, region, fillAlpha(region.fillMs, ms));
   for (const item of doc.items) drawItem(ctx, item, ms, images);
   legend(ctx, doc.legend);
   // the card sits right of the badge (cardLayout); the badge is drawn last, on top of any overhang

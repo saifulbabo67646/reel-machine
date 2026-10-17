@@ -121,3 +121,13 @@ def test_the_script_stage_refuses_a_missing_music_file(tmp_path):
         ScriptStage().run(ctx, {"segments": ITALY, "music": "~/no/such/track.mp3"})
     assert err.value.stage == "script" and err.value.details["path"] == "music"
     assert ScriptStage().run(ctx, {"segments": ITALY, "music": "auto"}).inputs.music == "auto"
+
+
+def test_a_bad_region_fails_probe_with_its_path(tmp_path):
+    ctx = _ctx(tmp_path)
+    shutil.copy2(FIXTURE.parent / "regions.geojson", geodata.geo_cache(ctx.config) / geodata.FILES["regions"][0])
+    segs = [{"kind": "regions", "country": "USA", "narration": "Texas.", "regions": [{"region": "Texsa"}]}]
+    report = MapReelRecipe().probe(MapReelInputs.model_validate({"segments": segs}), ctx)
+    assert not report.ok and report.details["error"]["path"] == "segments[0].regions[0].region"
+    segs[0]["regions"][0]["region"] = "Texas"
+    assert MapReelRecipe().probe(MapReelInputs.model_validate({"segments": segs}), ctx).ok

@@ -137,3 +137,14 @@ export function ghostCentre(px, py, textW, textH, angle, driftPx, W, H, margin =
   const fit = (v, lo, hi) => (lo > hi ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, v)));
   return { x: fit(px, margin + hx, W - margin - hx - driftPx), y: fit(py, margin + hy, H - margin - hy) };
 }
+
+// Where to centre a region's name tag (w x h px, upright, still): on screen, and moved to the nearer side of
+// the caption `band` ({y0, y1}) when it would sit on it.
+export function tagCentre(px, py, w, h, W, H, band = null, margin = 8) {
+  const at = ghostCentre(px, py, w, h, 0, 0, W, H, margin);
+  if (band && at.y + h / 2 > band.y0 && at.y - h / 2 < band.y1) {
+    const above = band.y0 - h / 2, below = band.y1 + h / 2;
+    at.y = Math.abs(at.y - above) <= Math.abs(at.y - below) ? above : below;
+  }
+  return at;
+}

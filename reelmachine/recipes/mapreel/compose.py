@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from .geometry import HEIGHT, SAFE, WIDTH, Frame, Shape, frame_for, item_layout, merc, simplify, simplify_for, to_screen
+from .geometry import BADGE_MIN, HEIGHT, SAFE, WIDTH, Frame, Shape, frame_for, item_layout, merc, simplify, simplify_for, to_screen
 
 HERE = Path(__file__).resolve().parent
 RUNTIME_DIR = HERE / "runtime"
@@ -64,13 +64,19 @@ def _near(frame: Frame, shape: Shape, ring: np.ndarray) -> np.ndarray:
     return ring + np.array([shift, 0.0]) if shift else ring
 
 
-def place_entry(code: str, name: str, colour: str, shape: Shape, frame: Frame, fill_ms: int,
-                label_lonlat: tuple[float, float]) -> dict[str, Any]:
+def place_rings(shape: Shape, frame: Frame) -> list[list[list[float]]]:
+    """A shape's rings in the world copy nearest the frame, simplified to what the frame can show."""
     rings = []
     for ring in shape.rings:
         slim = simplify_for(frame, _near(frame, shape, ring))
         if len(slim) >= 3:
             rings.append([[round(float(x), 7), round(float(y), 7)] for x, y in slim])
+    return rings
+
+
+def place_entry(code: str, name: str, colour: str, shape: Shape, frame: Frame, fill_ms: int,
+                label_lonlat: tuple[float, float]) -> dict[str, Any]:
+    rings = place_rings(shape, frame)
     lx, ly = merc(label_lonlat[0], label_lonlat[1])
     centre = (shape.main[0] + shape.main[2]) / 2
     lx = float(lx) + round(centre - float(lx)) + _shift(frame, shape)
@@ -79,7 +85,8 @@ def place_entry(code: str, name: str, colour: str, shape: Shape, frame: Frame, f
 
 
 def item_entries(items: list[dict[str, Any]], shape: Shape | None, frame: Frame,
-                 safe: tuple[float, float, float, float] = SAFE) -> list[dict[str, Any]]:
+                 safe: tuple[float, float, float, float] = SAFE, max_size: int = ITEM_SIZE,
+                 min_size: int = BADGE_MIN) -> list[dict[str, Any]]:
     if not items:
         return []
     if shape is None:
@@ -90,8 +97,8 @@ def item_entries(items: list[dict[str, Any]], shape: Shape | None, frame: Frame,
     else:
         # a pixel of tolerance on screen: the same answer, a fraction of the vertices to test
         rings_px = [simplify(to_screen(frame, _near(frame, shape, r)), 1.0) for r in shape.rings]
-        anchors, size = item_layout([r for r in rings_px if len(r) >= 3], len(items), max_size=ITEM_SIZE,
-                                   safe=safe)
+        anchors, size = item_layout([r for r in rings_px if len(r) >= 3], len(items), max_size=max_size,
+                                   min_size=min_size, safe=safe)
     return [{"name": it["name"], "image": it.get("image"), "emoji": it.get("emoji"), "atMs": int(it["atMs"]),
              "x": round(x, 1), "y": round(y, 1), "size": size} for it, (x, y) in zip(items, anchors)]
 

@@ -112,7 +112,36 @@ class VersusSegment(_Segment):
         return self
 
 
-Segment = Annotated[Union[CountrySegment, HighlightSegment, RankSegment, VersusSegment],
+class RegionEntry(BaseModel):
+    """One state or prefecture of the segment's country, by name or ISO 3166-2 code, with its own items."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    region: str = Field(min_length=1, max_length=60)
+    say: str | None = Field(None, max_length=80)        # how the voice says it; it fills when this is heard
+    items: list[Item] = Field(default_factory=list, max_length=6)
+    colour: str | None = None
+
+    @field_validator("colour")
+    @classmethod
+    def _check_colour(cls, value: str | None) -> str | None:
+        return _colour(value)
+
+
+class RegionsSegment(_Segment):
+    """A country's states filling one by one as they are named, each carrying its own items."""
+
+    kind: Literal["regions"]
+    country: str = Field(min_length=2, max_length=60)
+    regions: list[RegionEntry] = Field(min_length=1, max_length=12)
+
+    @property
+    def items(self) -> list[Item]:
+        """Every region's items in order, as one list: image keys (`<segment id>/<index>`) count them so."""
+        return [item for entry in self.regions for item in entry.items]
+
+
+Segment = Annotated[Union[CountrySegment, HighlightSegment, RankSegment, VersusSegment, RegionsSegment],
                     Field(discriminator="kind")]
 
 
@@ -146,6 +175,7 @@ class ResolvedSegment(BaseModel):
     codes: list[str]
     names: dict[str, str]
     colours: dict[str, str]
+    regions: list[dict] = Field(default_factory=list)  # a regions segment: {code, name, colour} per region
 
 
 class ScriptOutput(StageOutput):

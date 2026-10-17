@@ -14,6 +14,7 @@ from ..explainer3d.markup import parse_markup, spoken_text
 from ..explainer3d.timing import estimate_speech_ms, fit_windows, shot_windows
 from .models import MapReelInputs
 from .places import atlas_for
+from .regions import region_atlas_for
 from .stages import (ComposeStage, GeoStage, ImagesStage, NarrationStage, PrepStage, RenderStage,
                      ScriptStage, SegmentsStage, check_music, resolve_segments)
 from .timing import MIN_SEGMENT_MS
@@ -92,7 +93,9 @@ class MapReelRecipe:
         details: dict[str, Any] = {}
         try:
             check_music(inputs)
-            segments = resolve_segments(inputs, atlas_for(ctx.config or get_settings()))
+            settings = ctx.config or get_settings()
+            # the admin-1 file (about 40 MB) is fetched only when a regions segment needs it
+            segments = resolve_segments(inputs, atlas_for(settings), lambda: region_atlas_for(settings))
             estimates = [estimate_speech_ms(spoken_text(parse_markup(s.narration)), inputs.language)
                          for s in inputs.segments]
             windows = shot_windows(estimates, min_ms=MIN_SEGMENT_MS)

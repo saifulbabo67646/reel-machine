@@ -37,6 +37,7 @@ def _seed(settings):
     root = geodata.geo_cache(settings)
     root.mkdir(parents=True, exist_ok=True)
     shutil.copy2(FIXTURE, root / geodata.FILES["countries"][0])
+    shutil.copy2(FIXTURE.parent / "regions.geojson", root / geodata.FILES["regions"][0])
     for key, size in (("world", "720x360"), ("detail", "1440x720")):
         subprocess.run([settings.ffmpeg, "-v", "error", "-y", "-f", "lavfi", "-i", f"testsrc2=size={size}",
                         "-frames:v", "1", str(root / geodata.FILES[key][0])], check=True)
@@ -193,3 +194,19 @@ def test_a_versus_segment_splits_the_screen_and_the_next_one_flies_on(tmp_path):
     assert all(0 < t < duration for t in times) and times[0] < times[1]
     assert _layers(tmp_path, versus["id"]) == ["layers/world.jpg"]
     assert after["camera"]["flyMs"] > 0 and "layers/prev-detail.jpg" not in _layers(tmp_path, after["id"])
+
+
+def test_a_regions_segment_fills_its_states(tmp_path):
+    script = {"mode": "storyboard", "segments": [
+        {"kind": "regions", "country": "USA", "narration": "Texas has BBQ. California has the avocado.",
+         "regions": [{"region": "Texas", "items": [{"name": "BBQ"}]},
+                     {"region": "US-CA", "items": [{"name": "Avocado", "image": "LOGO"}]}]}]}
+    job = _run(tmp_path, script)
+    assert job.state == JobState.SUCCEEDED, job.error
+    (seg,) = json.loads(_artifacts(job)["script.resolved.json"].read_text())["segments"]
+    assert seg["kind"] == "regions" and seg["codes"] == ["USA"]
+    duration = seg["window"]["duration_ms"]
+    assert [r["code"] for r in seg["regions"]] == ["US-TX", "US-CA"]
+    fills = [r["fillMs"] for r in seg["regions"]]
+    assert all(0 < t < duration for t in fills) and fills[0] < fills[1]
+    assert [it["name"] for it in seg["items"]] == ["BBQ", "Avocado"] and seg["items"][1]["image"]

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, slideOffset } from "../pure.mjs";
+import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, slideOffset, tagCentre } from "../pure.mjs";
 
 const A = { x: 0.2, y: 0.4, s: 1080 };
 const B = { x: 0.55, y: 0.35, s: 20000 };
@@ -136,4 +136,17 @@ test("a card can be laid out across any span", () => {
   const c = cardLayout(2000, 0, 60, 1020);
   assert.equal(c.cx, 540);
   assert.ok(c.width <= 960 + 1e-9 && 2000 * c.valuePx / 104 <= 960 - 80 + 1e-9);
+});
+
+test("a region's name tag stays on screen and off the caption band", () => {
+  const W = 1080, H = 1920, band = { y0: 1320, y1: 1406 };
+  const inside = (at, w, h) => at.x - w / 2 >= 0 && at.x + w / 2 <= W && at.y - h / 2 >= 0 && at.y + h / 2 <= H;
+  for (const [px, py] of [[-50, 400], [1100, 400], [540, -30], [540, 1990]]) {
+    const at = tagCentre(px, py, 300, 52, W, H, band);
+    assert.ok(inside(at, 300, 52), `${px},${py} -> ${at.x},${at.y}`);
+  }
+  assert.deepEqual(tagCentre(540, 900, 300, 52, W, H, band), { x: 540, y: 900 }); // already fine
+  // on the band: to its nearer side
+  assert.equal(tagCentre(540, 1340, 300, 52, W, H, band).y, 1320 - 26);
+  assert.equal(tagCentre(540, 1390, 300, 52, W, H, band).y, 1406 + 26);
 });

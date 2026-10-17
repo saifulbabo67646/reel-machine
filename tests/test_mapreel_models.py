@@ -101,3 +101,72 @@ def test_a_versus_refuses_the_same_country_twice(countries):
     with pytest.raises(ValidationError, match="versus needs different countries"):
         MapReelInputs.model_validate({"segments": [_versus(countries=countries,
                                                            stats=[{"value": "1"}] * len(countries))]})
+
+
+def _regions(**extra):
+    return {"kind": "regions", "country": "USA", "narration": "Texas has BBQ and California has avocados.",
+            "regions": [{"region": "Texas", "items": [{"name": "BBQ"}]},
+                        {"region": "US-CA", "say": "California", "items": [{"name": "Avocado"}]}], **extra}
+
+
+def test_a_regions_segment_takes_regions_with_their_items():
+    seg = MapReelInputs.model_validate({"segments": [_regions()]}).segments[0]
+    assert seg.kind == "regions" and seg.country == "USA" and [r.region for r in seg.regions] == ["Texas", "US-CA"]
+    assert seg.regions[1].say == "California" and seg.regions[0].colour is None
+    assert [it.name for it in seg.items] == ["BBQ", "Avocado"]  # every region's items, in order
+
+
+@pytest.mark.parametrize("bad", [
+    _regions(regions=[]),                                                              # no regions
+    _regions(regions=[{"region": f"R{i}"} for i in range(13)]),                        # > 12
+    _regions(regions=[{"region": "Texas", "items": [{"name": "A"}] * 7}]),             # > 6 items
+    _regions(regions=[{"region": "Texas", "colour": "red"}]),
+    _regions(regions=[{"region": "Texas", "extra": 1}]),
+])
+def test_bad_regions_segments_are_refused(bad):
+    with pytest.raises(ValidationError):
+        MapReelInputs.model_validate({"segments": [bad]})
+
+
+FIXTURES = __import__("pathlib").Path(__file__).parent / "fixtures" / "mapreel"
+
+
+def _resolve(segments):
+    from reelmachine.recipes.mapreel import stages
+    from reelmachine.recipes.mapreel.places import Atlas
+    from reelmachine.recipes.mapreel.regions import RegionAtlas
+
+    calls = []
+
+    def regions():
+        calls.append(1)
+        return RegionAtlas.load(FIXTURES / "regions.geojson")
+
+    inputs = MapReelInputs.model_validate({"segments": segments})
+    return stages.resolve_segments(inputs, Atlas.load(FIXTURES / "countries.geojson"), regions), calls
+
+
+def test_regions_resolve_inside_their_country_with_colours_of_their_own():
+    (seg,), calls = _resolve([_regions(regions=[{"region": "Texas"}, {"region": "US-CA"}, {"region": "Georgia"}])])
+    assert seg.codes == ["USA"] and calls == [1]
+    assert [(r["code"], r["name"]) for r in seg.regions] == [("US-TX", "Texas"), ("US-CA", "California"),
+                                                               ("US-GA", "Georgia")]
+    colours = [r["colour"] for r in seg.regions]
+    assert len(set(colours)) == 3 and seg.colours["USA"] not in colours
+
+
+def test_a_region_colour_is_kept_and_no_region_atlas_loads_without_regions():
+    (seg,), _ = _resolve([_regions(regions=[{"region": "Texas", "colour": "#123456"}, {"region": "US-CA"}])])
+    assert seg.regions[0]["colour"] == "#123456" and seg.regions[1]["colour"] not in ("#123456", seg.colours["USA"])
+    plain, calls = _resolve([{"kind": "country", "country": "ITA", "narration": "x", "items": [{"name": "a"}]}])
+    assert calls == [] and plain[0].regions == []
+
+
+def test_a_bad_region_fails_with_its_path():
+    from reelmachine.core.errors import InvalidInput
+
+    with pytest.raises(InvalidInput) as caught:
+        _resolve([{"kind": "country", "country": "ITA", "narration": "x", "items": [{"name": "a"}]},
+                  _regions(regions=[{"region": "Texas"}, {"region": "Texsa"}])])
+    assert caught.value.details["path"] == "segments[1].regions[1].region"
+    assert "Texas" in caught.value.hint

@@ -10,7 +10,7 @@ import shutil
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 
@@ -35,6 +35,7 @@ from .models import (
     ResolvedSegment, ScriptOutput, SegmentProject, SegmentsOutput, Track, Window,
 )
 from .places import Atlas, atlas_for
+from .regions import RegionAtlas, region_atlas_for
 from .timing import FLY_MS, MIN_SEGMENT_MS
 
 IMAGE_MAX_BYTES = 8 * 1024 * 1024
@@ -53,11 +54,32 @@ def _artifacts(ctx: StageContext) -> Path:
 
 
 def _codes(segment: Any) -> list[str]:
-    return [segment.country] if segment.kind in ("country", "rank") else list(segment.countries)
+    return list(segment.countries) if segment.kind in ("highlight", "versus") else [segment.country]
 
 
-def resolve_segments(inputs: MapReelInputs, atlas: Atlas) -> list[ResolvedSegment]:
-    """Places to codes (errors carry the segment path) and a colour for every place."""
+def _resolve_regions(index: int, segment: Any, country: str, regions: RegionAtlas,
+                     country_colour: str) -> list[dict[str, str]]:
+    """A regions segment's regions, found inside its country, each coloured apart from the others and the country."""
+    found = []
+    for j, entry in enumerate(segment.regions):
+        try:
+            place = regions.resolve(entry.region, country)
+        except InvalidInput as exc:
+            exc.details["path"] = f"segments[{index}].regions[{j}].region"
+            raise
+        if any(p.code == place.code for p in found):  # one region twice would be one fill and one colour
+            raise InvalidInput(f"{entry.region!r} is {place.name} again", hint="name each region once",
+                               details={"path": f"segments[{index}].regions[{j}].region"})
+        found.append(place)
+    fixed = {country: country_colour, **{p.code: e.colour for p, e in zip(found, segment.regions) if e.colour}}
+    colours = palette.assign([[country], [p.code for p in found]], fixed=fixed)
+    return [{"code": p.code, "name": p.name, "colour": colours[p.code]} for p in found]
+
+
+def resolve_segments(inputs: MapReelInputs, atlas: Atlas,
+                     region_atlas: Callable[[], RegionAtlas] | None = None) -> list[ResolvedSegment]:
+    """Places to codes (errors carry the segment path) and a colour for every place. `region_atlas` loads the
+    admin-1 data; it is called once, and only when a `regions` segment needs it."""
     resolved: list[tuple[str, int, Any, list[str], dict[str, str]]] = []
     for index, (seg_id, segment) in enumerate(zip(inputs.segment_ids(), inputs.segments)):
         codes, names = [], {}
@@ -65,7 +87,7 @@ def resolve_segments(inputs: MapReelInputs, atlas: Atlas) -> list[ResolvedSegmen
             try:
                 place = atlas.resolve(query)
             except InvalidInput as exc:
-                field = "country" if segment.kind in ("country", "rank") else f"countries[{j}]"
+                field = f"countries[{j}]" if segment.kind in ("highlight", "versus") else "country"
                 exc.details["path"] = f"segments[{index}].{field}"
                 raise
             if segment.kind == "versus" and place.code in codes:  # "Japan" and "JPN": one panel twice
@@ -77,9 +99,19 @@ def resolve_segments(inputs: MapReelInputs, atlas: Atlas) -> list[ResolvedSegmen
         resolved.append((seg_id, index, segment, codes, names))
     fixed = {codes[0]: seg.colour for _, _, seg, codes, _ in resolved if seg.colour}
     colours = palette.assign([codes for *_, codes, _ in resolved], fixed=fixed)
-    return [ResolvedSegment(id=seg_id, index=index, kind=seg.kind, codes=codes, names=names,
-                            colours={c: colours[c] for c in codes})
-            for seg_id, index, seg, codes, names in resolved]
+    regions: RegionAtlas | None = None
+    out = []
+    for seg_id, index, seg, codes, names in resolved:
+        entries = []
+        if seg.kind == "regions":
+            if regions is None:
+                if region_atlas is None:
+                    raise ValueError("resolve_segments needs region_atlas for a regions segment")
+                regions = region_atlas()
+            entries = _resolve_regions(index, seg, codes[0], regions, colours[codes[0]])
+        out.append(ResolvedSegment(id=seg_id, index=index, kind=seg.kind, codes=codes, names=names,
+                                   colours={c: colours[c] for c in codes}, regions=entries))
+    return out
 
 
 def _shifted(rings: list[list[list[float]]], dx: int) -> list[list[list[float]]]:
@@ -105,7 +137,7 @@ class ScriptStage:
         inputs = MapReelInputs.model_validate(payload)
         try:
             check_music(inputs)
-            segments = resolve_segments(inputs, atlas_for(ctx.config))
+            segments = resolve_segments(inputs, atlas_for(ctx.config), lambda: region_atlas_for(ctx.config))
         except InvalidInput as exc:
             exc.stage = self.id
             raise
@@ -299,6 +331,8 @@ class SegmentsStage:
     def run(self, ctx: StageContext, payload: NarrationOutput) -> SegmentsOutput:
         atlas = atlas_for(ctx.config)
         inputs = payload.inputs
+        # the admin-1 data only when a regions segment draws its states
+        regions = region_atlas_for(ctx.config) if any(s.kind == "regions" for s in inputs.segments) else None
         warnings = list(payload.warnings)
         projects, cues, resolved = [], [], []
         previous_frame, previous_end, previous_id, previous_places = None, None, None, []
@@ -326,7 +360,7 @@ class SegmentsStage:
             built = kinds.build(seg, spec, kinds.KindContext(
                 atlas=atlas, landed=landed, fly_ms=fly, speech_start=speech_start, speech_end=speech_end,
                 last_ms=last_ms, spoken=payload.spoken[i], images=payload.images,
-                panels=payload.panels.get(seg.id, [])))
+                panels=payload.panels.get(seg.id, []), regions=regions))
             warnings.extend(built.warnings)
             places, items = built.places, built.items
 

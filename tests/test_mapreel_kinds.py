@@ -145,3 +145,126 @@ def test_an_unheard_versus_stat_is_spread_and_clamped(atlas):
     assert times[0] < times[1] <= 7700
     late = _versus(atlas, "One of these is bigger than the other one", last_ms=900)
     assert all(p["stat"]["atMs"] <= 900 for p in late.extras["panels"])
+
+
+REGIONS = Path(__file__).parent / "fixtures" / "mapreel" / "regions.geojson"
+
+
+@pytest.fixture(scope="module")
+def region_atlas():
+    from reelmachine.recipes.mapreel.regions import RegionAtlas
+
+    return RegionAtlas.load(REGIONS)
+
+
+def _regions(atlas, region_atlas, narration, regions=None, speech_start=1000, last_ms=7700):
+    regions = regions or [{"region": "Texas", "items": [{"name": "BBQ"}]},
+                          {"region": "US-CA", "items": [{"name": "Avocado"}]}]
+    spec = MapReelInputs.model_validate({"segments": [{
+        "kind": "regions", "country": "USA", "narration": narration, "regions": regions}]}).segments[0]
+    found = [region_atlas.resolve(r["region"], "USA") for r in regions]
+    seg = ResolvedSegment(id="seg-1", index=0, kind="regions", codes=["USA"],
+                          names={"USA": "United States of America"}, colours={"USA": "#8a2be2"},
+                          regions=[{"code": p.code, "name": p.name, "colour": c}
+                                   for p, c in zip(found, ("#e0201b", "#3333ff", "#f28c0f"))])
+    landed = compose.segment_frame([shape_of(atlas.places["USA"])], 1.0)
+    ctx = kinds.KindContext(atlas=atlas, landed=landed, fly_ms=900, speech_start=speech_start, speech_end=5000,
+                            last_ms=last_ms, spoken=_said(narration), images={}, regions=region_atlas)
+    return kinds.build(seg, spec, ctx), landed
+
+
+def test_a_region_fills_when_its_name_is_heard(atlas, region_atlas):
+    built, _ = _regions(atlas, region_atlas, "Texas has BBQ and California has avocados.")
+    assert [(r["code"], r["fillMs"]) for r in built.extras["regions"]] == [("US-TX", 1000), ("US-CA", 2600)]
+    assert built.resolved["regions"] == [{"code": "US-TX", "name": "Texas", "colour": "#e0201b", "fillMs": 1000},
+                                         {"code": "US-CA", "name": "California", "colour": "#3333ff", "fillMs": 2600}]
+    # the country is the faint backdrop with its ghost name; every state's border is drawn over it
+    assert [p["code"] for p in built.places] == ["USA"] and built.extras["countryFaint"] is True
+    assert len(built.extras["borders"]) >= len(region_atlas.in_country("USA"))
+    assert all(len(ring) >= 3 for ring in built.extras["borders"])
+    assert (1000, "pop") in built.cues and (2600, "pop") in built.cues
+    assert [c for c in built.cues if c[0] == built.items[0]["atMs"]]
+
+
+def test_a_region_with_say_fills_at_the_say_words(atlas, region_atlas):
+    built, _ = _regions(atlas, region_atlas, "Texas has BBQ and the Golden State has avocados.",
+                        regions=[{"region": "Texas"}, {"region": "US-CA", "say": "the Golden State"}])
+    assert [r["fillMs"] for r in built.extras["regions"]] == [1000, 2600]
+
+
+def test_an_unheard_region_fills_on_its_first_item_or_is_spread(atlas, region_atlas):
+    built, _ = _regions(atlas, region_atlas, "Brisket is everywhere, but so is the avocado.",
+                        regions=[{"region": "Texas", "items": [{"name": "Brisket"}]}, {"region": "US-CA"}],
+                        last_ms=1500)
+    texas, california = built.extras["regions"]
+    assert texas["fillMs"] == 1000 and 1000 < california["fillMs"] <= 1500
+
+
+def test_an_item_never_pops_before_its_region_fills(atlas, region_atlas):
+    # BBQ is said first, but it is not Texas's first item, so Texas fills on its name
+    built, _ = _regions(atlas, region_atlas, "BBQ is huge, and so is Texas.",
+                        regions=[{"region": "Texas", "items": [{"name": "Oil"}, {"name": "BBQ"}]}])
+    (texas,) = built.extras["regions"]
+    assert texas["fillMs"] == 1000 + 6 * 400
+    assert all(it["atMs"] >= texas["fillMs"] for it in built.items)
+    assert all((it["atMs"], "pop") in built.cues for it in built.items)
+
+
+def test_items_lie_inside_their_region(atlas, region_atlas):
+    import numpy as np
+
+    from reelmachine.recipes.mapreel.geometry import inside, to_screen
+
+    regions = [{"region": "Texas", "items": [{"name": n} for n in ("BBQ", "Oil", "Rodeo")]},
+               {"region": "US-CA", "items": [{"name": n} for n in ("Avocado", "Tech")]}]
+    built, landed = _regions(atlas, region_atlas, "Texas has BBQ, oil and rodeo; California avocado and tech.",
+                             regions=regions)
+    assert [it["name"] for it in built.items] == ["BBQ", "Oil", "Rodeo", "Avocado", "Tech"]
+    owners = [0, 0, 0, 1, 1]
+    for item, k in zip(built.items, owners):
+        rings_px = [to_screen(landed, np.asarray(r)) for r in built.extras["regions"][k]["rings"]]
+        assert inside(rings_px, item["x"], item["y"]), item
+        assert 120 <= item["size"] <= 220
+
+
+def test_a_region_name_tag_never_covers_an_item(atlas, region_atlas):
+    from reelmachine.recipes.mapreel.geometry import BADGE_HALF_H
+
+    built, landed = _regions(atlas, region_atlas, "Texas has BBQ and California has avocados.")
+    for region, item in zip(built.extras["regions"], built.items):
+        tag_y = (region["label"]["y"] - landed.y) * landed.s + 960
+        assert tag_y + kinds.TAG_PX / 2 <= item["y"] - BADGE_HALF_H * item["size"], (region["name"], tag_y, item)
+
+
+def test_region_name_tags_never_cover_each_other():
+    from reelmachine.recipes.mapreel.geometry import Frame
+
+    frame = Frame(0.5, 0.5, 2000.0)
+    same = {"x": 0.5, "y": 0.5}
+    boxes = kinds.tag_boxes([("Osaka Prefecture", same), ("Tokyo", same), ("Kyoto", same)], [], frame)
+    for i, a in enumerate(boxes):
+        for b in boxes[i + 1:]:
+            assert abs(a[0] - b[0]) >= a[2] + b[2] or abs(a[1] - b[1]) >= a[3] + b[3], (a, b)
+
+
+def test_a_small_region_keeps_its_items_on_its_main_body(atlas, region_atlas):
+    import numpy as np
+
+    from reelmachine.recipes.mapreel.geometry import inside, merc, to_screen
+
+    narration = "Tokyo has sushi."
+    spec = MapReelInputs.model_validate({"segments": [{
+        "kind": "regions", "country": "JPN", "narration": narration,
+        "regions": [{"region": "Tokyo", "items": [{"name": "Sushi"}]}]}]}).segments[0]
+    seg = ResolvedSegment(id="seg-1", index=0, kind="regions", codes=["JPN"], names={"JPN": "Japan"},
+                          colours={"JPN": "#8a2be2"}, regions=[{"code": "JP-13", "name": "Tokyo", "colour": "#e0201b"}])
+    landed = compose.segment_frame([shape_of(atlas.places["JPN"])], 1.0)
+    ctx = kinds.KindContext(atlas=atlas, landed=landed, fly_ms=900, speech_start=1000, speech_end=3000,
+                            last_ms=4000, spoken=_said(narration), images={}, regions=region_atlas)
+    (sushi,) = kinds.build(seg, spec, ctx).items
+    tokyo = shape_of(region_atlas.places["JP-13"])
+    main = [r for r in tokyo.rings if r[:, 0].min() >= tokyo.main[0] - 1e-9 and r[:, 0].max() <= tokyo.main[2] + 1e-9
+            and r[:, 1].min() >= tokyo.main[1] - 1e-9 and r[:, 1].max() <= tokyo.main[3] + 1e-9]
+    x0, y0, x1, y1 = to_screen(landed, np.array([[tokyo.main[0], tokyo.main[1]], [tokyo.main[2], tokyo.main[3]]])).ravel()
+    # the badge's anchor is over Tokyo itself, not the islands a thousand km south
+    assert x0 - 60 <= sushi["x"] <= x1 + 60 and y0 - 60 <= sushi["y"] <= y1 + 60, (sushi, (x0, y0, x1, y1))
