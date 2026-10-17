@@ -16,10 +16,11 @@ GUIDE: dict[str, Any] = {
         "and a re-hook line (see `rehooks`) at least every 12 s. End on the payoff, then a call to comment "
         "(see `endings`).",
         "5. Places: resolve countries with find_places (codes like 'ITA'). For a regions segment, list the "
-        "country's states or prefectures with find_places(query, limit, country='USA') and name each by its "
-        "ISO 3166-2 code ('US-TX', 'JP-13') or name.",
-        "6. Images: give an item `image` (an https URL or a local file) or an `emoji`; anything unusable "
-        "shows as a bold text badge.",
+        "country's states or prefectures with find_places(query, limit, country='USA'); an empty query lists "
+        "every region (raise `limit`, up to 50). Name each by its ISO 3166-2 code ('US-TX', 'JP-13') or name.",
+        "6. Images: give an item `image` (an https URL or a local file) or an `emoji`; anything unusable shows "
+        "as a bold text badge. 'commons:File:<name>' is accepted but shows as a badge for now (until Commons "
+        "images are fetched); link the file's https URL instead.",
         "7. probe and fix every failed check and every `lint` finding in details.lint (see `lint`).",
         "8. start_job with mode 'storyboard', look at storyboard.jpg, then start_job with mode 'build'.",
     ],
@@ -38,7 +39,7 @@ GUIDE: dict[str, Any] = {
     "hooks": [
         "Curiosity gap: hold back the answer. 'Number five might shock you.' / 'Only one country eats this "
         "for breakfast.'",
-        "Challenge: dare the viewer. 'You won't guess number one.' / 'Name a country that makes cars. Wrong.'",
+        "Challenge: dare the viewer. 'You won't guess number one.' / 'Bet you can't name number one.'",
         "Shock stat: open on a number. '750,000 chocolate-sprinkle sandwiches a day, in one country.'",
         "'You' framing: put the viewer in the shot. 'You'd never eat number one on this list.'",
         "Contradiction: say the opposite of what they expect. 'You think <brand> is American. It's <country>.'",
@@ -121,10 +122,13 @@ GUIDE: dict[str, Any] = {
         "Items pop when the voice says their name: write the name in the narration exactly, or give `say` "
         "for how it is pronounced and `at` (seconds) to force a time.",
         "Keep a new visual every second: 3-5 items per country segment, segments of 3-5 seconds.",
-        "`image` takes a local file or an https URL; anything unusable shows as a bold text badge.",
+        "`image` takes an https URL, a local file or 'commons:File:<name>' (a badge for now); anything unusable "
+        "shows as a bold text badge.",
         "Every stat needs a source: give each item, stat and rank a `source` URL to the page that states it.",
         "A region's tag on the map is its `say` or its name shortened ('Ōsaka Prefecture' shows 'Ōsaka'); "
         "keep `say` short.",
+        "beat-gap is a suggestion: natural spoken sentences beat filler cards. Add an item only when it is new "
+        "information; a few beat-gap warnings are fine.",
         "A stat's first number counts up on screen ('750,000', '$5.69'); say the value in the narration so it "
         "lands with the voice.",
     ],

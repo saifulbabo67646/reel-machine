@@ -463,7 +463,8 @@ class McpTools:
                         place["regions"] = True
         if country:
             hint = (
-                'use the code in a regions segment: {"kind": "regions", "country": "<country>", "regions": ["<code>", ...]}'
+                'use the code in a regions segment: {"kind": "regions", "country": "<country>", '
+                '"regions": [{"region": "<code>", "items": [{"name": "..."}]}, ...]}'
                 if found else "nothing matched in that country; leave query empty to list its regions"
             )
         else:

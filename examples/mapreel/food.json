@@ -1,5 +1,5 @@
 {
-  "title": "Foods only locals love",
+  "title": "Foods you'd never eat",
   "mode": "storyboard",
   "voice": "fake:default",
   "segments": [
@@ -12,7 +12,7 @@
         "JPN",
         "ITA"
       ],
-      "legend": "Foods only locals love",
+      "legend": "Foods you'd never eat",
       "narration": "Five foods you'd never eat. Number one is banned for sale."
     },
     {
@@ -25,22 +25,12 @@
         "label": "hagelslag sandwiches a day",
         "source": "https://en.wikipedia.org/wiki/Hagelslag"
       },
-      "narration": "Number five, the Netherlands: 750,000 a day. Hagelslag: chocolate sprinkles on bread.",
+      "narration": "Number five starts gentle. The Netherlands eats 750,000 sandwiches a day under chocolate sprinkles.",
       "items": [
         {
           "name": "Hagelslag",
-          "emoji": "🍫",
-          "source": "https://en.wikipedia.org/wiki/Hagelslag"
-        },
-        {
-          "name": "Sprinkles",
-          "emoji": "✨",
-          "source": "https://en.wikipedia.org/wiki/Hagelslag"
-        },
-        {
-          "name": "Bread",
-          "emoji": "🍞",
-          "source": "https://en.wikipedia.org/wiki/Hagelslag"
+          "say": "chocolate sprinkles",
+          "emoji": "🍫"
         }
       ]
     },
@@ -49,85 +39,24 @@
       "rank": 4,
       "country": "GBR",
       "source": "https://en.wikipedia.org/wiki/Marmite",
-      "narration": "Number four, Britain: Marmite, made from beer leftovers. Love it? Hate it?",
+      "narration": "Number four: Britain's Marmite, from beer leftovers. Love it or hate it.",
       "items": [
         {
           "name": "Marmite",
-          "emoji": "🫙",
-          "source": "https://en.wikipedia.org/wiki/Marmite"
+          "emoji": "🫙"
         },
         {
-          "name": "Beer",
-          "emoji": "🍺",
-          "source": "https://en.wikipedia.org/wiki/Marmite"
+          "name": "Beer leftovers",
+          "say": "beer",
+          "emoji": "🍺"
         },
         {
           "name": "Love it",
-          "emoji": "❤️",
-          "source": "https://en.wikipedia.org/wiki/Marmite"
+          "emoji": "❤️"
         },
         {
           "name": "Hate it",
-          "emoji": "💔",
-          "source": "https://en.wikipedia.org/wiki/Marmite"
-        }
-      ]
-    },
-    {
-      "kind": "country",
-      "country": "FRA",
-      "narration": "Bonus, France: snails. And frog legs, about 4,000 tonnes every year.",
-      "items": [
-        {
-          "name": "Snails",
-          "emoji": "🐌",
-          "source": "https://en.wikipedia.org/wiki/Escargot"
-        },
-        {
-          "name": "Frog legs",
-          "emoji": "🐸",
-          "source": "https://en.wikipedia.org/wiki/Frog_legs"
-        },
-        {
-          "name": "4,000 tonnes",
-          "say": "about 4,000",
-          "emoji": "⚖️",
-          "source": "https://en.wikipedia.org/wiki/Frog_legs"
-        },
-        {
-          "name": "Every year",
-          "emoji": "📅",
-          "source": "https://en.wikipedia.org/wiki/Frog_legs"
-        }
-      ]
-    },
-    {
-      "kind": "rank",
-      "rank": 3,
-      "country": "NOR",
-      "source": "https://en.wikipedia.org/wiki/Lutefisk",
-      "narration": "Number three, Norway: lutefisk. Dried fish, cured in lye, for Christmas.",
-      "items": [
-        {
-          "name": "Lutefisk",
-          "emoji": "🐟",
-          "source": "https://en.wikipedia.org/wiki/Lutefisk"
-        },
-        {
-          "name": "Dried fish",
-          "say": "fish",
-          "emoji": "🎣",
-          "source": "https://en.wikipedia.org/wiki/Lutefisk"
-        },
-        {
-          "name": "Lye",
-          "emoji": "🧪",
-          "source": "https://en.wikipedia.org/wiki/Lutefisk"
-        },
-        {
-          "name": "Christmas",
-          "emoji": "🎄",
-          "source": "https://en.wikipedia.org/wiki/Lutefisk"
+          "emoji": "💔"
         }
       ]
     },
@@ -155,90 +84,100 @@
           "source": "https://www.koreatimes.co.kr/amp/southkorea/society/20251009/koreans-per-capita-ramyeon-consumption-ranks-2nd-after-vietnam"
         }
       ],
-      "narration": "Noodles a head? Vietnam: 81. South Korea: 79. Japan: 47."
+      "narration": "Noodles a head? Vietnam, 81. South Korea, 79. Japan, 47."
     },
     {
-      "kind": "rank",
-      "rank": 2,
-      "country": "JPN",
-      "source": "https://en.wikipedia.org/wiki/Natt%C5%8D",
-      "narration": "Number two, Japan: natto. Fermented soybeans. Sticky. Powerful smell. Often for breakfast.",
+      "kind": "country",
+      "country": "FRA",
+      "narration": "France didn't even make the list, and it eats snails and about 4,000 tonnes of frog legs a year.",
       "items": [
         {
-          "name": "Natto",
-          "emoji": "🫘",
-          "source": "https://en.wikipedia.org/wiki/Natt%C5%8D"
+          "name": "Snails",
+          "emoji": "🐌",
+          "source": "https://en.wikipedia.org/wiki/Escargot"
         },
         {
-          "name": "Soybeans",
-          "say": "fermented soybeans",
-          "emoji": "🫛",
-          "source": "https://en.wikipedia.org/wiki/Natt%C5%8D"
-        },
-        {
-          "name": "Sticky",
-          "emoji": "🕸️",
-          "source": "https://en.wikipedia.org/wiki/Natt%C5%8D"
-        },
-        {
-          "name": "Smell",
-          "emoji": "👃",
-          "source": "https://en.wikipedia.org/wiki/Natt%C5%8D"
-        },
-        {
-          "name": "Breakfast",
-          "emoji": "🍚",
-          "source": "https://en.wikipedia.org/wiki/Natt%C5%8D"
+          "name": "Frog legs",
+          "emoji": "🐸",
+          "source": "https://en.wikipedia.org/wiki/Frog_legs"
         }
       ]
     },
     {
       "kind": "regions",
       "country": "JPN",
-      "narration": "Now, every region has its own. Hokkaido: jingisukan, grilled mutton. Osaka: takoyaki, octopus balls. Tokyo: monjayaki.",
+      "narration": "Even in Japan: Osaka eats takoyaki, octopus balls. Hokkaido grills mutton, jingisukan.",
       "regions": [
-        {
-          "region": "JP-01",
-          "say": "Hokkaido",
-          "items": [
-            {
-              "name": "Jingisukan",
-              "emoji": "🐑",
-              "source": "https://en.wikipedia.org/wiki/Jingisukan"
-            },
-            {
-              "name": "Grilled mutton",
-              "emoji": "🍖",
-              "source": "https://en.wikipedia.org/wiki/Jingisukan"
-            }
-          ]
-        },
         {
           "region": "JP-27",
           "say": "Osaka",
           "items": [
             {
               "name": "Takoyaki",
-              "emoji": "🐙",
+              "emoji": "🧆",
               "source": "https://en.wikipedia.org/wiki/Takoyaki"
             },
             {
-              "name": "Octopus balls",
-              "emoji": "🧆",
+              "name": "Octopus",
+              "emoji": "🐙",
               "source": "https://en.wikipedia.org/wiki/Takoyaki"
             }
           ]
         },
         {
-          "region": "JP-13",
-          "say": "Tokyo",
+          "region": "JP-01",
+          "say": "Hokkaido",
           "items": [
             {
-              "name": "Monjayaki",
-              "emoji": "🥞",
-              "source": "https://en.wikipedia.org/wiki/Monjayaki"
+              "name": "Mutton",
+              "emoji": "🐑",
+              "source": "https://en.wikipedia.org/wiki/Jingisukan"
+            },
+            {
+              "name": "Jingisukan",
+              "emoji": "🍖",
+              "source": "https://en.wikipedia.org/wiki/Jingisukan"
             }
           ]
+        }
+      ]
+    },
+    {
+      "kind": "rank",
+      "rank": 3,
+      "country": "NOR",
+      "source": "https://en.wikipedia.org/wiki/Lutefisk",
+      "narration": "Number three, Norway's lutefisk: dried fish, cured in lye, for Christmas.",
+      "items": [
+        {
+          "name": "Lutefisk",
+          "emoji": "🐟"
+        },
+        {
+          "name": "Dried fish",
+          "say": "fish",
+          "emoji": "🎣"
+        },
+        {
+          "name": "Lye",
+          "emoji": "🧪"
+        },
+        {
+          "name": "Christmas",
+          "emoji": "🎄"
+        }
+      ]
+    },
+    {
+      "kind": "rank",
+      "rank": 2,
+      "country": "JPN",
+      "source": "https://en.wikipedia.org/wiki/Natt%C5%8D",
+      "narration": "But wait, it gets weirder. Number two, Japan's natto: sticky fermented soybeans with a powerful smell.",
+      "items": [
+        {
+          "name": "Natto",
+          "emoji": "🫘"
         }
       ]
     },
@@ -247,34 +186,29 @@
       "rank": 1,
       "country": "ITA",
       "source": "https://en.wikipedia.org/wiki/Casu_martzu",
-      "narration": "And number one, Italy: casu martzu. Sardinian sheep cheese, with live maggots. Banned for sale.",
+      "narration": "And number one has live maggots in it. Sardinia's casu martzu, so dangerous its sale is banned.",
       "items": [
         {
-          "name": "Casu martzu",
-          "emoji": "🧀",
-          "source": "https://en.wikipedia.org/wiki/Casu_martzu"
+          "name": "Live maggots",
+          "say": "maggots",
+          "emoji": "🐛"
         },
         {
           "name": "Sardinia",
-          "say": "Sardinian",
-          "emoji": "🏝️",
-          "source": "https://en.wikipedia.org/wiki/Casu_martzu"
+          "emoji": "🏝️"
         },
         {
-          "name": "Sheep's milk",
-          "say": "sheep",
-          "emoji": "🐑",
-          "source": "https://en.wikipedia.org/wiki/Casu_martzu"
+          "name": "Casu martzu",
+          "emoji": "🧀"
         },
         {
-          "name": "Live maggots",
-          "emoji": "🐛",
-          "source": "https://en.wikipedia.org/wiki/Casu_martzu"
+          "name": "Dangerous",
+          "emoji": "⚠️"
         },
         {
-          "name": "Banned",
-          "emoji": "🚫",
-          "source": "https://en.wikipedia.org/wiki/Casu_martzu"
+          "name": "Sale banned",
+          "say": "sale is banned",
+          "emoji": "🚫"
         }
       ]
     },
@@ -285,7 +219,6 @@
         "GBR",
         "FRA",
         "NOR",
-        "KOR",
         "JPN",
         "ITA"
       ],

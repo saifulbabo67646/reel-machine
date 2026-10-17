@@ -51,6 +51,8 @@ def test_find_places_with_a_country_lists_its_regions(tmp_path):
     assert [p["code"] for p in found["places"]] == ["US-TX"]
     assert found["places"][0] == {"code": "US-TX", "name": "Texas", "level": "region", "parent": "USA", "ambiguous": False}
     assert len(every["places"]) == 3 and {p["parent"] for p in every["places"]} == {"JPN"}
+    # the hint shows the RegionEntry shape the model takes, not a bare list of codes
+    assert '"regions": [{"region": "<code>"' in found["hint"] and '["<code>"' not in found["hint"]
 
 
 def test_find_places_code_shape_searches_regions(tmp_path):
