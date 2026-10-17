@@ -71,6 +71,27 @@ def test_the_runtime_unit_tests_pass():
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
+@pytest.mark.parametrize("fly_ms,duration_ms", [(0, 2500), (900, 2500), (900, 4800), (900, 9000), (0, 6000)])
+def test_the_drifted_end_is_where_the_runtime_camera_ends(fly_ms, duration_ms):
+    """drifted_end must match cameraAt in runtime/pure.mjs, or every cut snaps the zoom."""
+    if shutil.which("node") is None:
+        pytest.skip("node not installed")
+    camera = {"from": {"x": 0.2, "y": 0.4, "s": 1080.0}, "to": {"x": 0.55, "y": 0.35, "s": 20000.0},
+              "flyMs": fly_ms, "drift": compose.DRIFT}
+    script = (f"import {{ cameraAt }} from {json.dumps((compose.RUNTIME_DIR / 'pure.mjs').as_uri())};"
+              f"console.log(JSON.stringify(cameraAt({json.dumps(camera)}, {duration_ms})));")
+    proc = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
+    assert compose.drifted_end(camera, duration_ms) == pytest.approx(json.loads(proc.stdout), rel=1e-12)
+
+
+def test_the_drift_grows_for_six_seconds_after_landing():
+    camera = {"from": {"x": 0, "y": 0, "s": 100.0}, "to": {"x": 0.5, "y": 0.5, "s": 1000.0}, "flyMs": 900,
+              "drift": 0.04}
+    assert compose.drifted_end(camera, 900)["s"] == pytest.approx(1000)
+    assert compose.drifted_end(camera, 900 + 3000)["s"] == pytest.approx(1020)
+    assert compose.drifted_end(camera, 900 + 60000) == pytest.approx({"x": 0.5, "y": 0.5, "s": 1040})
+
+
 def test_the_project_key_covers_the_html_template(tmp_path, monkeypatch):
     doc = _doc(tmp_path)
     layer = tmp_path / "world.jpg"

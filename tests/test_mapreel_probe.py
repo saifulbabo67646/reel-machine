@@ -89,3 +89,35 @@ def test_a_target_length_stretches_the_estimates(tmp_path):
     plain = _probe(tmp_path / "a", segs)
     fitted = _probe(tmp_path / "b", segs, length=30)
     assert fitted.details["estimatedMs"] >= plain.details["estimatedMs"]
+
+
+ITALY = [{"kind": "country", "country": "ITA", "narration": "Italy has Gucci.", "items": [{"name": "Gucci"}]}]
+
+
+def test_a_missing_music_file_fails_the_script_check(tmp_path):
+    report = _probe(tmp_path, ITALY, music=str(tmp_path / "nope.mp3"))
+    script = next(c for c in report.checks if c.name == "script")
+    assert not report.ok and not script.ok and "music" in script.detail
+    assert report.details["error"]["path"] == "music" and "auto" in report.details["error"]["hint"]
+
+
+def test_auto_music_and_an_existing_file_probe_ok(tmp_path):
+    assert _probe(tmp_path, ITALY, music="auto").ok
+    track = tmp_path / "bed.wav"
+    track.write_bytes(b"RIFF")
+    assert _probe(tmp_path / "again", ITALY, music=str(track)).ok
+
+
+def test_the_script_stage_refuses_a_missing_music_file(tmp_path):
+    from types import SimpleNamespace
+
+    import pytest
+
+    from reelmachine.core.errors import InvalidInput
+    from reelmachine.recipes.mapreel.stages import ScriptStage
+
+    ctx = SimpleNamespace(config=_ctx(tmp_path).config)
+    with pytest.raises(InvalidInput) as err:
+        ScriptStage().run(ctx, {"segments": ITALY, "music": "~/no/such/track.mp3"})
+    assert err.value.stage == "script" and err.value.details["path"] == "music"
+    assert ScriptStage().run(ctx, {"segments": ITALY, "music": "auto"}).inputs.music == "auto"

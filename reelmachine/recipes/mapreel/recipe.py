@@ -15,7 +15,7 @@ from ..explainer3d.timing import estimate_speech_ms, fit_windows, shot_windows
 from .models import MapReelInputs
 from .places import atlas_for
 from .stages import (ComposeStage, GeoStage, ImagesStage, NarrationStage, PrepStage, RenderStage,
-                     ScriptStage, SegmentsStage, resolve_segments)
+                     ScriptStage, SegmentsStage, check_music, resolve_segments)
 from .timing import MIN_SEGMENT_MS
 
 GUIDE = {
@@ -91,6 +91,7 @@ class MapReelRecipe:
         checks: list[CheckResult] = []
         details: dict[str, Any] = {}
         try:
+            check_music(inputs)
             segments = resolve_segments(inputs, atlas_for(ctx.config or get_settings()))
             estimates = [estimate_speech_ms(spoken_text(parse_markup(s.narration)), inputs.language)
                          for s in inputs.segments]

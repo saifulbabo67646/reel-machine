@@ -87,7 +87,7 @@ class MapReelInputs(BaseModel):
     language: str = "en"
     voice: str = "fake:default"
     look: Literal["satellite"] = "satellite"
-    music: str | None = None
+    music: str | None = None  # "auto" (a synthesised bed) or a local audio file
     length: int | None = Field(None, ge=15, le=90)
     segments: list[Segment] = Field(min_length=1, max_length=40)
     name: str | None = None

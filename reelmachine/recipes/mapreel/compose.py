@@ -17,6 +17,8 @@ HERE = Path(__file__).resolve().parent
 RUNTIME_DIR = HERE / "runtime"
 FPS = 30
 ITEM_SIZE = 300
+DRIFT = 0.04  # the camera zooms in by this fraction after landing ...
+DRIFT_MS = 6000  # ... over this long (runtime/pure.mjs cameraAt)
 
 
 def _runtime_version() -> str:
@@ -74,6 +76,15 @@ def item_entries(items: list[dict[str, Any]], shape: Shape | None, frame: Frame)
         anchors, size = item_layout([r for r in rings_px if len(r) >= 3], len(items), max_size=ITEM_SIZE)
     return [{"name": it["name"], "image": it.get("image"), "emoji": it.get("emoji"), "atMs": int(it["atMs"]),
              "x": round(x, 1), "y": round(y, 1), "size": size} for it, (x, y) in zip(items, anchors)]
+
+
+def drifted_end(camera: dict[str, Any], duration_ms: int) -> dict[str, float]:
+    """Where the runtime's camera is at the segment's last instant: `to`, zoomed in by the drift.
+    The same formula as cameraAt in runtime/pure.mjs; the next segment starts here so the cut is invisible."""
+    to, fly = camera["to"], camera.get("flyMs") or 0
+    after = max(0.0, (duration_ms - fly) / DRIFT_MS)
+    grow = 1 + camera.get("drift", 0) * min(1.0, after)
+    return {"x": to["x"], "y": to["y"], "s": to["s"] * grow}
 
 
 def segment_document(*, duration_ms: int, camera: dict[str, Any], layers: list[dict[str, Any]],

@@ -24,6 +24,7 @@ from ...render.captions import write_srt
 from ..doodle.narration import provider_for
 from ..explainer3d.audio import mix, pad_speech, synth_sfx
 from ..explainer3d.markup import display_text, display_words, parse_markup, spoken_text
+from ..explainer3d.music import synth_music
 from ..explainer3d.stages import speak_line
 from ..explainer3d.timing import fit_windows, shot_windows
 from ..explainer3d.video import join_shots, mux
@@ -77,6 +78,14 @@ def resolve_segments(inputs: MapReelInputs, atlas: Atlas) -> list[ResolvedSegmen
             for seg_id, index, seg, codes, names in resolved]
 
 
+def check_music(inputs: MapReelInputs) -> None:
+    """`music` is "auto" (a synthesised bed) or an existing local audio file."""
+    if inputs.music and inputs.music != "auto" and not Path(inputs.music).expanduser().is_file():
+        raise InvalidInput(f"music file not found: {inputs.music}",
+                           hint='give a local audio file, "auto" for a synthesised bed, or leave music out',
+                           details={"path": "music"})
+
+
 class ScriptStage:
     id = "script"
     revision = 1
@@ -86,6 +95,7 @@ class ScriptStage:
     def run(self, ctx: StageContext, payload: Any) -> ScriptOutput:
         inputs = MapReelInputs.model_validate(payload)
         try:
+            check_music(inputs)
             segments = resolve_segments(inputs, atlas_for(ctx.config))
         except InvalidInput as exc:
             exc.stage = self.id
@@ -246,6 +256,11 @@ class NarrationStage:
             words=shown_all, hot=hot_all, spoken=spoken_all, provider=name, licence=licence)
 
 
+def _long_side(bbox: list[float]) -> float:
+    """A detail layer's long side in Mercator units: each layer is at most DETAIL_MAX_PX on that side."""
+    return max(bbox[2] - bbox[0], bbox[3] - bbox[1])
+
+
 class SegmentsStage:
     """Pop times, item layout and one HyperFrames project per segment; script.resolved.json."""
 
@@ -259,17 +274,23 @@ class SegmentsStage:
         inputs = payload.inputs
         warnings = list(payload.warnings)
         projects, cues, resolved = [], [], []
-        previous_frame, previous_places = None, []
+        previous_frame, previous_end, previous_id, previous_places = None, None, None, []
         for i, (seg, spec, window) in enumerate(zip(payload.segments, inputs.segments, payload.windows)):
             frame = payload.frames[seg.id]
-            start = previous_frame or frame
-            fly = 0 if start == frame else FLY_MS
+            # fly or hold is decided on the undrifted frames; the camera itself starts where the previous
+            # segment's drift left it, so a cut never snaps the zoom back
+            if previous_frame is None:
+                start, target, fly = frame, frame, 0
+            elif previous_frame == frame:
+                start, target, fly = previous_end, previous_end, 0  # held: keep drifting from there
+            else:
+                start, target, fly = previous_end, frame, FLY_MS
             speech_start = window.speech_offset_ms
             speech_end = window.speech_offset_ms + window.speech_ms
             last_ms = window.duration_ms - POP_TAIL_MS
             spoken = payload.spoken[i]
             shapes = {c: shape_of(atlas.places[c]) for c in seg.codes}
-            landed = Frame(**frame)
+            landed = Frame(**target)
 
             # places fill when named (highlight) or as the camera lands (country)
             if spec.kind == "highlight":
@@ -305,14 +326,20 @@ class SegmentsStage:
             words = [{"text": w.text, "start": (w.start_ms - window.start_ms) / 1000,
                       "end": (w.end_ms - window.start_ms) / 1000, "hot": hot}
                      for w, hot in zip(payload.words[i], payload.hot[i])]
-            layers = [{"url": "layers/world.jpg", "bbox": [0, 0, 1, 1]},
-                      {"url": "layers/detail.jpg", "bbox": payload.detail_bboxes[seg.id]}]
-            camera = {"from": start, "to": frame, "flyMs": fly, "drift": 0.04}
+            details = [{"url": "layers/detail.jpg", "bbox": payload.detail_bboxes[seg.id]}]
+            links = {"layers/world.jpg": Path(payload.world), "layers/detail.jpg": Path(payload.layers[seg.id])}
+            if fly:  # the flight leaves a sharp country, not the blurry world layer magnified
+                details.insert(0, {"url": "layers/prev-detail.jpg", "bbox": payload.detail_bboxes[previous_id]})
+                links["layers/prev-detail.jpg"] = Path(payload.layers[previous_id])
+                # the sharper of the two on top: a layer's px per Mercator unit only falls as its box grows,
+                # so on a zoom out (a country back to the world) the previous country stays above
+                details.sort(key=lambda layer: -_long_side(layer["bbox"]))
+            layers = [{"url": "layers/world.jpg", "bbox": [0, 0, 1, 1]}, *details]
+            camera = {"from": start, "to": target, "flyMs": fly, "drift": compose.DRIFT}
             doc = compose.segment_document(
                 duration_ms=window.duration_ms, camera=camera, layers=layers, places=places,
                 previous=[{"colour": p["colour"], "rings": p["rings"]} for p in previous_places] if fly else [],
                 items=items, words=words, legend=getattr(spec, "legend", None))
-            links = {"layers/world.jpg": Path(payload.world), "layers/detail.jpg": Path(payload.layers[seg.id])}
             for it in items_in:
                 if it["_local"]:
                     links[it["image"]] = Path(it["_local"])
@@ -327,7 +354,8 @@ class SegmentsStage:
                              "places": [{"code": p["code"], "fillMs": p["fillMs"]} for p in places],
                              "items": [{"name": it["name"], "atMs": it["atMs"], "image": it["image"],
                                         "x": it["x"], "y": it["y"]} for it in items]})
-            previous_frame, previous_places = frame, places
+            previous_frame, previous_id, previous_places = frame, seg.id, places
+            previous_end = compose.drifted_end(camera, window.duration_ms)
         (_artifacts(ctx) / "script.resolved.json").write_text(
             json.dumps({"segments": resolved, "warnings": warnings}, indent=2, ensure_ascii=False),
             encoding="utf-8")
@@ -455,7 +483,10 @@ class RenderStage:
                 sounds[cue["sfx"]] = synth_sfx(cue["sfx"], work / "sfx" / f"{cue['sfx']}.wav", settings=settings,
                                                designed=True)
         cues = [(cue["at_ms"], sounds[cue["sfx"]]) for cue in prep.segments.cues]
-        music = Path(inputs.music).expanduser() if inputs.music else None
+        if inputs.music == "auto":
+            music = synth_music(work / "music.wav", total_ms=timeline.duration_ms)
+        else:
+            music = Path(inputs.music).expanduser() if inputs.music else None  # checked by the script stage
         audio = mix(ctx.assets.get(narration.audio_asset), cues, music, work / "audio.wav",
                     total_ms=timeline.duration_ms, settings=settings, profile="studio", cancel=ctx.cancel)
         video = mux(joined, audio, outdir / f"{name}.mp4", total_ms=timeline.duration_ms, settings=settings,

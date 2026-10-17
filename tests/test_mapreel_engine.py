@@ -2,6 +2,7 @@
 
 import dataclasses
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -11,7 +12,7 @@ import pytest
 from reelmachine.config import get_settings
 from reelmachine.core.job import JobRequest, JobState
 from reelmachine.engine import Engine
-from reelmachine.recipes.mapreel import geodata
+from reelmachine.recipes.mapreel import compose, geodata
 
 pytestmark = pytest.mark.slow
 FIXTURE = Path(__file__).parent / "fixtures" / "mapreel" / "countries.geojson"
@@ -88,6 +89,20 @@ def test_a_build_makes_a_reel_with_captions(tmp_path):
     assert "Gucci" in arts["captions.srt"].read_text()
 
 
+def test_auto_music_builds_a_reel_with_a_synthesised_bed(tmp_path):
+    job = _run(tmp_path, {**SCRIPT, "music": "auto"})
+    assert job.state == JobState.SUCCEEDED, job.error
+    assert list((tmp_path / "work").rglob("music.wav"))
+
+
+def test_a_missing_music_file_fails_in_the_script_stage(tmp_path):
+    job = _run(tmp_path, {**SCRIPT, "music": str(tmp_path / "nope.mp3")})
+    assert job.state == JobState.FAILED
+    error = job.error.model_dump() if hasattr(job.error, "model_dump") else job.error
+    assert error["stage"] == "script" and error["details"]["path"] == "music" and error["hint"]
+    assert not list((tmp_path / "work").rglob("projects"))  # nothing was built before it failed
+
+
 def test_an_unknown_country_fails_with_a_suggestion(tmp_path):
     bad = {"segments": [{"kind": "country", "country": "Itally", "narration": "x", "items": [{"name": "a"}]}]}
     job = _run(tmp_path, bad)
@@ -98,7 +113,44 @@ def test_the_camera_continues_across_a_cut(tmp_path):
     job = _run(tmp_path, {**SCRIPT, "mode": "storyboard"})
     resolved = json.loads(_artifacts(job)["script.resolved.json"].read_text())
     a, b = resolved["segments"]
-    assert b["camera"]["from"] == a["camera"]["to"]
+    end = compose.drifted_end(a["camera"], a["window"]["duration_ms"])
+    assert end["s"] > a["camera"]["to"]["s"]  # a drifted a little after landing ...
+    assert b["camera"]["from"] == pytest.approx(end)  # ... and b starts exactly there, so the cut is invisible
+    assert b["camera"]["flyMs"] > 0
+    # the flight leaves a sharp country: a's detail layer is drawn under b's, above the world
+    assert _layers(tmp_path, b["id"]) == ["layers/world.jpg", "layers/prev-detail.jpg", "layers/detail.jpg"]
+    (index,) = (tmp_path / "work").rglob(f"projects/{b['id']}/index.html")
+    (a_index,) = (tmp_path / "work").rglob(f"projects/{a['id']}/index.html")
+    a_detail = a_index.parent / "layers" / "detail.jpg"
+    assert (index.parent / "layers" / "prev-detail.jpg").read_bytes() == a_detail.read_bytes()
+
+
+def _layers(tmp_path, seg_id):
+    (index,) = (tmp_path / "work").rglob(f"projects/{seg_id}/index.html")
+    doc = json.loads(re.search(r'<script id="segment-data" type="application/json">(.*?)</script>',
+                               index.read_text(), re.S).group(1).replace("<\\/", "</"))
+    return [layer["url"] for layer in doc["layers"]]
+
+
+def test_on_a_zoom_out_the_sharper_previous_country_is_drawn_on_top(tmp_path):
+    script = {**SCRIPT, "segments": list(reversed(SCRIPT["segments"])), "mode": "storyboard"}
+    job = _run(tmp_path, script)
+    assert job.state == JobState.SUCCEEDED, job.error
+    _, wide = json.loads(_artifacts(job)["script.resolved.json"].read_text())["segments"]
+    assert _layers(tmp_path, wide["id"]) == ["layers/world.jpg", "layers/detail.jpg", "layers/prev-detail.jpg"]
+
+
+def test_a_held_segment_keeps_drifting_from_where_the_last_one_ended(tmp_path):
+    script = json.loads(json.dumps(SCRIPT))
+    script["segments"].append({"kind": "country", "country": "Italy", "camera": {"hold": True},
+                               "narration": "Versace is from Italy too.", "items": [{"name": "Versace"}]})
+    job = _run(tmp_path, {**script, "mode": "storyboard"})
+    assert job.state == JobState.SUCCEEDED, job.error
+    resolved = json.loads(_artifacts(job)["script.resolved.json"].read_text())
+    _, b, c = resolved["segments"]
+    end = compose.drifted_end(b["camera"], b["window"]["duration_ms"])
+    assert c["camera"]["flyMs"] == 0
+    assert c["camera"]["from"] == pytest.approx(end) and c["camera"]["to"] == pytest.approx(end)
 
 
 def test_a_pop_past_the_segment_end_is_clamped_and_warned(tmp_path):
