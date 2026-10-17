@@ -76,7 +76,25 @@ class HighlightSegment(_Segment):
     legend: str | None = Field(None, max_length=60)
 
 
-Segment = Annotated[Union[CountrySegment, HighlightSegment], Field(discriminator="kind")]
+class Stat(BaseModel):
+    """A figure on a card: "70%", "$1.2 bn". Its first number counts up on screen."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    value: str = Field(min_length=1, max_length=24)
+    label: str | None = Field(None, max_length=40)
+    source: str | None = Field(None, max_length=500)
+
+
+class RankSegment(_Segment):
+    kind: Literal["rank"]
+    rank: int = Field(ge=1, le=99)
+    country: str = Field(min_length=2, max_length=60)
+    stat: Stat | None = None
+    items: list[Item] = Field(default_factory=list, max_length=8)
+
+
+Segment = Annotated[Union[CountrySegment, HighlightSegment, RankSegment], Field(discriminator="kind")]
 
 
 class MapReelInputs(BaseModel):

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox } from "../pure.mjs";
+import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText } from "../pure.mjs";
 
 const A = { x: 0.2, y: 0.4, s: 1080 };
 const B = { x: 0.55, y: 0.35, s: 20000 };
@@ -90,4 +90,16 @@ test("a place's on-screen box spans all its rings", () => {
   const near = (a, b) => Math.abs(a - b) < 1e-6;
   assert.ok(near(box.x0, 530) && near(box.x1, 550) && near(box.y0, 960) && near(box.y1, 995));
   assert.ok(near(box.w, 20) && near(box.h, 35));
+});
+
+test("a stat counts up from zero, keeping its decimals, commas, prefix and suffix", () => {
+  const pct = { prefix: "", number: 70, decimals: 0, comma: false, suffix: "%" };
+  assert.equal(countText(pct, 0, "70%"), "0%");
+  assert.equal(countText(pct, 0.5, "70%"), "61%"); // eased out: most of the way by half time
+  assert.equal(countText(pct, 1, "70%"), "70%");
+  const money = { prefix: "$", number: 1200.5, decimals: 2, comma: true, suffix: " bn" };
+  assert.equal(countText(money, 0, "$1,200.50 bn"), "$0.00 bn");
+  assert.equal(countText(money, 0.5, "$1,200.50 bn"), "$1,050.44 bn");
+  assert.equal(countText(money, 1, "$1,200.50 bn"), "$1,200.50 bn");
+  for (const p of [0, 0.5, 1]) assert.equal(countText(null, p, "Most"), "Most");
 });

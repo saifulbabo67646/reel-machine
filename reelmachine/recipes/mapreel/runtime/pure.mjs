@@ -46,11 +46,21 @@ export function cameraAt(camera, ms) {
   return zoomPath(from, to)(easeInOut(ms / flyMs));
 }
 
-const POP_MS = 350;
+export const POP_MS = 350;
 export function popState(atMs, ms) {
   if (ms < atMs) return { visible: false, scale: 0, alpha: 0, blur: 0 };
   const p = clamp01((ms - atMs) / POP_MS);
   return { visible: true, scale: p >= 1 ? 1 : backOut(p), alpha: clamp01(p * 2), blur: p >= 1 ? 0 : (1 - p) * 10 };
+}
+
+// A stat's text part way through its count-up (p in 0..1, eased out): the number grows from zero with
+// its decimals and comma grouping, inside its prefix and suffix. No number (`count` null): the raw value.
+export function countText(count, p, raw = "") {
+  if (!count) return raw;
+  const t = 1 - Math.pow(1 - clamp01(p), 3);
+  let [whole, fraction] = (count.number * t).toFixed(count.decimals).split(".");
+  if (count.comma) whole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return count.prefix + whole + (fraction === undefined ? "" : "." + fraction) + count.suffix;
 }
 
 // A place's on-screen bounding box under a camera: {x0, y0, x1, y1, w, h} in px.

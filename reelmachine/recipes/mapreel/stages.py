@@ -29,7 +29,7 @@ from ..explainer3d.stages import speak_line
 from ..explainer3d.timing import fit_windows, shot_windows
 from ..explainer3d.video import join_shots, mux
 from . import basemap, compose, geodata, kinds, palette
-from .geometry import Frame, shape_of, visible_bbox
+from .geometry import SAFE, Frame, shape_of, visible_bbox
 from .models import (
     ComposeOutput, GeoOutput, ImagesOutput, MapReelInputs, NarrationOutput, PrepOutput, RenderOutput,
     ResolvedSegment, ScriptOutput, SegmentProject, SegmentsOutput, Track, Window,
@@ -53,7 +53,7 @@ def _artifacts(ctx: StageContext) -> Path:
 
 
 def _codes(segment: Any) -> list[str]:
-    return [segment.country] if segment.kind == "country" else list(segment.countries)
+    return [segment.country] if segment.kind in ("country", "rank") else list(segment.countries)
 
 
 def resolve_segments(inputs: MapReelInputs, atlas: Atlas) -> list[ResolvedSegment]:
@@ -65,7 +65,7 @@ def resolve_segments(inputs: MapReelInputs, atlas: Atlas) -> list[ResolvedSegmen
             try:
                 place = atlas.resolve(query)
             except InvalidInput as exc:
-                field = "country" if segment.kind == "country" else f"countries[{j}]"
+                field = "country" if segment.kind in ("country", "rank") else f"countries[{j}]"
                 exc.details["path"] = f"segments[{index}].{field}"
                 raise
             codes.append(place.code)
@@ -128,7 +128,10 @@ class GeoStage:
             if spec.camera.hold and previous is not None:
                 frame = previous
             else:
-                frame = compose.segment_frame([shape_of(atlas.places[c]) for c in seg.codes], spec.camera.zoom)
+                # a rank sits lower, under its badge and stat card
+                safe = kinds.RANK_SAFE if spec.kind == "rank" else SAFE
+                frame = compose.segment_frame([shape_of(atlas.places[c]) for c in seg.codes], spec.camera.zoom,
+                                              safe=safe)
             frames[seg.id] = frame.to_dict()
             path, bbox = basemap.detail_layer(settings, root, visible_bbox(frame, margin=0.25))
             layers[seg.id], bboxes[seg.id] = str(path), list(bbox)

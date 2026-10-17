@@ -162,3 +162,17 @@ def test_a_pop_past_the_segment_end_is_clamped_and_warned(tmp_path):
     seg = resolved["segments"][1]
     assert seg["items"][2]["atMs"] == seg["window"]["duration_ms"] - 300
     assert any("Versace" in w and "after the segment ends" in w for w in resolved["warnings"])
+
+
+def test_a_rank_segment_carries_a_badge_and_a_stat(tmp_path):
+    script = {"mode": "storyboard", "segments": [
+        {"kind": "rank", "rank": 1, "country": "Italy", "stat": {"value": "70%", "label": "of the world's luxury"},
+         "narration": "Number one is Italy, with 70% of it: Gucci and Prada.",
+         "items": [{"name": "Gucci"}, {"name": "Prada"}]}]}
+    job = _run(tmp_path, script)
+    assert job.state == JobState.SUCCEEDED, job.error
+    (seg,) = json.loads(_artifacts(job)["script.resolved.json"].read_text())["segments"]
+    assert seg["kind"] == "rank" and seg["codes"] == ["ITA"] and len(seg["items"]) == 2
+    duration = seg["window"]["duration_ms"]
+    assert seg["rank"]["n"] == 1 and seg["rank"]["gold"] and 0 < seg["rank"]["atMs"] < duration
+    assert seg["stat"]["value"] == "70%" and 0 < seg["stat"]["atMs"] < duration

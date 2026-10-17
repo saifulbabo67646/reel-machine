@@ -50,3 +50,22 @@ def test_the_recipe_is_registered():
 
     names = {ep.name for ep in entry_points(group="reelmachine.recipes")}
     assert "mapreel" in names
+
+
+def _rank(**extra):
+    return {"kind": "rank", "rank": 1, "country": "ITA", "narration": "Italy is number one.", **extra}
+
+
+@pytest.mark.parametrize("bad", [
+    _rank(rank=0),
+    _rank(rank=100),
+    _rank(stat={"value": "x" * 25}),
+])
+def test_bad_rank_segments_are_refused(bad):
+    with pytest.raises(ValidationError):
+        MapReelInputs.model_validate({"segments": [bad]})
+
+
+def test_a_rank_with_no_items_validates():
+    seg = MapReelInputs.model_validate({"segments": [_rank(stat={"value": "70%", "label": "of the world's olive oil"})]}).segments[0]
+    assert seg.kind == "rank" and seg.items == [] and seg.stat.value == "70%" and seg.stat.source is None

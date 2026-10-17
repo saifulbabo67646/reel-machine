@@ -1,6 +1,8 @@
 // reelmachine/recipes/mapreel/runtime/draw.mjs
 // Draws one frame of a map segment on a 2D canvas.
-import { cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre, ringsBox } from "./pure.mjs";
+import {
+  cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, clamp01, POP_MS,
+} from "./pure.mjs";
 
 const W = 1080, H = 1920;
 const FONT = '"Arial Black", "Helvetica Neue", Arial, sans-serif';
@@ -182,6 +184,95 @@ function legend(ctx, text) {
   ctx.restore();
 }
 
+const RANK_X = 190, RANK_Y = 330, RANK_R = 125, GOLD = "#ffcc00", SHINE_MS = 600;
+
+// A ranking's big #N disc, top left, popping in as the country fills; number one is gold and shines once.
+function rankBadge(ctx, rank, ms) {
+  const pop = popState(rank.atMs, ms);
+  if (!pop.visible) return;
+  ctx.save();
+  ctx.globalAlpha = pop.alpha;
+  if (pop.blur > 0.2) ctx.filter = `blur(${pop.blur.toFixed(1)}px)`;
+  ctx.translate(RANK_X, RANK_Y);
+  ctx.scale(pop.scale, pop.scale);
+  ctx.beginPath();
+  ctx.arc(0, 0, RANK_R, 0, Math.PI * 2);
+  ctx.shadowColor = "rgba(0,0,0,0.45)";
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 8;
+  ctx.fillStyle = rank.gold ? GOLD : rank.colour;
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+  const t = (ms - rank.atMs - POP_MS) / SHINE_MS;
+  if (rank.gold && t > 0 && t < 1) { // a white band sweeps the disc diagonally once the pop settles
+    ctx.save();
+    ctx.clip();
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.fillRect(-1.6 * RANK_R + t * 3.2 * RANK_R - 30, -2 * RANK_R, 60, 4 * RANK_R);
+    ctx.restore();
+  }
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = "#ffffff";
+  ctx.stroke();
+  const text = `#${rank.n}`;
+  ctx.font = `900 120px ${FONT}`;
+  const size = fitFontPx(120, ctx.measureText(text).width, RANK_R * 1.6); // "#99" stays inside the ring
+  ctx.font = `900 ${size}px ${FONT}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = rank.gold ? "#111111" : "#ffffff";
+  ctx.fillText(text, 0, 6);
+  ctx.restore();
+}
+
+const STAT_TOP = 150, STAT_PAD = 28, COUNT_MS = 700;
+
+// A white card, top centre: the stat's value in the place colour counting up, its label below.
+function statCard(ctx, stat, ms, colour) {
+  const pop = popState(stat.atMs, ms);
+  if (!pop.visible) return;
+  ctx.save();
+  const room = W - 32 - 80; // the card never leaves the screen
+  ctx.font = `900 104px ${FONT}`;
+  const valuePx = fitFontPx(104, ctx.measureText(stat.value).width, room);
+  ctx.font = `900 ${valuePx}px ${FONT}`;
+  const valueW = ctx.measureText(stat.value).width; // measured at its final text, so the card never jitters
+  let labelPx = 0, labelW = 0;
+  if (stat.label) {
+    ctx.font = `700 40px ${FONT}`;
+    labelPx = fitFontPx(40, ctx.measureText(stat.label).width, room);
+    ctx.font = `700 ${labelPx}px ${FONT}`;
+    labelW = ctx.measureText(stat.label).width;
+  }
+  const width = Math.max(valueW, labelW) + 80;
+  const height = STAT_PAD * 2 + valuePx + (stat.label ? 12 + labelPx : 0);
+  ctx.globalAlpha = pop.alpha;
+  if (pop.blur > 0.2) ctx.filter = `blur(${pop.blur.toFixed(1)}px)`;
+  ctx.translate(W / 2, STAT_TOP + height / 2);
+  ctx.scale(pop.scale, pop.scale);
+  ctx.shadowColor = "rgba(0,0,0,0.45)";
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetY = 6;
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.roundRect(-width / 2, -height / 2, width, height, 24);
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `900 ${valuePx}px ${FONT}`;
+  ctx.fillStyle = colour || "#111111";
+  ctx.fillText(countText(stat.count, clamp01((ms - stat.atMs) / COUNT_MS), stat.value), 0,
+               -height / 2 + STAT_PAD + valuePx / 2);
+  if (stat.label) {
+    ctx.font = `700 ${labelPx}px ${FONT}`;
+    ctx.fillStyle = "#222222";
+    ctx.fillText(stat.label, 0, height / 2 - STAT_PAD - labelPx / 2);
+  }
+  ctx.restore();
+}
+
 export function drawFrame(ctx, doc, images, seconds) {
   const ms = seconds * 1000;
   const cam = cameraAt(doc.camera, ms);
@@ -192,5 +283,8 @@ export function drawFrame(ctx, doc, images, seconds) {
   if (doc.places.length === 1) ghostName(ctx, cam, doc.places[0], fillAlpha(doc.places[0].fillMs, ms), seconds, doc.duration || 0);
   for (const item of doc.items) drawItem(ctx, item, ms, images);
   legend(ctx, doc.legend);
+  // the card first, so a long value never covers the badge
+  if (doc.stat) statCard(ctx, doc.stat, ms, doc.places[0] && doc.places[0].colour);
+  if (doc.rank) rankBadge(ctx, doc.rank, ms);
   caption(ctx, doc.words, seconds);
 }

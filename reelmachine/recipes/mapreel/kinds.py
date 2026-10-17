@@ -3,16 +3,22 @@ extras, sound cues and resolved-script entries come out. Camera, layers and proj
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from ...core.timeline import WordSpan
 from . import compose
-from .geometry import Frame, shape_of
+from .geometry import SAFE, Frame, shape_of
 from .models import ResolvedSegment
 from .places import Atlas
 from .timing import match, match_any, pop_times
+
+#: a rank segment's country and items sit below the badge (top left) and the stat card (top centre)
+RANK_SAFE = (0.08, 0.24, 0.92, 0.80)
+RANK_AFTER_FILL_MS = 150   # the badge lands just after the country fills ...
+STAT_AFTER_FILL_MS = 600   # ... and an unheard stat a beat after that
 
 
 @dataclass
@@ -45,7 +51,8 @@ def _place(seg: ResolvedSegment, code: str, fill: int, ctx: KindContext) -> dict
                                ctx.landed, fill, ctx.atlas.places[code].label)
 
 
-def _items(seg: ResolvedSegment, spec: Any, ctx: KindContext, built: Built) -> None:
+def _items(seg: ResolvedSegment, spec: Any, ctx: KindContext, built: Built,
+           safe: tuple[float, float, float, float] = SAFE) -> None:
     """The segment's items, popping as each is said, laid out inside its one country."""
     heard = match([it.say or it.name for it in spec.items], ctx.spoken)
     overrides = [None if it.at is None else int(it.at * 1000) for it in spec.items]
@@ -65,7 +72,7 @@ def _items(seg: ResolvedSegment, spec: Any, ctx: KindContext, built: Built) -> N
     for j in spread:
         built.warnings.append(f"{seg.id} {spec.items[j].name}: not heard in the narration; "
                               "its pop is spread evenly (add `say` or `at`)")
-    built.items = compose.item_entries(items_in, shape_of(ctx.atlas.places[seg.codes[0]]), ctx.landed)
+    built.items = compose.item_entries(items_in, shape_of(ctx.atlas.places[seg.codes[0]]), ctx.landed, safe=safe)
     built.cues.extend((it["atMs"], "pop") for it in built.items)
 
 
@@ -86,7 +93,37 @@ def build_highlight(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:
                  extras={"legend": spec.legend})
 
 
-BUILDERS = {"country": build_country, "highlight": build_highlight}
+def count_spec(value: str) -> dict[str, Any] | None:
+    """How a stat counts up: its first number, with the text around it kept as is ("$1,200.50 bn")."""
+    found = re.search(r"\d[\d,]*(?:\.\d+)?", value)
+    if found is None:
+        return None
+    digits = found.group()
+    whole, _, fraction = digits.partition(".")
+    return {"prefix": value[:found.start()], "number": float(digits.replace(",", "")), "decimals": len(fraction),
+            "comma": "," in whole, "suffix": value[found.end():]}
+
+
+def build_rank(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:
+    """A country as a ranking entry: a big #N badge as it fills, a stat card that counts up when said."""
+    code = seg.codes[0]
+    fill = max(300, ctx.fly_ms - 200)
+    built = Built(places=[_place(seg, code, fill, ctx)])
+    _items(seg, spec, ctx, built, safe=RANK_SAFE)
+    rank = {"n": spec.rank, "atMs": fill + RANK_AFTER_FILL_MS, "colour": seg.colours[code], "gold": spec.rank == 1}
+    built.extras["rank"] = built.resolved["rank"] = rank
+    built.cues.append((rank["atMs"], "ding"))
+    if spec.stat is not None:
+        (heard,) = match_any([[spec.stat.value]], ctx.spoken)
+        at = fill + STAT_AFTER_FILL_MS if heard is None else ctx.speech_start + heard
+        stat = {"value": spec.stat.value, "label": spec.stat.label, "atMs": min(at, ctx.last_ms),
+                "count": count_spec(spec.stat.value)}
+        built.extras["stat"] = built.resolved["stat"] = stat
+        built.cues.append((stat["atMs"], "thud"))
+    return built
+
+
+BUILDERS = {"country": build_country, "highlight": build_highlight, "rank": build_rank}
 
 
 def build(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:

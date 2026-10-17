@@ -78,7 +78,8 @@ def place_entry(code: str, name: str, colour: str, shape: Shape, frame: Frame, f
             "label": {"x": lx, "y": float(ly)}}
 
 
-def item_entries(items: list[dict[str, Any]], shape: Shape | None, frame: Frame) -> list[dict[str, Any]]:
+def item_entries(items: list[dict[str, Any]], shape: Shape | None, frame: Frame,
+                 safe: tuple[float, float, float, float] = SAFE) -> list[dict[str, Any]]:
     if not items:
         return []
     if shape is None:
@@ -89,7 +90,8 @@ def item_entries(items: list[dict[str, Any]], shape: Shape | None, frame: Frame)
     else:
         # a pixel of tolerance on screen: the same answer, a fraction of the vertices to test
         rings_px = [simplify(to_screen(frame, _near(frame, shape, r)), 1.0) for r in shape.rings]
-        anchors, size = item_layout([r for r in rings_px if len(r) >= 3], len(items), max_size=ITEM_SIZE)
+        anchors, size = item_layout([r for r in rings_px if len(r) >= 3], len(items), max_size=ITEM_SIZE,
+                                   safe=safe)
     return [{"name": it["name"], "image": it.get("image"), "emoji": it.get("emoji"), "atMs": int(it["atMs"]),
              "x": round(x, 1), "y": round(y, 1), "size": size} for it, (x, y) in zip(items, anchors)]
 

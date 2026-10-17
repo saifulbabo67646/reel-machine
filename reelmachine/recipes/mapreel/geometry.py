@@ -213,12 +213,13 @@ def _box_points(x: np.ndarray, y: np.ndarray, hw: float, hh: float) -> list[tupl
 
 
 def item_layout(rings_px: list[np.ndarray], n: int, *, max_size: int = BADGE_MAX, min_size: int = BADGE_MIN,
-                step: float = 24.0, cell: float = 12.0) -> tuple[list[tuple[float, float]], int]:
+                step: float = 24.0, cell: float = 12.0,
+                safe: tuple[float, float, float, float] = SAFE) -> tuple[list[tuple[float, float]], int]:
     """`n` badge anchors and one badge size. Every badge box (size*1.1 x size*0.6) lies inside
     the place and the safe area, and no two boxes overlap; anchors spread as far apart as they
     can (greedy farthest-point). The size steps down to `min_size` until they fit. A place too
     small even then gets a column at its centre, which may overhang."""
-    sx0, sy0, sx1, sy1 = SAFE
+    sx0, sy0, sx1, sy1 = safe
     # inside-mask on a fine raster over the safe area; a summed-area table answers "is this whole box inside"
     rx = np.arange(sx0 * WIDTH, sx1 * WIDTH + cell, cell)
     ry = np.arange(sy0 * HEIGHT, sy1 * HEIGHT + cell, cell)
