@@ -63,6 +63,16 @@ export function countText(count, p, raw = "") {
   return count.prefix + whole + (fraction === undefined ? "" : "." + fraction) + count.suffix;
 }
 
+// The stat card sits right of the rank badge (which ends at x 315): centred in x 330..1048, never wider.
+// valueW / labelW are measured at the base fonts (104 / 40 px); each font shrinks until its text fits.
+export const CARD_X0 = 330, CARD_X1 = 1048, CARD_PAD = 40;
+export function cardLayout(valueW, labelW) {
+  const room = CARD_X1 - CARD_X0 - 2 * CARD_PAD;
+  const valuePx = fitFontPx(104, valueW, room), labelPx = fitFontPx(40, labelW, room);
+  const width = Math.min(CARD_X1 - CARD_X0, Math.max(valueW * valuePx / 104, labelW * labelPx / 40) + 2 * CARD_PAD);
+  return { cx: (CARD_X0 + CARD_X1) / 2, width, valuePx, labelPx };
+}
+
 // A place's on-screen bounding box under a camera: {x0, y0, x1, y1, w, h} in px.
 export function ringsBox(rings, cam) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;

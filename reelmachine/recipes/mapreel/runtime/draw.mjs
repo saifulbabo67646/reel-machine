@@ -1,7 +1,7 @@
 // reelmachine/recipes/mapreel/runtime/draw.mjs
 // Draws one frame of a map segment on a 2D canvas.
 import {
-  cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, clamp01, POP_MS,
+  cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, clamp01, POP_MS, cardLayout,
 } from "./pure.mjs";
 
 const W = 1080, H = 1920;
@@ -228,28 +228,20 @@ function rankBadge(ctx, rank, ms) {
 
 const STAT_TOP = 150, STAT_PAD = 28, COUNT_MS = 700;
 
-// A white card, top centre: the stat's value in the place colour counting up, its label below.
+// A white card, top right of the rank badge: the stat's value in the place colour counting up, its label below.
 function statCard(ctx, stat, ms, colour) {
   const pop = popState(stat.atMs, ms);
   if (!pop.visible) return;
   ctx.save();
-  const room = W - 32 - 80; // the card never leaves the screen
   ctx.font = `900 104px ${FONT}`;
-  const valuePx = fitFontPx(104, ctx.measureText(stat.value).width, room);
-  ctx.font = `900 ${valuePx}px ${FONT}`;
   const valueW = ctx.measureText(stat.value).width; // measured at its final text, so the card never jitters
-  let labelPx = 0, labelW = 0;
-  if (stat.label) {
-    ctx.font = `700 40px ${FONT}`;
-    labelPx = fitFontPx(40, ctx.measureText(stat.label).width, room);
-    ctx.font = `700 ${labelPx}px ${FONT}`;
-    labelW = ctx.measureText(stat.label).width;
-  }
-  const width = Math.max(valueW, labelW) + 80;
+  ctx.font = `700 40px ${FONT}`;
+  const labelW = stat.label ? ctx.measureText(stat.label).width : 0;
+  const { cx, width, valuePx, labelPx } = cardLayout(valueW, labelW);
   const height = STAT_PAD * 2 + valuePx + (stat.label ? 12 + labelPx : 0);
   ctx.globalAlpha = pop.alpha;
   if (pop.blur > 0.2) ctx.filter = `blur(${pop.blur.toFixed(1)}px)`;
-  ctx.translate(W / 2, STAT_TOP + height / 2);
+  ctx.translate(cx, STAT_TOP + height / 2);
   ctx.scale(pop.scale, pop.scale);
   ctx.shadowColor = "rgba(0,0,0,0.45)";
   ctx.shadowBlur = 18;
@@ -283,7 +275,7 @@ export function drawFrame(ctx, doc, images, seconds) {
   if (doc.places.length === 1) ghostName(ctx, cam, doc.places[0], fillAlpha(doc.places[0].fillMs, ms), seconds, doc.duration || 0);
   for (const item of doc.items) drawItem(ctx, item, ms, images);
   legend(ctx, doc.legend);
-  // the card first, so a long value never covers the badge
+  // the card sits right of the badge (cardLayout); the badge is drawn last, on top of any overhang
   if (doc.stat) statCard(ctx, doc.stat, ms, doc.places[0] && doc.places[0].colour);
   if (doc.rank) rankBadge(ctx, doc.rank, ms);
   caption(ctx, doc.words, seconds);

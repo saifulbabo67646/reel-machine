@@ -115,7 +115,8 @@ def build_rank(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:
     built.cues.append((rank["atMs"], "ding"))
     if spec.stat is not None:
         (heard,) = match_any([[spec.stat.value]], ctx.spoken)
-        at = fill + STAT_AFTER_FILL_MS if heard is None else ctx.speech_start + heard
+        # a value said before the badge lands waits for it: the number belongs to the rank
+        at = fill + STAT_AFTER_FILL_MS if heard is None else max(ctx.speech_start + heard, rank["atMs"])
         stat = {"value": spec.stat.value, "label": spec.stat.label, "atMs": min(at, ctx.last_ms),
                 "count": count_spec(spec.stat.value)}
         built.extras["stat"] = built.resolved["stat"] = stat

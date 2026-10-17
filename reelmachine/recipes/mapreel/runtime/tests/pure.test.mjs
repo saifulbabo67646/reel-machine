@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText } from "../pure.mjs";
+import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout } from "../pure.mjs";
 
 const A = { x: 0.2, y: 0.4, s: 1080 };
 const B = { x: 0.55, y: 0.35, s: 20000 };
@@ -102,4 +102,15 @@ test("a stat counts up from zero, keeping its decimals, commas, prefix and suffi
   assert.equal(countText(money, 0.5, "$1,200.50 bn"), "$1,050.44 bn");
   assert.equal(countText(money, 1, "$1,200.50 bn"), "$1,200.50 bn");
   for (const p of [0, 0.5, 1]) assert.equal(countText(null, p, "Most"), "Most");
+});
+
+test("the stat card sits right of the rank badge and its text shrinks to fit", () => {
+  const short = cardLayout(300, 0);
+  assert.deepEqual(short, { cx: 689, width: 380, valuePx: 104, labelPx: 40 });
+  for (const [v, l] of [[300, 0], [900, 200], [400, 1200], [1500, 1500]]) {
+    const c = cardLayout(v, l);
+    assert.ok(c.cx - c.width / 2 >= 330 - 1e-9 && c.cx + c.width / 2 <= 1048 + 1e-9);
+    assert.ok(v * c.valuePx / 104 <= c.width - 80 + 1e-9 && l * c.labelPx / 40 <= c.width - 80 + 1e-9);
+  }
+  assert.ok(cardLayout(900, 0).valuePx < 104 && cardLayout(0, 1200).labelPx < 40);
 });

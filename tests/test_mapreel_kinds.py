@@ -32,14 +32,15 @@ def _said(text, step=400):
     return [WordSpan(text=w, start_ms=i * step, end_ms=i * step + 300) for i, w in enumerate(text.split())]
 
 
-def _rank(atlas, *, rank=1, stat=None, narration="Italy is number one.", fly_ms=900, last_ms=4700, items=()):
+def _rank(atlas, *, rank=1, stat=None, narration="Italy is number one.", fly_ms=900, last_ms=4700, items=(),
+          speech_start=1000):
     spec = MapReelInputs.model_validate({"segments": [{
         "kind": "rank", "rank": rank, "country": "ITA", "narration": narration, "stat": stat,
         "items": [{"name": n} for n in items]}]}).segments[0]
     seg = ResolvedSegment(id="seg-1", index=0, kind="rank", codes=["ITA"], names={"ITA": "Italy"},
                           colours={"ITA": "#8a2be2"})
     landed = compose.segment_frame([shape_of(atlas.places["ITA"])], 1.0, safe=kinds.RANK_SAFE)
-    ctx = kinds.KindContext(atlas=atlas, landed=landed, fly_ms=fly_ms, speech_start=1000, speech_end=3500,
+    ctx = kinds.KindContext(atlas=atlas, landed=landed, fly_ms=fly_ms, speech_start=speech_start, speech_end=3500,
                             last_ms=last_ms, spoken=_said(narration), images={})
     return kinds.build(seg, spec, ctx)
 
@@ -79,3 +80,11 @@ def test_rank_cues_ding_and_thud_and_items_pop(atlas):
     assert len(built.items) == 2
     # the items stay below the badge and the card: inside the rank safe area
     assert all(it["y"] >= kinds.RANK_SAFE[1] * 1920 for it in built.items)
+
+
+def test_a_stat_heard_before_the_badge_waits_for_it(atlas):
+    built = _rank(atlas, stat={"value": "70%"}, narration="70% is Italy's.", speech_start=0)
+    assert built.extras["rank"]["atMs"] == 850  # fill 700 + 150; the value is said at 0
+    assert built.extras["stat"]["atMs"] == 850
+    late = _rank(atlas, stat={"value": "70%"}, narration="70% is Italy's.", speech_start=0, last_ms=500)
+    assert late.extras["stat"]["atMs"] == 500  # still clamped to the segment's last pop
