@@ -27,6 +27,15 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "ivorycoast": ("CIV",), "uae": ("ARE",), "czechrepublic": ("CZE",), "russia": ("RUS",),
     "vatican": ("VAT",), "southkorea": ("KOR",), "northkorea": ("PRK",),
 }
+#: how each alias is written, for matching it against the voice's words
+ALIAS_SAID: dict[str, str] = {
+    "holland": "Holland", "uk": "UK", "britain": "Britain", "greatbritain": "Great Britain",
+    "england": "England", "scotland": "Scotland", "wales": "Wales",
+    "us": "US", "usa": "USA", "america": "America", "unitedstates": "United States",
+    "korea": "Korea", "congo": "Congo", "turkiye": "Türkiye", "burma": "Burma",
+    "ivorycoast": "Ivory Coast", "uae": "UAE", "czechrepublic": "Czech Republic", "russia": "Russia",
+    "vatican": "Vatican", "southkorea": "South Korea", "northkorea": "North Korea",
+}
 _NAME_FIELDS = ("NAME", "NAME_LONG", "NAME_EN", "ADMIN", "FORMAL_EN", "BRK_NAME", "ABBREV", "NAME_ALT")
 
 
@@ -61,9 +70,11 @@ def _rings(geometry: dict[str, Any]) -> tuple[tuple[Ring, ...], ...]:
 
 
 class Atlas:
-    def __init__(self, places: dict[str, Place], keys: dict[str, set[str]]) -> None:
+    def __init__(self, places: dict[str, Place], keys: dict[str, set[str]],
+                 said: dict[str, list[str]] | None = None) -> None:
         self.places = places
         self.keys = keys  # normalised name/code -> codes
+        self.said = said or {}  # code -> names as written (Natural Earth's name fields, aliases)
 
     @staticmethod
     def load(path: Path) -> "Atlas":
@@ -87,6 +98,13 @@ class Atlas:
         raise InvalidInput(f"no country called {query!r}",
                            hint=f"did you mean {', '.join(close)}?" if close else "use an ISO code like 'ITA' (find_places)",
                            details={"query": query, "suggestions": close})
+
+    def spoken_names(self, code: str) -> list[str]:
+        """Every name a narrator might say for `code`, longest first (so a long name wins a tie)."""
+        seen: dict[str, str] = {}
+        for name in [self.places[code].name, *self.said.get(code, [])]:
+            seen.setdefault(name.casefold(), name)
+        return sorted(seen.values(), key=len, reverse=True)
 
     def search(self, query: str, limit: int = 8) -> list[dict[str, Any]]:
         key = norm(query)
@@ -117,6 +135,7 @@ def _load(path: str, _mtime: int) -> Atlas:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     places: dict[str, Place] = {}
     keys: dict[str, set[str]] = {}
+    said: dict[str, list[str]] = {}
     adm0 = {f["properties"]["ADM0_A3"] for f in data["features"] if f.get("geometry")}
     for feature in data["features"]:
         props, geometry = feature["properties"], feature.get("geometry")
@@ -135,11 +154,14 @@ def _load(path: str, _mtime: int) -> Atlas:
         for field in _NAME_FIELDS:
             if props.get(field):
                 keys.setdefault(norm(props[field]), set()).add(code)
+                said.setdefault(code, []).append(props[field])
     for alias, codes in ALIASES.items():  # aliases replace whatever a short code collided with
         present = {c for c in codes if c in places}
         if present:
             keys[alias] = present
-    return Atlas(places, keys)
+            if len(present) == 1:  # an alias for two countries ("Korea") names neither when spoken
+                said.setdefault(next(iter(present)), []).append(ALIAS_SAID[alias])
+    return Atlas(places, keys, said)
 
 
 def atlas_for(settings: Settings) -> Atlas:

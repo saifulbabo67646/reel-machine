@@ -123,3 +123,36 @@ def test_a_place_too_narrow_for_whole_badges_gets_disjoint_badges_centred_on_it(
     for i, a in enumerate(anchors):
         for b in anchors[i + 1:]:
             assert not g._boxes_overlap(a, b, size)
+
+
+def test_a_world_frame_never_shows_the_top_edge():
+    frame = g.frame_for((0.1, 0.1, 0.3, 0.2))
+    assert frame.s >= g.HEIGHT
+    vb = g.visible_bbox(frame)
+    assert vb[1] >= 0 and vb[3] <= 1
+
+
+def test_a_country_frame_is_unchanged():
+    from reelmachine.recipes.mapreel import compose
+    frame = compose.segment_frame([g.shape_of(ATLAS.resolve("ITA"))], 1.0)
+    # the Plan 1 frame, pinned before world frames learned to fill the height
+    assert (frame.x, frame.y, frame.s) == pytest.approx((0.5348872944444445, 0.3744050904251254, 27413.84572459445))
+
+
+def test_frames_too_wide_for_the_height_still_fit():
+    bbox = (0.15, 0.4, 0.85, 0.45)
+    frame = g.frame_for(bbox)
+    assert g.WIDTH <= frame.s < g.HEIGHT
+    vb = g.visible_bbox(frame)
+    assert vb[0] <= bbox[0] and vb[2] >= bbox[2]
+
+
+def test_clamp_frame_centres_a_world_shorter_than_the_view():
+    frame = g.clamp_frame(g.Frame(0.3, 0.2, 1200.0))
+    assert frame == g.Frame(0.3, 0.5, 1200.0)
+
+
+def test_frame_for_frames_inside_a_panel_view():
+    frame = g.frame_for((0.5, 0.3, 0.52, 0.32), view=(1080, 960), safe=(0.0, 0.0, 1.0, 1.0))
+    assert frame.s == pytest.approx(min(1080 / 0.02, 960 / 0.02))
+    assert (frame.x, frame.y) == pytest.approx((0.51, 0.31))

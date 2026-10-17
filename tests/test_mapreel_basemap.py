@@ -118,3 +118,10 @@ def test_palette_reappearing_code_keeps_colour_and_is_avoided_by_neighbours():
     assert colours["DEU"] != colours["FRA"] and colours["ITA"] != colours["FRA"]
     colours = palette.assign([["FRA", "DEU"], ["ITA"], ["FRA"]])
     assert colours["ITA"] not in (colours["FRA"], colours["DEU"])
+
+
+def test_sixty_countries_get_sixty_colours():
+    codes = [f"C{i:02d}" for i in range(60)]
+    colours = palette.assign([codes])
+    assert len(set(colours.values())) == 60
+    assert all(c.startswith("#") and len(c) == 7 for c in colours.values())

@@ -3,7 +3,7 @@
 // Frames are {x, y, s}: the Mercator point at screen centre and px per Mercator unit.
 
 const RHO = Math.SQRT2;
-const W = 1080;
+const W = 1080, H = 1920;
 
 export const clamp01 = (t) => Math.max(0, Math.min(1, t));
 export const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -51,6 +51,19 @@ export function popState(atMs, ms) {
   if (ms < atMs) return { visible: false, scale: 0, alpha: 0, blur: 0 };
   const p = clamp01((ms - atMs) / POP_MS);
   return { visible: true, scale: p >= 1 ? 1 : backOut(p), alpha: clamp01(p * 2), blur: p >= 1 ? 0 : (1 - p) * 10 };
+}
+
+// A place's on-screen bounding box under a camera: {x0, y0, x1, y1, w, h} in px.
+export function ringsBox(rings, cam) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const ring of rings) {
+    for (const [x, y] of ring) {
+      x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+    }
+  }
+  const px0 = (x0 - cam.x) * cam.s + W / 2, px1 = (x1 - cam.x) * cam.s + W / 2;
+  const py0 = (y0 - cam.y) * cam.s + H / 2, py1 = (y1 - cam.y) * cam.s + H / 2;
+  return { x0: px0, y0: py0, x1: px1, y1: py1, w: px1 - px0, h: py1 - py0 };
 }
 
 export function fillAlpha(fillMs, ms) {

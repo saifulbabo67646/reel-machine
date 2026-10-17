@@ -136,3 +136,11 @@ def test_a_territory_sharing_its_countrys_iso_code_does_not_replace_it(tmp_path)
     assert atlas.resolve("SSD").name == "S. Sudan"  # a lone ISO code that differs from ADM0_A3 still wins
     for query in ("XK", "KOS", "Kosovo"):  # no ISO-3 at all: its own ISO-2 and ADM0 codes still find it
         assert atlas.resolve(query).code == "KOS"
+
+
+def test_spoken_names_include_aliases(atlas):
+    names = atlas.spoken_names("USA")
+    assert "United States of America" in names and "America" in names and "USA" in names
+    assert len({n.casefold() for n in names}) == len(names)
+    assert [len(n) for n in names] == sorted((len(n) for n in names), reverse=True)
+    assert "Holland" in atlas.spoken_names("NLD")

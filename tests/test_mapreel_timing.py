@@ -52,3 +52,16 @@ def test_a_run_of_unheard_names_spreads_evenly():
     assert spread == [0, 1, 2, 3]
     gaps = [b - a for a, b in zip(times, times[1:])]
     assert max(gaps) - min(gaps) <= 1 and times[0] < 2000 and times[-1] < 4500
+
+
+def test_a_name_inside_another_name_takes_its_own_word():
+    assert match(["Ralph Lauren", "Lauren"], _words("Ralph Lauren and Lauren Hutton")) == [0, 900]
+    # no word of its own: unheard, never a word another name already took
+    assert match(["Ralph Lauren", "Lauren"], _words("Ralph Lauren leads")) == [0, None]
+
+
+def test_match_any_takes_the_first_alternative_heard():
+    from reelmachine.recipes.mapreel.timing import match_any
+    assert match_any([["United States of America", "America", "USA"]], _words("America leads")) == [0]
+    words = _words("the United States of America and America")
+    assert match_any([["United States of America", "America"], ["America"]], words) == [300, 1800]

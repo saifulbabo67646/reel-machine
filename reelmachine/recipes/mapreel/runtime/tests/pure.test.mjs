@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre } from "../pure.mjs";
+import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox } from "../pure.mjs";
 
 const A = { x: 0.2, y: 0.4, s: 1080 };
 const B = { x: 0.55, y: 0.35, s: 20000 };
@@ -81,4 +81,13 @@ test("a ghosted name near the edge is pulled on screen, drift and rotation inclu
     assert.ok(at.y - hy >= 0 && at.y + hy <= H, `y ${at.y} from ${py}`);
   }
   assert.deepEqual(ghostCentre(500, 900, 300, 120, angle, drift, W, H), { x: 500, y: 900 }); // already fine
+});
+
+test("a place's on-screen box spans all its rings", () => {
+  const cam = { x: 0.5, y: 0.5, s: 1000 };
+  const rings = [[[0.5, 0.5], [0.51, 0.5], [0.51, 0.52]], [[0.49, 0.53], [0.495, 0.53], [0.495, 0.535]]];
+  const box = ringsBox(rings, cam);
+  const near = (a, b) => Math.abs(a - b) < 1e-6;
+  assert.ok(near(box.x0, 530) && near(box.x1, 550) && near(box.y0, 960) && near(box.y1, 995));
+  assert.ok(near(box.w, 20) && near(box.h, 35));
 });

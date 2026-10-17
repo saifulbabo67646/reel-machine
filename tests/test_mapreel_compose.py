@@ -122,3 +122,16 @@ def test_a_place_is_not_torn_across_world_copies(codes):
         assert max(xs) - min(xs) < 0.6, code
         assert min(xs) - 0.05 <= entry["label"]["x"] <= max(xs) + 0.05, code
 
+
+
+def test_world_frames_take_the_short_way_round():
+    shapes = [g.shape_of(ATLAS.resolve(c)) for c in ("USA", "JPN")]
+    frame = compose.segment_frame(shapes, 1.0)
+    vb = g.visible_bbox(frame)
+    mains = []
+    for shape in shapes:
+        k = compose._shift(frame, shape)
+        x0, y0, x1, y1 = shape.main
+        mains.append((x0 + k, y0, x1 + k, y1))
+        assert vb[0] <= x0 + k and x1 + k <= vb[2] and vb[1] <= y0 and y1 <= vb[3]
+    assert max(m[2] for m in mains) - min(m[0] for m in mains) < 0.5

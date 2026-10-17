@@ -1,6 +1,6 @@
 // reelmachine/recipes/mapreel/runtime/draw.mjs
 // Draws one frame of a map segment on a 2D canvas.
-import { cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre } from "./pure.mjs";
+import { cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre, ringsBox } from "./pure.mjs";
 
 const W = 1080, H = 1920;
 const FONT = '"Arial Black", "Helvetica Neue", Arial, sans-serif';
@@ -37,8 +37,12 @@ function drawLayers(ctx, cam, layers, images) {
   }
 }
 
-function fillPlace(ctx, cam, place, alpha) {
+const MARK_BELOW = 70, MARK_R = 46; // px: a place smaller than this on both sides gets a ring
+
+function fillPlace(ctx, cam, place, alpha, seconds = 0) {
   if (alpha <= 0) return;
+  const box = ringsBox(place.rings, cam);
+  if (box.w < MARK_BELOW && box.h < MARK_BELOW) markPlace(ctx, box, place.colour, alpha, seconds);
   ctx.save();
   ctx.globalAlpha = 0.8 * alpha;
   tracePlace(ctx, cam, place.rings);
@@ -57,6 +61,23 @@ function fillPlace(ctx, cam, place, alpha) {
   tracePlace(ctx, cam, place.rings);
   ctx.lineWidth = 2;
   ctx.strokeStyle = "rgba(255,255,255,0.8)";
+  ctx.stroke();
+  ctx.restore();
+}
+
+// A tiny place on a world view (Singapore, Fiji's islands) would be a speck: ring it, pulsing.
+function markPlace(ctx, box, colour, alpha, seconds) {
+  const r = MARK_R * (1 + 0.08 * Math.sin(seconds * 6));
+  const cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.lineWidth = 7 + 2 * 2; // the white outline shows 2 px either side of the coloured ring
+  ctx.strokeStyle = "#ffffff";
+  ctx.stroke();
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = colour;
   ctx.stroke();
   ctx.restore();
 }
@@ -166,8 +187,8 @@ export function drawFrame(ctx, doc, images, seconds) {
   const cam = cameraAt(doc.camera, ms);
   drawLayers(ctx, cam, doc.layers, images);
   const fadeOut = 1 - Math.min(1, ms / Math.max(1, doc.camera.flyMs * 0.8));
-  for (const place of doc.previous || []) fillPlace(ctx, cam, place, fadeOut);
-  for (const place of doc.places) fillPlace(ctx, cam, place, fillAlpha(place.fillMs, ms));
+  for (const place of doc.previous || []) fillPlace(ctx, cam, place, fadeOut, seconds);
+  for (const place of doc.places) fillPlace(ctx, cam, place, fillAlpha(place.fillMs, ms), seconds);
   if (doc.places.length === 1) ghostName(ctx, cam, doc.places[0], fillAlpha(doc.places[0].fillMs, ms), seconds, doc.duration || 0);
   for (const item of doc.items) drawItem(ctx, item, ms, images);
   legend(ctx, doc.legend);

@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from .geometry import HEIGHT, WIDTH, Frame, Shape, frame_for, item_layout, merc, simplify, simplify_for, to_screen
+from .geometry import HEIGHT, SAFE, WIDTH, Frame, Shape, frame_for, item_layout, merc, simplify, simplify_for, to_screen
 
 HERE = Path(__file__).resolve().parent
 RUNTIME_DIR = HERE / "runtime"
@@ -32,10 +32,26 @@ def _runtime_version() -> str:
 RUNTIME_VERSION = _runtime_version()
 
 
-def segment_frame(shapes: list[Shape], zoom: float) -> Frame:
-    boxes = [s.main for s in shapes]
+def _short_way(boxes: list[tuple[float, float, float, float]]) -> list[tuple[float, float, float, float]]:
+    """Shift boxes by whole worlds so the set spans the shortest arc: the cut goes in the widest
+    gap between neighbouring centres on the circle (USA + Japan meet across the Pacific)."""
+    centres = [(b[0] + b[2]) / 2 for b in boxes]
+    order = sorted(range(len(boxes)), key=lambda i: centres[i] % 1.0)
+    ring = [centres[i] % 1.0 for i in order]
+    gaps = [ring[k + 1] - ring[k] for k in range(len(ring) - 1)] + [ring[0] + 1.0 - ring[-1]]
+    cut = int(np.argmax(gaps))  # the boxes after position `cut` move one world west
+    out = list(boxes)
+    for k, i in enumerate(order):
+        shift = -float(np.floor(centres[i])) - (1.0 if cut < len(ring) - 1 and k > cut else 0.0)
+        b = boxes[i]
+        out[i] = (b[0] + shift, b[1], b[2] + shift, b[3])
+    return out
+
+
+def segment_frame(shapes: list[Shape], zoom: float, safe: tuple[float, float, float, float] = SAFE) -> Frame:
+    boxes = _short_way([s.main for s in shapes])
     union = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
-    return frame_for(union, zoom=zoom)
+    return frame_for(union, zoom=zoom, safe=safe)
 
 
 def _shift(frame: Frame, shape: Shape) -> int:

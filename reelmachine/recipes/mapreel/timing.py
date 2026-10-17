@@ -28,30 +28,51 @@ def _stream(words: Sequence[WordSpan]) -> tuple[list[str], list[int]]:
     return flat, owner
 
 
-def _find(flat: list[str], phrase: list[str], start: int) -> int | None:
+def _find(flat: list[str], phrase: list[str], start: int, used: list[bool]) -> int | None:
+    """The first run of `phrase` at or after `start` that no earlier name took."""
     k = len(phrase)
     for i in range(start, len(flat) - k + 1):
-        if flat[i:i + k] == phrase:
+        if flat[i:i + k] == phrase and not any(used[i:i + k]):
             return i
     return None
 
 
-def match(phrases: Sequence[str], words: Sequence[WordSpan]) -> list[int | None]:
+def _earliest(flat: list[str], options: list[list[str]], start: int,
+              used: list[bool]) -> tuple[int, int] | None:
+    """(start, length) of the earliest free run of any option; the first option wins a tie."""
+    best = None
+    for toks in options:
+        hit = _find(flat, toks, start, used)
+        if hit is not None and (best is None or hit < best[0]):
+            best = (hit, len(toks))
+    return best
+
+
+def match_any(alternatives: Sequence[Sequence[str]], words: Sequence[WordSpan]) -> list[int | None]:
+    """For each entry, when the first of its alternative phrases is said (earliest start wins).
+    Entries are heard in order; a word heard for one entry is never heard for another."""
     flat, owner = _stream(words)
+    used = [False] * len(flat)
     out: list[int | None] = []
     cursor = 0
-    for phrase in phrases:
-        toks = tokens(phrase)
-        if not toks:
+    for phrases in alternatives:
+        options = [toks for toks in (tokens(p) for p in phrases) if toks]
+        best = _earliest(flat, options, cursor, used)
+        if best is not None:
+            cursor = best[0] + best[1]
+        else:
+            best = _earliest(flat, options, 0, used)  # said earlier than listed
+        if best is None:
             out.append(None)
             continue
-        hit = _find(flat, toks, cursor)
-        if hit is None:
-            hit = _find(flat, toks, 0)  # said earlier than listed
-        else:
-            cursor = hit + len(toks)
-        out.append(None if hit is None else words[owner[hit]].start_ms)
+        hit, k = best
+        used[hit:hit + k] = [True] * k
+        out.append(words[owner[hit]].start_ms)
     return out
+
+
+def match(phrases: Sequence[str], words: Sequence[WordSpan]) -> list[int | None]:
+    return match_any([[p] for p in phrases], words)
 
 
 def pop_times(spoken: Sequence[int | None], *, overrides: Sequence[int | None],

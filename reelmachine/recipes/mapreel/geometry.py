@@ -41,8 +41,10 @@ def simplify(points: Sequence[Sequence[float]], tolerance: float) -> np.ndarray:
 
 WIDTH, HEIGHT = 1080, 1920
 MAX_LAT = 85.05112878
-#: px per Mercator unit: the whole world never narrower than the screen; never closer than
+#: px per Mercator unit: the world fills the screen's height (no sky or floor above and below it)
+#: unless the places need more width; then never narrower than the screen. Never closer than
 #: 6° of longitude across it (the 21600-px texture would upscale past 3×)
+MIN_S_FILL = float(HEIGHT)
 MIN_S = float(WIDTH)
 MAX_S = WIDTH / (6.0 / 360.0)
 #: where a framed place sits on screen: clear of the legend at the top and captions below
@@ -134,18 +136,34 @@ class Frame:
         return {"x": self.x, "y": self.y, "s": self.s}
 
 
-def frame_for(bbox: tuple[float, float, float, float], *, zoom: float = 1.0) -> Frame:
+def frame_for(bbox: tuple[float, float, float, float], *, zoom: float = 1.0,
+              view: tuple[int, int] = (WIDTH, HEIGHT),
+              safe: tuple[float, float, float, float] = SAFE) -> Frame:
+    """The frame that fits `bbox` inside the `safe` part of a `view` (w, h) px."""
     x0, y0, x1, y1 = bbox
-    sx0, sy0, sx1, sy1 = SAFE
+    sx0, sy0, sx1, sy1 = safe
+    view_w, view_h = view
     w = max(x1 - x0, 1e-9)
     h = max(y1 - y0, 1e-9)
-    s = min((sx1 - sx0) * WIDTH / w, (sy1 - sy0) * HEIGHT / h) * zoom
-    s = float(min(MAX_S, max(MIN_S, s)))
-    # centre the bbox on the safe area's centre, not the screen's
-    cx_px, cy_px = (sx0 + sx1) / 2 * WIDTH, (sy0 + sy1) / 2 * HEIGHT
-    x = (x0 + x1) / 2 - (cx_px - WIDTH / 2) / s
-    y = (y0 + y1) / 2 - (cy_px - HEIGHT / 2) / s
-    return Frame(float(x), float(y), s)
+    s = min((sx1 - sx0) * view_w / w, (sy1 - sy0) * view_h / h) * zoom
+    # the floors scale with the view: MIN_S_FILL and MIN_S for the full screen
+    fits_filled = w * view_h <= (sx1 - sx0) * view_w
+    s = float(min(MAX_S, max(float(view_h) if fits_filled else float(view_w), s)))
+    # centre the bbox on the safe area's centre, not the view's
+    cx_px, cy_px = (sx0 + sx1) / 2 * view_w, (sy0 + sy1) / 2 * view_h
+    x = (x0 + x1) / 2 - (cx_px - view_w / 2) / s
+    y = (y0 + y1) / 2 - (cy_px - view_h / 2) / s
+    return clamp_frame(Frame(float(x), float(y), s), view)
+
+
+def clamp_frame(frame: Frame, view: tuple[int, int] = (WIDTH, HEIGHT)) -> Frame:
+    """Keep the world's top and bottom edges off screen; a world shorter than the view sits centred."""
+    half = view[1] / 2 / frame.s
+    if frame.s >= view[1]:
+        y = min(max(frame.y, half), 1 - half)
+    else:
+        y = 0.5
+    return Frame(frame.x, float(y), frame.s)
 
 
 def to_screen(frame: Frame, pts: np.ndarray) -> np.ndarray:

@@ -35,7 +35,7 @@ from .models import (
     ResolvedSegment, ScriptOutput, SegmentProject, SegmentsOutput, Track, Window,
 )
 from .places import Atlas, atlas_for
-from .timing import FLY_MS, MIN_SEGMENT_MS, match, pop_times
+from .timing import FLY_MS, MIN_SEGMENT_MS, match, match_any, pop_times
 
 IMAGE_MAX_BYTES = 8 * 1024 * 1024
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
@@ -294,7 +294,9 @@ class SegmentsStage:
 
             # places fill when named (highlight) or as the camera lands (country)
             if spec.kind == "highlight":
-                heard = match([seg.names[c] for c in seg.codes], spoken)
+                # any name the place goes by, or what the script itself wrote for it
+                heard = match_any([[*atlas.spoken_names(c), query] for c, query in zip(seg.codes, spec.countries)],
+                                  spoken)
                 fills, _ = pop_times(heard, overrides=[None] * len(seg.codes),
                                      speech_start_ms=speech_start, speech_end_ms=speech_end)
                 fills = [min(t, last_ms) for t in fills]

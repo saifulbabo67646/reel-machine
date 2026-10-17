@@ -1,5 +1,6 @@
 """mapreel's images stage: a bad image is a badge and a warning, never a failed job or a stray file."""
 
+import json
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -89,3 +90,34 @@ def test_a_download_over_8_mb_is_stopped(tmp_path, monkeypatch):
 def test_cancellation_still_stops_the_stage(tmp_path):
     with pytest.raises(JobCancelled):
         _run(tmp_path, ["/nope.png"], cancelled=True)
+
+
+FIXTURE = Path(__file__).parent / "fixtures" / "mapreel" / "countries.geojson"
+
+
+def test_highlight_fills_on_an_alias(tmp_path, monkeypatch):
+    from reelmachine.core.timeline import WordSpan
+    from reelmachine.recipes.mapreel.models import NarrationOutput, Window
+    from reelmachine.recipes.mapreel.places import Atlas
+
+    monkeypatch.setattr(stages, "atlas_for", lambda settings: Atlas.load(FIXTURE))
+    inputs = MapReelInputs.model_validate({"segments": [{
+        "kind": "highlight", "countries": ["USA", "NLD"], "narration": "America and Holland lead."}]})
+    seg = ResolvedSegment(id="seg-1", index=0, kind="highlight", codes=["USA", "NLD"],
+                          names={"USA": "United States of America", "NLD": "Netherlands"},
+                          colours={"USA": "#8a2be2", "NLD": "#e0201b"})
+    layer = tmp_path / "layer.jpg"
+    layer.write_bytes(b"jpg")
+    spoken = [WordSpan(text=w, start_ms=i * 400, end_ms=i * 400 + 300)
+              for i, w in enumerate("America and Holland lead.".split())]
+    payload = NarrationOutput(
+        inputs=inputs, segments=[seg], world=str(layer), layers={"seg-1": str(layer)},
+        detail_bboxes={"seg-1": [0, 0, 1, 1]}, frames={"seg-1": {"x": 0.3, "y": 0.4, "s": 2000}},
+        images={}, audio_asset="a.wav", duration_ms=5000,
+        windows=[Window(start_ms=0, duration_ms=5000, speech_offset_ms=1000, speech_ms=2000)],
+        words=[spoken], hot=[[False] * len(spoken)], spoken=[spoken], provider="fake")
+    ctx = SimpleNamespace(workdir=tmp_path / "stage", config=None)
+    stages.SegmentsStage().run(ctx, payload)
+    resolved = json.loads((tmp_path / "stage" / "artifacts" / "script.resolved.json").read_text())
+    fills = {p["code"]: p["fillMs"] for p in resolved["segments"][0]["places"]}
+    assert fills == {"USA": 1000, "NLD": 1800}
