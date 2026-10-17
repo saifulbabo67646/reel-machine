@@ -145,6 +145,16 @@ def estimated_windows(inputs: MapReelInputs) -> list[ShotWindow]:
     return fit_windows(windows, inputs.length * 1000) if inputs.length else windows
 
 
+def heard_names(inputs: MapReelInputs, resolved: list[ResolvedSegment], atlas: Atlas) -> dict[str, list[str]]:
+    """What the voice says for each highlight or versus country, keyed "seg-N/j" (the runtime's `heard_as`)."""
+    out = {}
+    for seg, spec in zip(resolved, inputs.segments):
+        if spec.kind in ("highlight", "versus"):
+            for j, (code, query) in enumerate(zip(seg.codes, spec.countries)):
+                out[f"{seg.id}/{j}"] = atlas.heard_as(code, query)
+    return out
+
+
 class ScriptStage:
     id = "script"
     revision = 1
@@ -155,11 +165,12 @@ class ScriptStage:
         inputs = MapReelInputs.model_validate(payload)
         try:
             check_music(inputs)
-            segments = resolve_segments(inputs, atlas_for(ctx.config), lambda: region_atlas_for(ctx.config))
+            atlas = atlas_for(ctx.config)
+            segments = resolve_segments(inputs, atlas, lambda: region_atlas_for(ctx.config))
         except InvalidInput as exc:
             exc.stage = self.id
             raise
-        found = lint.check(inputs, estimated_windows(inputs))
+        found = lint.check(inputs, estimated_windows(inputs), names=heard_names(inputs, segments, atlas))
         for finding in found:
             if finding.severity == "error":
                 raise InvalidInput(finding.message, hint=finding.hint, stage=self.id,

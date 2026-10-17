@@ -6,10 +6,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, Literal, Sequence
+from typing import Any, Literal, Mapping, Sequence
 
 from ..explainer3d.markup import parse_markup, spoken_text
 from ..explainer3d.timing import ShotWindow, shot_windows
+from .kinds import RANK_AFTER_FILL_MS, VS_AT_MS
 from .models import MapReelInputs
 from .timing import FLY_MS, MIN_SEGMENT_MS, pop_times
 
@@ -46,16 +47,26 @@ def _text(segment: Any) -> str:
 
 
 def _at(text: str, phrases: Sequence[str]) -> float | None:
-    """Where in the text (0..1) the earliest of `phrases` is said."""
-    low, best = text.lower(), None
+    """Where in the text (0..1) the earliest of `phrases` is said, as whole words."""
+    best = None
     for phrase in phrases:
-        if phrase and (pos := low.find(phrase.lower())) >= 0 and (best is None or pos < best):
-            best = pos
+        if not phrase.strip():
+            continue
+        m = re.search(rf"(?<!\w){re.escape(phrase.strip())}(?!\w)", text, re.I)
+        if m and (best is None or m.start() < best):
+            best = m.start()
     return None if best is None else best / max(1, len(text))
 
 
-def _entries(segment: Any) -> list[tuple[list[str], float | None]]:
-    """What the segment pops or fills, in the order it is written: the phrases that name it, and a forced time."""
+def _country_phrases(index: int, j: int, query: str, names: Mapping[str, Sequence[str]] | None) -> list[str]:
+    """What the voice may say for a highlight or versus country: its names when known, else what was written."""
+    return list(names.get(f"seg-{index + 1}/{j}", ())) if names and f"seg-{index + 1}/{j}" in names else [query]
+
+
+def _entries(segment: Any, index: int = 0,
+             names: Mapping[str, Sequence[str]] | None = None) -> list[tuple[list[str], float | None]]:
+    """What the segment pops or fills, in the order it is written: the phrases that name it, and a forced time.
+    A versus country lists its stat's value first, then its names, as the runtime does."""
     def item(it: Any) -> tuple[list[str], float | None]:
         return [it.say or it.name], it.at
 
@@ -63,12 +74,13 @@ def _entries(segment: Any) -> list[tuple[list[str], float | None]]:
     if kind == "country":
         return [item(i) for i in segment.items]
     if kind == "highlight":
-        return [([c], None) for c in segment.countries]
+        return [(_country_phrases(index, j, c, names), None) for j, c in enumerate(segment.countries)]
     if kind == "rank":
-        stat = [([segment.stat.label or "", segment.stat.value], None)] if segment.stat else []
+        stat = [([segment.stat.value], None)] if segment.stat else []
         return [*stat, *(item(i) for i in segment.items)]
     if kind == "versus":
-        return [([c], None) for c in segment.countries]
+        return [([stat.value, *_country_phrases(index, j, c, names)], None)
+                for j, (c, stat) in enumerate(zip(segment.countries, segment.stats))]
     out: list[tuple[list[str], float | None]] = []
     for entry in segment.regions:
         out.append(([entry.say or entry.region], None))
@@ -76,12 +88,14 @@ def _entries(segment: Any) -> list[tuple[list[str], float | None]]:
     return out
 
 
-def estimate_beats(inputs: MapReelInputs, windows: Sequence[ShotWindow]) -> list[list[float]]:
-    """Reel-time seconds of everything that happens on screen, per segment, sorted."""
+def estimate_beats(inputs: MapReelInputs, windows: Sequence[ShotWindow], *,
+                   names: Mapping[str, Sequence[str]] | None = None) -> list[list[float]]:
+    """Reel-time seconds of everything that happens on screen, per segment, sorted. `names` maps
+    "seg-N/j" (country j of a highlight or versus) to what the voice says for it."""
     out = []
-    for segment, window in zip(inputs.segments, windows):
+    for index, (segment, window) in enumerate(zip(inputs.segments, windows)):
         text = _text(segment)
-        entries = _entries(segment)
+        entries = _entries(segment, index, names)
         start, off, speech = window.start_ms, window.speech_offset_ms, window.speech_ms
         spoken = [None if (f := _at(text, p)) is None else int(f * speech) for p, _ in entries]
         forced = [None if at is None else int(at * 1000) for _, at in entries]
@@ -91,15 +105,18 @@ def estimate_beats(inputs: MapReelInputs, windows: Sequence[ShotWindow]) -> list
             beats.append(0)
         if segment.kind in ("country", "rank", "regions"):
             beats.append(FLY_MS)
-        if segment.kind == "versus" and len(times) >= 2:
-            beats.append((times[0] + times[1]) // 2)  # VS
+        if segment.kind == "rank":
+            badge = FLY_MS + RANK_AFTER_FILL_MS
+            beats.append(badge)
+            if segment.stat:  # a value said before the badge lands waits for it
+                beats[0] = max(beats[0], badge)
         if segment.kind == "versus":
-            beats.extend(times)  # a stat lands with its country
+            beats.append(VS_AT_MS)
         out.append(sorted((start + ms) / 1000 for ms in beats))
     return out
 
 
-def _rule_beat_gap(inputs: MapReelInputs, windows: Sequence[ShotWindow], beats: list[list[float]]) -> list[Finding]:
+def _rule_beat_gap(windows: Sequence[ShotWindow], beats: list[list[float]]) -> list[Finding]:
     found = []
     for i, (w, seg_beats) in enumerate(zip(windows, beats)):
         lo = (w.start_ms + w.speech_offset_ms) / 1000
@@ -185,7 +202,8 @@ def _rule_ending(inputs: MapReelInputs) -> list[Finding]:
                     "end on a question or a call to comment, like 'Which one did I miss?'", f"seg-{len(inputs.segments)}")]
 
 
-def check(inputs: MapReelInputs, windows: Sequence[ShotWindow]) -> list[Finding]:
+def check(inputs: MapReelInputs, windows: Sequence[ShotWindow], *,
+          names: Mapping[str, Sequence[str]] | None = None) -> list[Finding]:
     hard = "error" if inputs.mode == "build" and inputs.lint == "strict" else "warning"
     found: list[Finding] = []
     first = _text(inputs.segments[0])
@@ -202,7 +220,7 @@ def check(inputs: MapReelInputs, windows: Sequence[ShotWindow]) -> list[Finding]
             found.append(Finding(
                 "unpaid-loop", hard, "the opening teases a payoff that never comes",
                 "end with a rank 1 segment, or say 'and number one is...' in a later line", "seg-1"))
-    found.extend(_rule_beat_gap(inputs, windows, estimate_beats(inputs, windows)))
+    found.extend(_rule_beat_gap(windows, estimate_beats(inputs, windows, names=names)))
     found.extend(_rule_rehook(inputs, windows))
     found.extend(_rule_monotony(inputs))
     found.extend(_rule_length(inputs, windows))

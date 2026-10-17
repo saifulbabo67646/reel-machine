@@ -28,6 +28,11 @@ SCRIPT = {
 }
 
 
+#: SCRIPT with its tease paid off, so a build passes the strict hook lint
+PAID = {**SCRIPT, "segments": [*SCRIPT["segments"], {
+    "kind": "highlight", "countries": ["ITA"], "narration": "And number one is Italy. Which brand did I miss?"}]}
+
+
 def _settings(tmp_path):
     return dataclasses.replace(get_settings(), workdir=tmp_path / "work", outdir=tmp_path / "out",
                                tts="fake", shared_cache=tmp_path / "shared")
@@ -77,10 +82,11 @@ def test_a_storyboard_stops_with_a_sheet_and_the_resolved_script(tmp_path):
     assert seg["items"][0]["atMs"] < seg["items"][1]["atMs"] < seg["items"][2]["atMs"]
     assert seg["items"][1]["image"] and seg["items"][2]["image"] is None  # the missing file became a badge
     assert any("Versace" in w for w in resolved["warnings"])
+    assert any(w.startswith("unpaid-loop:") for w in resolved["warnings"])  # lint warnings travel with the rest
 
 
 def test_a_build_makes_a_reel_with_captions(tmp_path):
-    job = _run(tmp_path, {**SCRIPT, "lint": "warn"})
+    job = _run(tmp_path, PAID)
     assert job.state == JobState.SUCCEEDED, job.error
     arts = _artifacts(job)
     from reelmachine import ffmpeg
@@ -91,7 +97,7 @@ def test_a_build_makes_a_reel_with_captions(tmp_path):
 
 
 def test_auto_music_builds_a_reel_with_a_synthesised_bed(tmp_path):
-    job = _run(tmp_path, {**SCRIPT, "music": "auto", "lint": "warn"})
+    job = _run(tmp_path, {**PAID, "music": "auto"})
     assert job.state == JobState.SUCCEEDED, job.error
     assert list((tmp_path / "work").rglob("music.wav"))
 

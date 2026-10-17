@@ -17,7 +17,7 @@ from .places import atlas_for
 from .regions import region_atlas_for
 from . import lint
 from .stages import (ComposeStage, GeoStage, ImagesStage, NarrationStage, PrepStage, RenderStage,
-                     ScriptStage, SegmentsStage, check_music, estimated_windows, resolve_segments)
+                     ScriptStage, SegmentsStage, check_music, estimated_windows, heard_names, resolve_segments)
 
 GUIDE = {
     "workflow": [
@@ -95,13 +95,14 @@ class MapReelRecipe:
             check_music(inputs)
             settings = ctx.config or get_settings()
             # the admin-1 file (about 40 MB) is fetched only when a regions segment needs it
-            segments = resolve_segments(inputs, atlas_for(settings), lambda: region_atlas_for(settings))
+            atlas = atlas_for(settings)
+            segments = resolve_segments(inputs, atlas, lambda: region_atlas_for(settings))
             windows = estimated_windows(inputs)
             details["segments"] = [{"id": seg.id, "codes": seg.codes, "estimatedMs": w.duration_ms}
                                    for seg, w in zip(segments, windows)]
             details["estimatedMs"] = windows[-1].end_ms
             checks.append(CheckResult(name="script", ok=True, detail=f"{len(segments)} segments"))
-            found = lint.check(inputs, windows)
+            found = lint.check(inputs, windows, names=heard_names(inputs, segments, atlas))
             details["lint"] = [asdict(f) for f in found]
             errors = [f.message for f in found if f.severity == "error"]
             checks.append(CheckResult(name="hook", ok=not errors,

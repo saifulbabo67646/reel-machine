@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from reelmachine.recipes.mapreel import lint
+from reelmachine.recipes.mapreel import kinds, lint
 from reelmachine.recipes.mapreel.models import MapReelInputs
 from reelmachine.recipes.mapreel.stages import estimated_windows
 
@@ -195,3 +195,49 @@ def test_estimate_beats_are_reel_seconds_per_segment():
     beats = lint.estimate_beats(inputs, windows)
     assert len(beats) == 2 and all(b == sorted(b) for b in beats)
     assert beats[1][0] >= windows[1].start_ms / 1000
+
+
+def _inputs(segments):
+    return MapReelInputs.model_validate({"segments": segments})
+
+
+def test_a_versus_vs_beat_uses_the_runtime_time():
+    versus = {"kind": "versus", "countries": ["USA", "ITA"], "narration": "Only 3 lands matter here today ok.",
+              "stats": [{"value": "9"}, {"value": "8"}]}
+    inputs = _inputs([highlight("Only 3 countries dress the world."), versus])
+    windows = estimated_windows(inputs)
+    beats = lint.estimate_beats(inputs, windows)[1]
+    assert (windows[1].start_ms + kinds.VS_AT_MS) / 1000 in beats
+
+
+def test_a_rank_badge_beat_lands_just_after_the_fill():
+    inputs = _inputs([highlight("Only 3 countries dress the world."), rank(1)])
+    windows = estimated_windows(inputs)
+    beats = lint.estimate_beats(inputs, windows)[1]
+    assert (windows[1].start_ms + lint.FLY_MS + kinds.RANK_AFTER_FILL_MS) / 1000 in beats
+
+
+def test_a_versus_stat_is_one_beat_matched_on_its_value():
+    versus = {"kind": "versus", "countries": ["USA", "ITA"], "narration": "Only 3 lands: 9 beats 8 by far, ok.",
+              "stats": [{"value": "9"}, {"value": "8"}]}
+    inputs = _inputs([versus])
+    # start, VS, and one beat per country
+    assert len(lint.estimate_beats(inputs, estimated_windows(inputs))[0]) == 4
+
+
+def test_an_iso_coded_highlight_country_gets_a_matched_beat_when_its_name_is_said():
+    text = "Only 3 lands matter and the first of them is the United States."
+    inputs = _inputs([highlight(text)])
+    inputs.segments[0].countries = ["USA"]
+    window = estimated_windows(inputs)[0]
+    names = {"seg-1/0": ["United States"]}
+    matched = lint.estimate_beats(inputs, [window], names=names)[0]
+    spread = lint.estimate_beats(inputs, [window])[0]
+    want = (window.start_ms + window.speech_offset_ms + int(text.index("United States") / len(text) * window.speech_ms)) / 1000
+    assert any(abs(b - want) < 0.002 for b in matched)
+    assert not any(abs(b - want) < 0.002 for b in spread)
+
+
+def test_a_name_matches_whole_words_only():
+    assert lint._at("I can afford it", ["Ford"]) is None
+    assert lint._at("a ford and Ford", ["ford"]) == 2 / len("a ford and Ford")

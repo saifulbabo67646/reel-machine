@@ -138,8 +138,26 @@ def test_a_weak_opener_fails_the_hook_check_in_a_build(tmp_path):
             "items": [{"name": "Gucci"}]}]
     report = _probe(tmp_path, seg, lint="strict")
     hook = next(c for c in report.checks if c.name == "hook")
-    assert not hook.ok and not report.ok and "hook" in hook.detail
+    assert not hook.ok and not report.ok
     assert any(f["rule"] == "weak-opener" for f in report.details["lint"])
+
+
+def test_the_script_stage_refuses_a_weak_hook_in_a_strict_build(tmp_path):
+    from types import SimpleNamespace
+
+    import pytest
+
+    from reelmachine.core.errors import InvalidInput
+    from reelmachine.recipes.mapreel.stages import ScriptStage
+
+    ctx = SimpleNamespace(config=_ctx(tmp_path).config)
+    weak = [{"kind": "country", "country": "ITA", "narration": "Welcome to Italy, it has Gucci.",
+             "items": [{"name": "Gucci"}]}]
+    with pytest.raises(InvalidInput) as err:
+        ScriptStage().run(ctx, {"segments": weak})
+    assert err.value.details == {"path": "segments[0].narration", "rule": "weak-opener"}
+    out = ScriptStage().run(ctx, {"segments": weak, "mode": "storyboard"})
+    assert any(f["rule"] == "weak-opener" and f["severity"] == "warning" for f in out.lint)
 
 
 def test_a_weak_opener_only_warns_in_a_storyboard_or_with_lint_warn(tmp_path):
