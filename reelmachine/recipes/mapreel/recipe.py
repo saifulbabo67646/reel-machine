@@ -4,11 +4,39 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...config import get_settings
+from ...core.errors import InvalidInput
+from ...core.manifest import CheckResult
 from ...core.recipe import CostNote, ProbeContext, ProbeReport, ProviderReq, RecipeSpec, StageSpec
 from ...core.stage import StageContext
+from ..doodle.narration import provider_for
+from ..explainer3d.markup import parse_markup, spoken_text
+from ..explainer3d.timing import estimate_speech_ms, shot_windows
 from .models import MapReelInputs
+from .places import atlas_for
 from .stages import (ComposeStage, GeoStage, ImagesStage, NarrationStage, PrepStage, RenderStage,
-                     ScriptStage, SegmentsStage)
+                     ScriptStage, SegmentsStage, resolve_segments)
+from .timing import MIN_SEGMENT_MS
+
+GUIDE = {
+    "workflow": [
+        "1. Pick a topic people argue about in the comments (brands, dishes, inventions, bans) and research "
+        "every fact you will say; keep the source URL.",
+        "2. Write the hook first: segment 1 opens on a surprise, a number, a challenge or 'you' — never "
+        "'X has…'. Tease a payoff you deliver at the end.",
+        "3. Resolve places with find_places (codes like 'ITA'); one country per 'country' segment, 1-8 items, "
+        "listed in the order the narration names them.",
+        "4. Use a 'highlight' segment for the hook or a reveal (several countries at once with a legend).",
+        "5. probe and fix every failed check; start_job with mode 'storyboard', look at storyboard.jpg, "
+        "then start_job with mode 'build'.",
+    ],
+    "tips": [
+        "Items pop when the voice says their name: write the name in the narration exactly, or give `say` "
+        "for how it is pronounced and `at` (seconds) to force a time.",
+        "Keep a new visual every second: 3-5 items per country segment, segments of 3-5 seconds.",
+        "`image` takes a local file or an https URL; anything unusable shows as a bold text badge.",
+    ],
+}
 
 EXAMPLE = {
     "mode": "storyboard",
@@ -55,11 +83,37 @@ class MapReelRecipe:
         artifacts=("reel.mp4", "captions.srt", "reel.json", "timeline.json", "storyboard.jpg",
                    "script.resolved.json"),
         render_modes=("hyperframes",),
+        guide=GUIDE,
         example=EXAMPLE,
     )
 
     def probe(self, inputs: MapReelInputs, ctx: ProbeContext) -> ProbeReport:
-        return ProbeReport(ok=True)
+        checks: list[CheckResult] = []
+        details: dict[str, Any] = {}
+        try:
+            segments = resolve_segments(inputs, atlas_for(ctx.config or get_settings()))
+            estimates = [estimate_speech_ms(spoken_text(parse_markup(s.narration)), inputs.language)
+                         for s in inputs.segments]
+            windows = shot_windows(estimates, min_ms=MIN_SEGMENT_MS)
+            details["segments"] = [{"id": seg.id, "codes": seg.codes, "estimatedMs": w.duration_ms}
+                                   for seg, w in zip(segments, windows)]
+            details["estimatedMs"] = windows[-1].end_ms
+            checks.append(CheckResult(name="script", ok=True, detail=f"{len(segments)} segments"))
+        except InvalidInput as exc:
+            path = exc.details.get("path", "")
+            checks.append(CheckResult(name="script", ok=False, detail=f"{path}: {exc.message}"))
+            details["error"] = {"path": path, "message": exc.message, "hint": exc.hint}
+        details["cost"] = {"ttsCharacters": sum(len(spoken_text(parse_markup(s.narration))) for s in inputs.segments),
+                           "voice": inputs.voice}
+        providers = ctx.providers
+        renderer = providers.get("renderer") if providers else None
+        problems = renderer.missing() if renderer is not None else ["no renderer bound"]
+        checks.append(CheckResult(name="renderer", ok=not problems,
+                                  detail="; ".join(problems) or getattr(renderer, "name", "")))
+        bound = getattr(providers.get("narration") if providers else None, "name", "")
+        checks.append(CheckResult(name="voice", ok=provider_for(inputs.voice) == bound,
+                                  detail=f"requested {provider_for(inputs.voice)!r}, deployment serves {bound!r}"))
+        return ProbeReport(ok=all(c.ok for c in checks), checks=checks, details=details)
 
     def verify(self, ctx: StageContext, result: dict[str, Any]) -> None:
         return None
