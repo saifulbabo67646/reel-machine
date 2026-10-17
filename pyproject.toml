@@ -59,6 +59,7 @@ explainer3d-fake = "reelmachine.recipes.explainer3d.fake:FakeShotRenderer"
 fake = "reelmachine.recipes.doodle.narration.fake:FakeNarration"
 elevenlabs = "reelmachine.recipes.doodle.narration.cloud:ElevenLabsNarration"
 cartesia = "reelmachine.recipes.doodle.narration.cloud:CartesiaNarration"
+macos = "reelmachine.recipes.doodle.narration.macos:MacOSNarration"
 
 [project.entry-points."reelmachine.scripts"]
 template = "reelmachine.recipes.doodle.script:TemplateScriptProvider"
