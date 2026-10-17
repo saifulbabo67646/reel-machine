@@ -1,0 +1,197 @@
+"""The hook lint: eight rules, two of them hard in a build."""
+
+import json
+from pathlib import Path
+
+from reelmachine.recipes.mapreel import lint
+from reelmachine.recipes.mapreel.models import MapReelInputs
+from reelmachine.recipes.mapreel.stages import estimated_windows
+
+BRANDS = Path(__file__).parent.parent / "examples" / "mapreel" / "brands.json"
+HOOK = "Only *three countries* dress the world. Number one will surprise you."
+PAYOFF = "And number one is Turkey. Which brand did I miss?"
+
+
+def country(code="ITA", narration="Italy has Gucci, Prada and Versace.", names=("Gucci", "Prada", "Versace"),
+            **extra):
+    return {"kind": "country", "country": code, "narration": narration, "source": "https://example.com",
+            "items": [{"name": n} for n in names], **extra}
+
+
+def highlight(narration, **extra):
+    return {"kind": "highlight", "countries": ["USA", "ITA"], "narration": narration,
+            "source": "https://example.com", **extra}
+
+
+def rank(n, narration="But Turkey is number one with the most.", **extra):
+    return {"kind": "rank", "rank": n, "country": "TUR", "narration": narration,
+            "source": "https://example.com", **extra}
+
+
+def run(segments, **extra):
+    inputs = MapReelInputs.model_validate({"segments": segments, **extra})
+    return lint.check(inputs, estimated_windows(inputs))
+
+
+def rules(findings):
+    return {f.rule for f in findings}
+
+
+# -- 1 weak-opener -------------------------------------------------------------------
+
+
+def test_weak_opener_flags_a_welcome():
+    found = run([highlight("Welcome to a map of the brands you know.")], mode="storyboard")
+    assert "weak-opener" in rules(found)
+
+
+def test_weak_opener_flags_a_flat_start_with_no_signal():
+    found = run([highlight("Italy has a famous long boot shaped coast line.")])
+    assert "weak-opener" in rules(found)
+
+
+def test_a_hook_with_a_number_passes_the_opener():
+    assert "weak-opener" not in rules(run([highlight("Only 3 countries dress the whole world.")]))
+
+
+def test_weak_opener_is_an_error_only_in_a_strict_build():
+    weak = [highlight("Welcome to a map of the brands you know.")]
+    err = [f for f in run(weak) if f.rule == "weak-opener"][0]
+    assert err.severity == "error" and err.segment == "seg-1" and err.hint
+    assert [f for f in run(weak, mode="storyboard") if f.rule == "weak-opener"][0].severity == "warning"
+    assert [f for f in run(weak, lint="warn") if f.rule == "weak-opener"][0].severity == "warning"
+
+
+# -- 2 unpaid-loop -------------------------------------------------------------------
+
+
+def test_unpaid_loop_flags_a_tease_never_paid():
+    found = run([highlight(HOOK), country()])
+    assert [f for f in found if f.rule == "unpaid-loop"][0].severity == "error"
+
+
+def test_unpaid_loop_is_paid_by_a_rank_one():
+    assert "unpaid-loop" not in rules(run([highlight(HOOK), country(), rank(1)]))
+
+
+def test_unpaid_loop_accepts_a_spoken_reveal():
+    assert "unpaid-loop" not in rules(run([highlight(HOOK), country(), highlight(PAYOFF)]))
+
+
+# -- 3 beat-gap ----------------------------------------------------------------------
+
+
+def test_beat_gap_flags_a_long_stretch_with_nothing_on_screen():
+    long = ("Italy is a long country with a very long coast and many many many many many many many many many "
+            "many many many many many words before Gucci.")
+    found = run([highlight("Only 3 countries dress the world."), country(narration=long, names=["Gucci"])])
+    assert [f.segment for f in found if f.rule == "beat-gap"] == ["seg-2"]
+
+
+def test_beat_gap_passes_when_names_land_every_second():
+    found = run([highlight("Only 3 countries dress the world."), country()])
+    assert "beat-gap" not in rules(found)
+
+
+# -- 4 no-rehook ---------------------------------------------------------------------
+
+
+def test_no_rehook_flags_a_long_flat_stretch():
+    flat = country(narration="Italy has Gucci, Prada and Versace, and a very long list of other famous "
+                             "brands that are made in the north of the country every year.")
+    found = run([highlight("Only 3 countries dress the world."), flat, flat, flat, flat, flat, flat])
+    finding = [f for f in found if f.rule == "no-rehook"]
+    assert finding and finding[0].severity == "warning" and "s" in finding[0].message
+
+
+def test_no_rehook_passes_on_a_short_reel():
+    assert "no-rehook" not in rules(run([highlight("Only 3 countries dress the world."), country()]))
+
+
+# -- 5 monotony ----------------------------------------------------------------------
+
+
+def test_monotony_flags_four_countries_in_a_row():
+    found = run([highlight("Only 3 countries dress the world.")] + [country()] * 4)
+    finding = [f for f in found if f.rule == "monotony"]
+    assert finding and "rank" in finding[0].hint and "versus" in finding[0].hint
+
+
+def test_monotony_passes_with_a_highlight_between():
+    found = run([highlight("Only 3 countries dress the world."), country(), country(), country(),
+                 highlight("But which is first?"), country()])
+    assert "monotony" not in rules(found)
+
+
+# -- 6 length ------------------------------------------------------------------------
+
+
+def test_length_warns_when_the_target_means_padding():
+    found = run([highlight("Only 3 countries dress the world."), country()], length=60)
+    finding = [f for f in found if f.rule == "length"][0]
+    assert "padding" in finding.message
+
+
+def test_length_passes_without_a_target():
+    assert "length" not in rules(run([highlight("Only 3 countries dress the world."), country()]))
+
+
+def test_length_warns_over_75_seconds():
+    wordy = country(narration=" ".join(["Italy has many famous brands"] * 12))
+    found = run([highlight("Only 3 countries dress the world.")] + [wordy] * 12)
+    assert any(f.rule == "length" and "60" in f.message for f in found)
+
+
+# -- 7 unsourced ---------------------------------------------------------------------
+
+
+def test_unsourced_lists_every_item_without_a_source_in_one_finding():
+    bare = {**country(), "source": None}
+    found = run([highlight("Only 3 countries dress the world."), bare])
+    finding = [f for f in found if f.rule == "unsourced"]
+    assert len(finding) == 1 and "Gucci" in finding[0].message and "Versace" in finding[0].message
+
+
+def test_unsourced_passes_with_a_segment_or_item_source():
+    own = {**country(), "source": None, "items": [{"name": n, "source": "https://x.org"} for n in ("A", "B")]}
+    assert "unsourced" not in rules(run([highlight("Only 3 countries dress the world."), country(), own]))
+
+
+# -- 8 no-ending ---------------------------------------------------------------------
+
+
+def test_no_ending_flags_a_script_that_just_stops():
+    found = run([highlight("Only 3 countries dress the world."), country(narration="Italy has Gucci.")])
+    assert "no-ending" in rules(found)
+
+
+def test_no_ending_passes_with_a_question_or_a_rank_one():
+    q = run([highlight("Only 3 countries dress the world."), country(narration="Which brand did I miss?")])
+    assert "no-ending" not in rules(q)
+    assert "no-ending" not in rules(run([highlight("Only 3 countries dress the world."), rank(1, "Turkey wins.")]))
+
+
+# -- the reference reel and the example ------------------------------------------------
+
+
+def test_the_reference_reel_fails_its_hook():
+    places = ["USA", "ITA", "FRA", "JPN", "SWE", "GBR", "DEU", "ESP", "CHN", "KOR", "IND", "BRA", "CAN", "MEX", "NLD"]
+    brands = [("Nike", "Apple", "Coca-Cola", "Ford"), ("Gucci", "Prada", "Fiat"), ("Chanel", "Dior")]
+    segments = [country(code, f"The United States has {', '.join(b[:-1])} and {b[-1]}.", b)
+                for code, b in ((p, brands[i % 3]) for i, p in enumerate(places))]
+    found = rules(run(segments))
+    assert {"weak-opener", "no-rehook", "monotony"} <= found
+
+
+def test_brands_example_passes_the_hard_rules():
+    inputs = MapReelInputs.model_validate({**json.loads(BRANDS.read_text()), "mode": "build"})
+    found = lint.check(inputs, estimated_windows(inputs))
+    assert not [f for f in found if f.severity == "error"], found
+
+
+def test_estimate_beats_are_reel_seconds_per_segment():
+    inputs = MapReelInputs.model_validate({"segments": [highlight("Only 3 countries dress the world."), country()]})
+    windows = estimated_windows(inputs)
+    beats = lint.estimate_beats(inputs, windows)
+    assert len(beats) == 2 and all(b == sorted(b) for b in beats)
+    assert beats[1][0] >= windows[1].start_ms / 1000

@@ -155,6 +155,7 @@ class MapReelInputs(BaseModel):
     look: Literal["satellite"] = "satellite"
     music: str | None = None  # "auto" (a synthesised bed) or a local audio file
     length: int | None = Field(None, ge=15, le=90)
+    lint: Literal["strict", "warn"] = "strict"  # strict: a build refuses a weak hook or an unpaid tease
     segments: list[Segment] = Field(min_length=1, max_length=40)
     name: str | None = None
     outdir: str | None = None
@@ -181,6 +182,7 @@ class ResolvedSegment(BaseModel):
 class ScriptOutput(StageOutput):
     inputs: MapReelInputs
     segments: list[ResolvedSegment]
+    lint: list[dict] = Field(default_factory=list)  # warnings from the hook lint, for script.resolved.json
 
 
 class GeoOutput(ScriptOutput):

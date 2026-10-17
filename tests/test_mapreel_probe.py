@@ -35,7 +35,7 @@ def _ctx(tmp_path):
 
 
 def _probe(tmp_path, segments, **extra):
-    inputs = MapReelInputs.model_validate({"segments": segments, **extra})
+    inputs = MapReelInputs.model_validate({"segments": segments, "lint": "warn", **extra})
     return MapReelRecipe().probe(inputs, _ctx(tmp_path))
 
 
@@ -118,16 +118,34 @@ def test_the_script_stage_refuses_a_missing_music_file(tmp_path):
 
     ctx = SimpleNamespace(config=_ctx(tmp_path).config)
     with pytest.raises(InvalidInput) as err:
-        ScriptStage().run(ctx, {"segments": ITALY, "music": "~/no/such/track.mp3"})
+        ScriptStage().run(ctx, {"segments": ITALY, "lint": "warn", "music": "~/no/such/track.mp3"})
     assert err.value.stage == "script" and err.value.details["path"] == "music"
-    assert ScriptStage().run(ctx, {"segments": ITALY, "music": "auto"}).inputs.music == "auto"
+    assert ScriptStage().run(ctx, {"segments": ITALY, "lint": "warn", "music": "auto"}).inputs.music == "auto"
 
 
 def test_a_bad_region_fails_probe_with_its_path(tmp_path):
     ctx = _ctx(tmp_path)
     shutil.copy2(FIXTURE.parent / "regions.geojson", geodata.geo_cache(ctx.config) / geodata.FILES["regions"][0])
     segs = [{"kind": "regions", "country": "USA", "narration": "Texas.", "regions": [{"region": "Texsa"}]}]
-    report = MapReelRecipe().probe(MapReelInputs.model_validate({"segments": segs}), ctx)
+    report = MapReelRecipe().probe(MapReelInputs.model_validate({"segments": segs, "lint": "warn"}), ctx)
     assert not report.ok and report.details["error"]["path"] == "segments[0].regions[0].region"
     segs[0]["regions"][0]["region"] = "Texas"
-    assert MapReelRecipe().probe(MapReelInputs.model_validate({"segments": segs}), ctx).ok
+    assert MapReelRecipe().probe(MapReelInputs.model_validate({"segments": segs, "lint": "warn"}), ctx).ok
+
+
+def test_a_weak_opener_fails_the_hook_check_in_a_build(tmp_path):
+    seg = [{"kind": "country", "country": "ITA", "narration": "Welcome to Italy, it has Gucci.",
+            "items": [{"name": "Gucci"}]}]
+    report = _probe(tmp_path, seg, lint="strict")
+    hook = next(c for c in report.checks if c.name == "hook")
+    assert not hook.ok and not report.ok and "hook" in hook.detail
+    assert any(f["rule"] == "weak-opener" for f in report.details["lint"])
+
+
+def test_a_weak_opener_only_warns_in_a_storyboard_or_with_lint_warn(tmp_path):
+    seg = [{"kind": "country", "country": "ITA", "narration": "Welcome to Italy, it has Gucci.",
+            "items": [{"name": "Gucci"}]}]
+    for name, extra in (("a", {"mode": "storyboard"}), ("b", {"lint": "warn"})):
+        report = _probe(tmp_path / name, seg, **extra)
+        assert next(c for c in report.checks if c.name == "hook").ok, extra
+        assert any(f["rule"] == "weak-opener" and f["severity"] == "warning" for f in report.details["lint"])

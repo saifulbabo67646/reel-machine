@@ -8,6 +8,7 @@ import math
 import os
 import shutil
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -26,9 +27,9 @@ from ..explainer3d.audio import mix, pad_speech, synth_sfx
 from ..explainer3d.markup import display_text, display_words, parse_markup, spoken_text
 from ..explainer3d.music import synth_music
 from ..explainer3d.stages import speak_line
-from ..explainer3d.timing import fit_windows, shot_windows
+from ..explainer3d.timing import ShotWindow, estimate_speech_ms, fit_windows, shot_windows
 from ..explainer3d.video import join_shots, mux
-from . import basemap, compose, geodata, kinds, palette
+from . import basemap, compose, geodata, kinds, lint, palette
 from .geometry import SAFE, Frame, frame_for, shape_of, visible_bbox
 from .models import (
     ComposeOutput, GeoOutput, ImagesOutput, MapReelInputs, NarrationOutput, PrepOutput, RenderOutput,
@@ -136,6 +137,14 @@ def check_music(inputs: MapReelInputs) -> None:
                            details={"path": "music"})
 
 
+def estimated_windows(inputs: MapReelInputs) -> list[ShotWindow]:
+    """Segment windows from the speech estimate alone (no voice yet), stretched to `length` when it is set."""
+    estimates = [estimate_speech_ms(spoken_text(parse_markup(s.narration)), inputs.language)
+                 for s in inputs.segments]
+    windows = shot_windows(estimates, min_ms=MIN_SEGMENT_MS)
+    return fit_windows(windows, inputs.length * 1000) if inputs.length else windows
+
+
 class ScriptStage:
     id = "script"
     revision = 1
@@ -150,7 +159,12 @@ class ScriptStage:
         except InvalidInput as exc:
             exc.stage = self.id
             raise
-        return ScriptOutput(inputs=inputs, segments=segments)
+        found = lint.check(inputs, estimated_windows(inputs))
+        for finding in found:
+            if finding.severity == "error":
+                raise InvalidInput(finding.message, hint=finding.hint, stage=self.id,
+                                   details={"path": "segments[0].narration", "rule": finding.rule})
+        return ScriptOutput(inputs=inputs, segments=segments, lint=[asdict(f) for f in found])
 
 
 class GeoStage:
@@ -343,6 +357,7 @@ class SegmentsStage:
         # the admin-1 data only when a regions segment draws its states
         regions = region_atlas_for(ctx.config) if any(s.kind == "regions" for s in inputs.segments) else None
         warnings = list(payload.warnings)
+        warnings.extend(f"{f['rule']}: {f['message']}" for f in payload.lint)
         projects, cues, resolved = [], [], []
         previous_frame, previous_end, previous_id, previous_places = None, None, None, []
         for i, (seg, spec, window) in enumerate(zip(payload.segments, inputs.segments, payload.windows)):

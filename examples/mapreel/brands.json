@@ -4,7 +4,7 @@
   "voice": "fake:default",
   "segments": [
     {"kind": "highlight", "countries": ["USA", "ITA", "FRA", "JPN", "SWE"], "legend": "Who dresses the world?",
-     "narration": "*Five countries* make almost everything you wear. Number five will surprise you."},
+     "narration": "*Five countries* make almost everything you wear. Number five might shock you."},
     {"kind": "country", "country": "USA", "narration": "The United States has Nike, Levi's, Calvin Klein and Ralph Lauren.",
      "items": [{"name": "Nike"}, {"name": "Levi's"}, {"name": "Calvin Klein"}, {"name": "Ralph Lauren"}]},
     {"kind": "country", "country": "ITA", "narration": "Italy has Gucci, Prada, Versace and Armani.",

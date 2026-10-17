@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import Any
 
 from ...config import get_settings
@@ -11,13 +12,12 @@ from ...core.recipe import CostNote, ProbeContext, ProbeReport, ProviderReq, Rec
 from ...core.stage import StageContext
 from ..doodle.narration import provider_for
 from ..explainer3d.markup import parse_markup, spoken_text
-from ..explainer3d.timing import estimate_speech_ms, fit_windows, shot_windows
 from .models import MapReelInputs
 from .places import atlas_for
 from .regions import region_atlas_for
+from . import lint
 from .stages import (ComposeStage, GeoStage, ImagesStage, NarrationStage, PrepStage, RenderStage,
-                     ScriptStage, SegmentsStage, check_music, resolve_segments)
-from .timing import MIN_SEGMENT_MS
+                     ScriptStage, SegmentsStage, check_music, estimated_windows, resolve_segments)
 
 GUIDE = {
     "workflow": [
@@ -96,15 +96,16 @@ class MapReelRecipe:
             settings = ctx.config or get_settings()
             # the admin-1 file (about 40 MB) is fetched only when a regions segment needs it
             segments = resolve_segments(inputs, atlas_for(settings), lambda: region_atlas_for(settings))
-            estimates = [estimate_speech_ms(spoken_text(parse_markup(s.narration)), inputs.language)
-                         for s in inputs.segments]
-            windows = shot_windows(estimates, min_ms=MIN_SEGMENT_MS)
-            if inputs.length:
-                windows = fit_windows(windows, inputs.length * 1000)
+            windows = estimated_windows(inputs)
             details["segments"] = [{"id": seg.id, "codes": seg.codes, "estimatedMs": w.duration_ms}
                                    for seg, w in zip(segments, windows)]
             details["estimatedMs"] = windows[-1].end_ms
             checks.append(CheckResult(name="script", ok=True, detail=f"{len(segments)} segments"))
+            found = lint.check(inputs, windows)
+            details["lint"] = [asdict(f) for f in found]
+            errors = [f.message for f in found if f.severity == "error"]
+            checks.append(CheckResult(name="hook", ok=not errors,
+                                      detail="; ".join(errors) if errors else f"{len(found)} suggestions"))
         except InvalidInput as exc:
             path = exc.details.get("path", "")
             checks.append(CheckResult(name="script", ok=False, detail=f"{path}: {exc.message}"))

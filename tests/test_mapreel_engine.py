@@ -80,7 +80,7 @@ def test_a_storyboard_stops_with_a_sheet_and_the_resolved_script(tmp_path):
 
 
 def test_a_build_makes_a_reel_with_captions(tmp_path):
-    job = _run(tmp_path, SCRIPT)
+    job = _run(tmp_path, {**SCRIPT, "lint": "warn"})
     assert job.state == JobState.SUCCEEDED, job.error
     arts = _artifacts(job)
     from reelmachine import ffmpeg
@@ -91,7 +91,7 @@ def test_a_build_makes_a_reel_with_captions(tmp_path):
 
 
 def test_auto_music_builds_a_reel_with_a_synthesised_bed(tmp_path):
-    job = _run(tmp_path, {**SCRIPT, "music": "auto"})
+    job = _run(tmp_path, {**SCRIPT, "music": "auto", "lint": "warn"})
     assert job.state == JobState.SUCCEEDED, job.error
     assert list((tmp_path / "work").rglob("music.wav"))
 
