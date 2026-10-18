@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from urllib.parse import quote
 
 from ...core.assets import Licence
@@ -14,11 +15,12 @@ NO_IMAGES = "- No images (items are shown as text badges)."
 NATURAL_EARTH_URL = "https://www.naturalearthdata.com/"
 BLUE_MARBLE_URL = "https://visibleearth.nasa.gov/"
 COMMONS_FILE_URL = "https://commons.wikimedia.org/wiki/File:"
+_INLINE = re.compile(r"[\[\]<>`]")  # what would make a link, a tag or code inside a line
 
 
 def _clean(text: object) -> str:
-    """One line, and never a line that starts a heading, a bullet, a quote or emphasis."""
-    line = " ".join(str(text).split())
+    """One line, never a line that starts a heading, a bullet, a quote or emphasis, and no link, HTML or code."""
+    line = _INLINE.sub(r"\\\g<0>", " ".join(str(text).split()))
     return "\\" + line if line[:1] in ("#", "-", ">", "*") else line
 
 
@@ -26,7 +28,7 @@ def _link(ref: str) -> str:
     """An http(s) URL as it is; anything else (a local path, a stray string) as code, never a link."""
     line = " ".join(str(ref).split())
     if line.startswith(("http://", "https://")):
-        return line.replace("<", "%3C").replace(">", "%3E")
+        return line.translate({ord("<"): "%3C", ord(">"): "%3E", ord("("): "%28", ord(")"): "%29"})
     return "`" + line.replace("`", "'") + "`"
 
 
@@ -82,7 +84,7 @@ def _claims(spec, countries: list[str]) -> list[tuple[str, str]]:
     for index, stat in enumerate(getattr(spec, "stats", []) or []):  # versus: one per country
         if stat.source:
             who = countries[index] if index < len(countries) else None
-            found.append((stat.source, f"{_clean(who)}: {_stat_text(stat)}" if who else _stat_text(stat)))
+            found.append((stat.source, f"{who}: {_stat_text(stat)}" if who else _stat_text(stat)))
     found += [(i.source, i.name) for i in getattr(spec, "items", []) if i.source]
     return found
 

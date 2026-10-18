@@ -132,3 +132,33 @@ def test_a_commons_image_links_its_file_page_and_licence():
     text = _render(inputs, [{"GBR": "United Kingdom"}], credits)
     assert ("- Marmite: CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0) — WestportWiki — "
             "https://commons.wikimedia.org/wiki/File:Marmite_-_Feb_%282013%29.jpg\n") in text
+
+
+def test_third_party_text_cannot_inject_links_or_html():
+    inputs = _inputs([{"kind": "country", "country": "ITA", "narration": "Italy.", "items": [{"name": "Gucci"}]}])
+    evil = "[click](https://evil.test) <img src=x onerror=1> `code`"
+    credits = {"seg-1/0": {"name": "Gucci", "source": "commons", "id_or_path": "commons:File:G.png",
+                           "licence": "CC BY 4.0", "licence_url": None, "attribution": evil, "restrictions": evil}}
+    text = _render(inputs, [{"ITA": "Italy"}], credits)
+    image = next(l for l in text.splitlines() if l.startswith("- Gucci"))
+    assert "\\[click\\](https://evil.test) \\<img src=x onerror=1\\> \\`code\\`" in image
+    for bare in ("[click]", "<img", "`code`"):
+        assert bare not in image.replace("\\" + bare[0], "")
+
+
+def test_a_versus_stat_label_is_escaped_once():
+    inputs = _inputs([{"kind": "versus", "countries": ["JPN", "ITA"], "narration": "Two.",
+                       "stats": [{"value": "1", "source": "https://x.test/j"}, {"value": "2"}]}])
+    text = _render(inputs, [{"JPN": "Ja[pan", "ITA": "Italy"}])
+    assert "Ja\\[pan: 1" in text and "\\\\[" not in text
+
+
+def test_parentheses_in_urls_are_percent_encoded():
+    inputs = _inputs([{"kind": "country", "country": "ITA", "narration": "Italy.", "source": "https://x.test/a_(b)",
+                       "items": [{"name": "Gucci"}]}])
+    credits = {"seg-1/0": {"name": "Gucci", "source": "commons", "id_or_path": "commons:File:G.png",
+                           "licence": "CC BY 4.0", "licence_url": "https://x.test/l_(v2)",
+                           "attribution": "Jane", "restrictions": None}}
+    text = _render(inputs, [{"ITA": "Italy"}], credits)
+    assert "https://x.test/a_%28b%29" in text and "(https://x.test/l_%28v2%29)" in text
+    assert "_(" not in text.replace("File:G.png", "")
