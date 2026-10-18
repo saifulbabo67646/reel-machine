@@ -1,13 +1,16 @@
 """dialoguereel stages: script → narration → compose → preview → render.
 
 `cast` mode stops at the preview with a still of the two characters, `storyboard` with a
-sheet of stills (the hook and each line once its meaning shows); `full` renders the reel.
+sheet of stills (the hook, the listen pass, each line once its meaning shows, the recap and
+the quiz); `full` renders the reel.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import math
+import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,12 +29,14 @@ from ..explainer3d.stages import speak_line
 from ..explainer3d.video import mux
 from . import cast as casts
 from . import compose, lint
+from .keys import match_keys
 from .models import (CastSpec, ComposeOutput, DialogueReelInputs, LineWindowModel, NarrationOutput, PreviewOutput,
                      RenderOutput, ScriptOutput)
 from .ruby import parse_ruby, plain_text
-from .schedule import GAP_MS, HOOK_MS, TAIL_MS, LineWindow, Schedule, schedule
+from .schedule import HOOK_MS, SLOW_RATE, Cue, LineWindow, QuizWindow, Schedule, quiz_line_for, schedule
 
 DROP_INS_MS = (150, 300)   # the two characters land: one pop each
+COUNTDOWN_MS = (0, 1000, 2000)   # the quiz countdown: one pop per second
 CAST_MS = compose.CAST_SECONDS * 1000
 
 
@@ -84,8 +89,8 @@ def credits(script: ScriptOutput) -> list[str]:
 
 
 def _one_line(text: str) -> str:
-    """Newlines (and so blank lines, which end an SRT cue) collapsed to single spaces."""
-    return " ".join(text.split())
+    """Runs of CR/LF (and so blank lines, which end an SRT cue) collapsed to one space; nothing else changes."""
+    return re.sub(r"[\r\n]+", " ", text)
 
 
 def caption_text(text: str, meaning: str) -> str:
@@ -162,13 +167,11 @@ class NarrationStage:
             shutil.copy2(path, local)
             spoken.append((local, ms, list(words)))
             licence = line_licence or licence
-        plan = schedule([ms for _, ms, _ in spoken])
-        parts = [silence(work / "hook.wav", total_ms=plan.hook_ms, settings=settings, cancel=ctx.cancel)]
-        for index, (path, ms, _) in enumerate(spoken):
-            last = index == len(spoken) - 1
-            parts.append(pad_speech(path, work / f"{index:03d}.padded.wav", lead_ms=0,
-                                    total_ms=ms + (TAIL_MS if last else GAP_MS), settings=settings,
-                                    cancel=ctx.cancel))
+        quiz_line = quiz_line_for(inputs)
+        plan = schedule([ms for _, ms, _ in spoken], slow=[line.slow for line in inputs.lines],
+                        listen_first=inputs.flow == "listen_first", recap=any(line.keys for line in inputs.lines),
+                        quiz_line=quiz_line if quiz_line is not None and 0 <= quiz_line < len(spoken) else None)
+        parts = self._track(ctx, plan, spoken, work)
         joined = ctx.workdir / "narration.wav"
         if len(parts) == 1:
             shutil.copy2(parts[0], joined)
@@ -179,14 +182,66 @@ class NarrationStage:
                                provenance=Provenance(provider=name, source=voices_used), ext=".wav")
         return NarrationOutput(
             script=payload, audio_asset=asset.id, duration_ms=plan.duration_ms,
-            lines=[LineWindowModel(start_ms=w.start_ms, speech_ms=w.speech_ms, end_ms=w.end_ms,
-                                   meaning_ms=w.meaning_ms) for w in plan.lines],
+            lines=[_window_model(w) for w in plan.lines], listen=[_window_model(w) for w in plan.listen],
+            bridge_ms=plan.bridge_ms, recap_ms=plan.recap_ms,
+            quiz=dataclasses.asdict(plan.quiz) if plan.quiz else None,
             words=[words for _, _, words in spoken], provider=name)
+
+    def _track(self, ctx: StageContext, plan: Schedule, spoken: list[tuple[Path, int, list[WordSpan]]],
+               work: Path) -> list[Path]:
+        """The voice track's pieces, walking the cues: silence up to each cue, then its clip; then the tail."""
+        settings = ctx.config
+        slow: dict[int, Path] = {}   # each slow line's 0.75x copy, made once
+        parts: list[Path] = []
+        cursor = 0
+        for n, cue in enumerate(plan.cues):
+            ctx.cancel.raise_if_cancelled()
+            src, ms, _ = spoken[cue.line]
+            if cue.rate != 1.0:
+                if cue.line not in slow:
+                    slow[cue.line] = work / f"{cue.line:03d}.slow.wav"
+                    ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-y", "-i", str(src),
+                                "-af", f"atempo={cue.rate}", str(slow[cue.line])], cancel=ctx.cancel)
+                src, ms = slow[cue.line], round(ms / cue.rate)
+            lead = cue.at_ms - cursor
+            parts.append(pad_speech(src, work / f"cue{n:03d}.wav", lead_ms=lead, total_ms=lead + ms,
+                                    settings=settings, cancel=ctx.cancel))
+            cursor = cue.at_ms + ms
+        if plan.duration_ms > cursor:
+            parts.append(silence(work / "tail.wav", total_ms=plan.duration_ms - cursor, settings=settings,
+                                 cancel=ctx.cancel))
+        return parts
+
+
+def _window_model(w: LineWindow) -> LineWindowModel:
+    return LineWindowModel(start_ms=w.start_ms, speech_ms=w.speech_ms, end_ms=w.end_ms, meaning_ms=w.meaning_ms,
+                           slow_start_ms=w.slow_start_ms, slow_ms=w.slow_ms)
+
+
+def _window(w: LineWindowModel) -> LineWindow:
+    return LineWindow(w.start_ms, w.speech_ms, w.end_ms, w.meaning_ms, w.slow_start_ms, w.slow_ms)
 
 
 def plan_of(narration: NarrationOutput) -> Schedule:
-    return Schedule(HOOK_MS, tuple(LineWindow(w.start_ms, w.speech_ms, w.end_ms, w.meaning_ms)
-                                   for w in narration.lines), narration.duration_ms)
+    """The narration's `Schedule` again, cues included (they follow from the windows, in schedule order)."""
+    lines = tuple(_window(w) for w in narration.lines)
+    listen = tuple(_window(w) for w in narration.listen)
+    quiz = QuizWindow(**narration.quiz) if narration.quiz else None
+    cues = [Cue(w.start_ms, i, 1.0) for i, w in enumerate(listen)]
+    for i, w in enumerate(lines):
+        cues.append(Cue(w.start_ms, i, 1.0))
+        if w.slow_start_ms is not None:
+            cues.append(Cue(w.slow_start_ms, i, SLOW_RATE))
+    if quiz:
+        cues.append(Cue(quiz.reveal_ms, quiz.line, 1.0))
+    return Schedule(HOOK_MS, lines, narration.duration_ms, listen, narration.bridge_ms, narration.recap_ms, quiz,
+                    tuple(cues))
+
+
+def _camel(quiz: QuizWindow | None) -> dict[str, int] | None:
+    if quiz is None:
+        return None
+    return {"line": quiz.line, "startMs": quiz.start_ms, "revealMs": quiz.reveal_ms, "endMs": quiz.end_ms}
 
 
 class ComposeStage:
@@ -198,15 +253,24 @@ class ComposeStage:
     def run(self, ctx: StageContext, payload: NarrationOutput) -> ComposeOutput:
         script = payload.script
         inputs, cast = script.inputs, script.cast
+        plan = plan_of(payload)
         if inputs.mode == "cast":
             doc = compose.cast_document(cast, inputs.look)
         else:
-            doc = compose.reel_document(inputs, cast, plan_of(payload), payload.words)
+            doc = compose.reel_document(inputs, cast, plan, payload.words)
         project = compose.write_project(doc, cast, ctx.workdir / "project")
+        lines = []
+        for index, line in enumerate(doc["lines"]):   # a cast sheet has none
+            source = inputs.lines[index]
+            keys = [{"index": k.index, "start": k.start, "end": k.end} if k else None
+                    for k in match_keys(source.text, source.keys)]
+            lines.append({"speaker": line["speaker"], "startMs": line["startMs"], "endMs": line["endMs"],
+                          "meaningMs": line["meaningMs"], "words": line["words"], "keys": keys})
         resolved = {
-            "cast": cast.id, "durationMs": payload.duration_ms,
-            "lines": [{"speaker": line["speaker"], "startMs": line["startMs"], "endMs": line["endMs"],
-                       "meaningMs": line["meaningMs"], "words": line["words"]} for line in doc["lines"]],
+            "cast": cast.id, "durationMs": payload.duration_ms, "lines": lines,
+            "sections": {"listen": [{"line": i, "startMs": w.start_ms, "endMs": w.end_ms}
+                                    for i, w in enumerate(plan.listen)],
+                         "bridgeMs": plan.bridge_ms, "recapMs": plan.recap_ms, "quiz": _camel(plan.quiz)},
             "warnings": script.warnings,
         }
         (_artifacts(ctx) / "script.resolved.json").write_text(
@@ -245,7 +309,15 @@ class PreviewStage:
 
     def _storyboard(self, ctx: StageContext, payload: ComposeOutput, renderer: Any, settings: Settings) -> Path:
         project = Path(payload.project)
-        times = [HOOK_MS * 0.8] + [w.meaning_ms + 300 for w in payload.narration.lines]
+        plan = plan_of(payload.narration)
+        times = [HOOK_MS * 0.8]
+        if plan.listen:
+            times.append((plan.listen[0].start_ms + plan.listen[-1].end_ms) / 2)
+        times += [w.meaning_ms + 300 for w in plan.lines]
+        if plan.recap_ms is not None:
+            times.append(plan.recap_ms + 1500)
+        if plan.quiz:
+            times += [plan.quiz.start_ms + 1500, plan.quiz.reveal_ms + 300]
         stills = ctx.workdir / "stills"
         frames = [renderer.snapshot(project, ms / 1000, stills / f"{index:03d}.png", cancel=ctx.cancel)
                   for index, ms in enumerate(times)]
@@ -296,16 +368,27 @@ class RenderStage:
             renderer.render(Path(composed.project), partial, fps=compose.FPS, seconds=total_ms / 1000,
                             cancel=ctx.cancel)
             partial.replace(cached)
-        pop = synth_sfx("pop", work / "sfx" / "pop.wav", settings=settings, designed=True)
-        audio = mix(ctx.assets.get(narration.audio_asset), [(at, pop) for at in DROP_INS_MS], None,
+        plan = plan_of(narration)
+        sfx = {n: synth_sfx(n, work / "sfx" / f"{n}.wav", settings=settings, designed=True)
+               for n in ("pop", "whoosh", "ding")}
+        cues = [(at, sfx["pop"]) for at in DROP_INS_MS]
+        cues += [(at, sfx["whoosh"]) for at in (plan.bridge_ms, plan.recap_ms) if at is not None]
+        if plan.quiz:
+            cues += [(plan.quiz.start_ms + at, sfx["pop"]) for at in COUNTDOWN_MS]
+            cues.append((plan.quiz.reveal_ms, sfx["ding"]))
+        audio = mix(ctx.assets.get(narration.audio_asset), cues, None,
                     work / "audio.wav", total_ms=total_ms, settings=settings, profile="studio", cancel=ctx.cancel)
         video = mux(cached, audio, outdir / f"{name}.mp4", total_ms=total_ms, settings=settings, cancel=ctx.cancel)
 
-        captions = [Caption(start_ms=w.start_ms, end_ms=w.end_ms,
-                            text=caption_text(line.text, line.meaning),
-                            lang=inputs.language, style_ref="dialoguereel.caption",
-                            meta={"speaker": line.speaker})
-                    for line, w in zip(inputs.lines, narration.lines, strict=True)]
+        def caption(line: Any, start_ms: int, end_ms: int) -> Caption:
+            return Caption(start_ms=start_ms, end_ms=end_ms, text=caption_text(line.text, line.meaning),
+                           lang=inputs.language, style_ref="dialoguereel.caption", meta={"speaker": line.speaker})
+
+        # each dialogue line (through its slow replay), then the quiz answer from the reveal; the listen pass has none
+        captions = [caption(line, w.start_ms, w.slow_start_ms + w.slow_ms if w.slow_start_ms is not None else w.end_ms)
+                    for line, w in zip(inputs.lines, plan.lines, strict=True)]
+        if plan.quiz:
+            captions.append(caption(inputs.lines[plan.quiz.line], plan.quiz.reveal_ms, plan.quiz.end_ms))
         srt = write_srt(captions, work / f"{name}.srt")
         manifest = {"reel": str(video), "recipe": "dialoguereel", "mode": inputs.mode,
                     "created": datetime.now(timezone.utc).isoformat(), "durationMs": total_ms,

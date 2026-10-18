@@ -152,6 +152,8 @@ class LineWindowModel(BaseModel):
     speech_ms: int
     end_ms: int
     meaning_ms: int
+    slow_start_ms: int | None = None
+    slow_ms: int = 0
 
 
 class NarrationOutput(StageOutput):
@@ -159,6 +161,10 @@ class NarrationOutput(StageOutput):
     audio_asset: str = ""                                # empty in cast mode: nothing is spoken
     duration_ms: int
     lines: list[LineWindowModel] = Field(default_factory=list)
+    listen: list[LineWindowModel] = Field(default_factory=list)   # the listen-first pass, when there is one
+    bridge_ms: int | None = None
+    recap_ms: int | None = None
+    quiz: dict | None = None                             # `schedule.QuizWindow`'s fields
     words: list[list[WordSpan]] = Field(default_factory=list)  # per line, in line time (as the voice said them)
     provider: str = ""
 

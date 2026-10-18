@@ -121,3 +121,34 @@ def test_the_spec_declares_its_providers_and_artifacts():
     assert set(spec.artifacts) == {"reel.mp4", "captions.srt", "reel.json", "storyboard.jpg", "cast.png",
                                    "script.resolved.json"}
     assert spec.example["mode"] == "storyboard" and JobRequest(recipe="dialoguereel", inputs=dict(spec.example))
+
+
+def test_caption_text_keeps_full_width_spaces():
+    from reelmachine.recipes.dialoguereel.stages import caption_text
+
+    assert caption_text("はい　そうです", "Yes  that") == "はい　そうです\nYes  that"
+    assert caption_text("雨{あめ}\r\nです", "Rain\n\nit is") == "雨 です\nRain it is"
+
+
+def test_plan_of_round_trips_every_section():
+    from reelmachine.recipes.dialoguereel.models import LineWindowModel, NarrationOutput, ScriptOutput
+    from reelmachine.recipes.dialoguereel.schedule import schedule
+    from reelmachine.recipes.dialoguereel.stages import plan_of
+
+    plan = schedule([900, 1300, 700], slow=[True, False, True], listen_first=True, recap=True, quiz_line=1)
+
+    def model(w):
+        return LineWindowModel(start_ms=w.start_ms, speech_ms=w.speech_ms, end_ms=w.end_ms, meaning_ms=w.meaning_ms,
+                               slow_start_ms=w.slow_start_ms, slow_ms=w.slow_ms)
+
+    script = ScriptOutput(inputs=DialogueReelInputs.model_validate(EXAMPLE), cast=cast.resolve(
+        CastSpec.model_validate(EXAMPLE["cast"])))
+    narration = NarrationOutput(
+        script=script, duration_ms=plan.duration_ms, lines=[model(w) for w in plan.lines],
+        listen=[model(w) for w in plan.listen], bridge_ms=plan.bridge_ms, recap_ms=plan.recap_ms,
+        quiz={"line": 1, "start_ms": plan.quiz.start_ms, "reveal_ms": plan.quiz.reveal_ms,
+              "end_ms": plan.quiz.end_ms})
+    assert plan_of(narration) == plan
+    plain = schedule([900, 1300])
+    assert plan_of(NarrationOutput(script=script, duration_ms=plain.duration_ms,
+                                   lines=[model(w) for w in plain.lines])) == plain
