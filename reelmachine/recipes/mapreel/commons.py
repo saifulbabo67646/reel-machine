@@ -17,10 +17,13 @@ from ...core.errors import InvalidInput, ProviderUnavailable
 
 API = "https://commons.wikimedia.org/w/api.php"
 USER_AGENT = "reel-machine/mapreel (https://github.com/saifulbabo67646/reel-machine)"
+#: a free licence's short name, each alternative ending on a word boundary ("Falsch" is not FAL)
 FREE = re.compile(
-    r"^(cc0|cc[- ]by(-sa)?( \d\.\d)?|public domain|pd\b.*|attribution|gfdl|fal|copyrighted free use)",
+    r"^(?:cc0|cc[- ]by(?:-sa)?|public domain|pd|attribution|gfdl|fal|copyrighted free use)\b",
     re.IGNORECASE,
 )
+#: a NonCommercial or NoDerivatives element (CC BY-NC 4.0, CC BY-NC-SA, CC BY-ND) makes any licence unfree
+NOT_FREE = re.compile(r"(?:^|[-\s])(?:nc|nd)(?:$|[-\s])|non-?commercial|no-?deriv", re.IGNORECASE)
 THUMB = 320
 
 Kind = Literal["any", "logo", "photo", "flag"]
@@ -40,6 +43,12 @@ class ImageHit:
     attribution: str
     permitted: bool
     restrictions: str | None
+
+
+def is_free(licence: str) -> bool:
+    """True for a free licence's short name: CC0, CC BY, CC BY-SA, public domain, GFDL, FAL and the like."""
+    licence = (licence or "").strip()
+    return bool(licence and FREE.match(licence) and not NOT_FREE.search(licence))
 
 
 def _http_json(params: dict[str, Any]) -> dict[str, Any]:
@@ -105,7 +114,7 @@ def _hit(page: dict[str, Any]) -> ImageHit | None:
         licence=licence,
         licence_url=_meta(info, "LicenseUrl") or None,
         attribution=attribution[:200],
-        permitted=bool(licence and FREE.match(licence) and not non_free),
+        permitted=is_free(licence) and not non_free,
         restrictions=_plain(_meta(info, "Restrictions")) or None,
     )
 

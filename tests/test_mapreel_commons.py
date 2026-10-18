@@ -63,6 +63,18 @@ def test_find_images_hides_files_without_a_free_licence():
     assert [h.permitted for h in every] == [True, False, False, False]
 
 
+@pytest.mark.parametrize("licence, free", [
+    ("CC BY-SA 4.0", True), ("CC BY 2.0", True), ("CC0", True), ("Public domain", True), ("PD-textlogo", True),
+    ("CC BY-SA 3.0 de", True), ("GFDL", True),
+    ("CC BY-NC 4.0", False), ("CC BY-NC-SA 3.0", False), ("CC BY-ND 2.0", False), ("CC BY NC 2.0", False),
+    ("Falsch", False), ("Fair use", False), ("", False),
+])
+def test_only_free_licences_are_permitted(licence, free):
+    hits = commons.search("x", include_nonfree=True, fetch=_fake(_api(_page(1, "a.png", mime="image/png",
+                                                                             licence=licence))))
+    assert hits[0].permitted is free
+
+
 def test_logo_kind_biases_the_query_and_prefers_vector():
     seen = []
     payload = _api(_page(1, "a.jpg", mime="image/jpeg"), _page(2, "b.svg"), _page(3, "c.png", mime="image/png"))

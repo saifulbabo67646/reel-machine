@@ -493,6 +493,8 @@ class McpTools:
             query, kind=kind, limit=max(1, min(int(limit), 50)), include_nonfree=bool(include_nonfree)  # type: ignore[arg-type]
         )
         return {
+            "schemaVersion": SCHEMA_VERSION,
+            "query": query,
             "results": [asdict(hit) for hit in hits],
             "note": (
                 "use a result's id as an item's \"image\"; logos and brand names may be trademarked, "

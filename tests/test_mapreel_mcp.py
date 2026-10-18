@@ -117,6 +117,7 @@ def test_find_images_tool_payload_and_errors(tmp_path, monkeypatch):
     monkeypatch.setattr(commons, "_http_json", fake)
     with _tools(tmp_path) as tools:
         found = tools.find_images(None, "Nike", kind="logo", limit=999)
+        assert found["schemaVersion"] and found["query"] == "Nike"
         assert found["results"][0]["id"] == "commons:File:Nike.svg"
         assert found["results"][0]["permitted"] is True
         assert "image" in found["note"] and "trademark" in found["note"]

@@ -250,7 +250,8 @@ country search never downloads it.
 
 ### `find_images`
 
-Wikimedia Commons images for a `mapreel` item (`logo`, `photo` or `flag` bias the search).
+Wikimedia Commons images for a `mapreel` item. `kind` accepts `any` (the default), `logo`,
+`photo` or `flag`: `logo` and `flag` bias the search and `photo` leaves out SVGs.
 Each result has an `id` like `commons:File:Nike.svg` (use it as an item's `image`), a 320 px
 `thumb_url`, the original `url`, size, `mime`, `licence`, `attribution` (plain text) and
 `permitted`: true when the licence is free. Files without a free licence are hidden unless
