@@ -100,3 +100,16 @@ def test_the_food_storyboard_renders_in_the_drawn_looks(tmp_path, look):
     if keep:
         Path(keep).mkdir(parents=True, exist_ok=True)
         (Path(keep) / f"food-{look}.jpg").write_bytes(sheet.read_bytes())
+
+
+def test_a_versus_never_opens_on_a_black_screen(tmp_path):
+    """The panels slide in over a dimmed map: the frames right after the cut are never black."""
+    job = _build(tmp_path, {"segments": [
+        {"kind": "versus", "countries": ["VNM", "KOR", "JPN"], "narration": "Vietnam, 81. Korea, 79. Japan, 47.",
+         "stats": [{"value": "81"}, {"value": "79"}, {"value": "47"}]}]})
+    assert job.state == JobState.SUCCEEDED, job.error
+    reel = next(Path(a.path) for a in job.result.artifacts if a.name == "reel.mp4")
+    for index in (0, 3, 8):  # before, while and just after the last panel starts to slide in
+        frame = _frame(reel, index)
+        for third in (frame[:640], frame[640:1280], frame[1280:]):
+            assert third.mean() > 15 and third.std() > 8, f"frame {index}: a third of the screen is black"

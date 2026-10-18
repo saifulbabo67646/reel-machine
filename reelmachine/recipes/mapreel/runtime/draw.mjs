@@ -505,7 +505,11 @@ function vsDisc(ctx, vs, y, ms) {
 
 function drawVersus(ctx, doc, images, seconds) {
   const ms = seconds * 1000;
-  ctx.fillStyle = "#000000";
+  // the panels slide in over the first one's map, dimmed, never over black: a black screen after the cut
+  // reads as a dropped frame
+  const first = doc.panels[0];
+  drawLayers(ctx, first.camera, [...doc.layers, ...first.layers], images);
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
   ctx.fillRect(0, 0, W, H);
   const discY = doc.vs && doc.panels.length > 1 ? doc.panels[1].rect[1] : null;
   doc.panels.forEach((panel, k) => drawPanel(ctx, doc, panel, k, ms, seconds, images, discY));
