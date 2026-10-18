@@ -90,6 +90,7 @@ def test_snapshot_returns_the_frame(tmp_path, fake_npx):
 
 def test_timeout_kills_the_process_and_unregisters_it(tmp_path, fake_npx, monkeypatch):
     monkeypatch.setenv("HF_SLEEP", "30")
+    monkeypatch.delenv("REEL_HYPERFRAMES_TIMEOUT_S", raising=False)  # CI raises the floor for real renders
     project = tmp_path / "shot"
     project.mkdir()
     token = CancellationToken()
