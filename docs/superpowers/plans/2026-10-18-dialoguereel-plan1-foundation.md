@@ -103,8 +103,8 @@ def test_colours_must_be_hex():
         BuiltinSource(kind="builtin", name="mug", colors={"primary": "blue"})
 
 def test_the_recipe_is_registered():
-    from reelmachine.core.registry import registry_from_entry_points
-    assert registry_from_entry_points().find_recipe("dialoguereel") is not None
+    from reelmachine.core.registry import Registry
+    assert Registry().find_recipe("dialoguereel") is not None
 ```
 
 - [ ] **Step 2: Run** `uv run pytest tests/test_dialoguereel_models.py -v` — Expected: FAIL (module not found).
