@@ -1,6 +1,6 @@
 # MCP reference
 
-reel-machine exposes its engine to agents through one MCP server with fourteen tools, over
+reel-machine exposes its engine to agents through one MCP server with fifteen tools, over
 two transports: `stdio` (a local agent) and `streamable-http` (a hosted deployment).
 
 ```
@@ -243,6 +243,8 @@ An empty `query` lists them all, up to `limit`. A code-shaped query without `cou
 admin-1 data, but only once the larger regions file (about 40 MB) is already cached; a plain
 country search never downloads it.
 
+The result is `{"places": [...], "hint": "..."}`.
+
 ```json
 {"query": "korea"}
 {"query": "texas", "country": "USA"}
@@ -261,6 +263,11 @@ Each result has an `id` like `commons:File:Nike.svg` (use it as an item's `image
 ```json
 {"query": "Nike", "kind": "logo"}
 ```
+
+**mapreel workflow.** `describe_recipe("mapreel")` for the guide, `find_places` for the
+country codes, `find_images` for item images, `probe` to check the script and its hook
+lint, then `start_job` in `storyboard` mode and again in `build` mode. See
+[MAPREEL.md](MAPREEL.md).
 
 ### `find_assets`
 
@@ -302,5 +309,5 @@ false. Read-only: no job, no render.
 
 ## What the server deliberately does not expose
 
-No MCP resources, prompts or sampling — tools only, and only the fourteen listed above. No tool
+No MCP resources, prompts or sampling — tools only, and only the fifteen listed above. No tool
 returns file bytes. No tool call waits for a render. No secret appears in a result.
