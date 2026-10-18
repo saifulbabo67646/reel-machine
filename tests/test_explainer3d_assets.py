@@ -144,6 +144,7 @@ def test_shot_projects_hard_link_cached_assets(tmp_path):
 
 
 def test_mcp_find_models_answers_from_the_catalogue(tmp_path, monkeypatch):
+    pytest.importorskip("mcp")
     import dataclasses
 
     from reelmachine.config import get_settings

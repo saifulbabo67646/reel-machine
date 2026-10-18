@@ -3,11 +3,15 @@ import shutil
 from contextlib import contextmanager
 from pathlib import Path
 
+import pytest
+
 from reelmachine.config import get_settings
 from reelmachine.recipes.mapreel import geodata
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mapreel" / "countries.geojson"
 REGIONS = FIXTURE.with_name("regions.geojson")
+
+pytest.importorskip("mcp")  # every test here drives the MCP tools
 
 
 @contextmanager

@@ -107,6 +107,7 @@ def test_set_packs_fetch_sky_textures_and_props(tmp_path, monkeypatch):
 
 
 def test_find_assets_covers_skies_and_textures(tmp_path, monkeypatch):
+    pytest.importorskip("mcp")
     import httpx
 
     def handler(request):
