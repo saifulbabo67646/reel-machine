@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import difflib
 import json
+import os
 import re
+import tempfile
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -16,6 +19,8 @@ from . import geodata
 from .places import Place, _rings, norm
 
 _CODE = re.compile(r"^[A-Z]{2}-[A-Z0-9]{1,3}$")
+#: beside the admin-1 file in the geo cache: country alpha-3 -> how many regions it has
+INDEX_NAME = "regions-index.json"
 _NAME_FIELDS = ("name", "name_en", "woe_name", "gn_name")
 
 
@@ -127,3 +132,34 @@ def _load(path: str, _mtime: int) -> RegionAtlas:
 
 def region_atlas_for(settings: Settings) -> RegionAtlas:
     return RegionAtlas.load(geodata.ensure(geodata.geo_cache(settings), "regions"))
+
+
+def region_counts(root: Path) -> dict[str, int] | None:
+    """How many regions each country has (alpha-3 -> count), or None when the admin-1 file is not cached (or
+    cannot be read). The first call parses the 40 MB file once and writes INDEX_NAME beside it; later calls read
+    that index alone. An index older than the file it counts, or damaged, is counted again."""
+    root = Path(root)
+    source, index = root / geodata.FILES["regions"][0], root / INDEX_NAME
+    try:
+        source_mtime = source.stat().st_mtime_ns
+    except OSError:
+        return None
+    try:
+        if index.stat().st_mtime_ns >= source_mtime:
+            data = json.loads(index.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and all(isinstance(k, str) and type(v) is int for k, v in data.items()):
+                return data
+    except (OSError, ValueError):
+        pass
+    try:
+        counts = dict(sorted(Counter(RegionAtlas.load(source).parents.values()).items()))
+    except (OSError, ValueError, KeyError, TypeError):
+        return None  # a damaged admin-1 file: no flags, and nothing fetched for a plain country search
+    fd, name = tempfile.mkstemp(dir=root, prefix=INDEX_NAME + ".", suffix=".partial")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(counts, handle, separators=(",", ":"))
+        os.replace(name, index)
+    except OSError:
+        Path(name).unlink(missing_ok=True)
+    return counts

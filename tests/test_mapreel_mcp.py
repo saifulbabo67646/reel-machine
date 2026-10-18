@@ -134,3 +134,60 @@ def test_find_images_tool_payload_and_errors(tmp_path, monkeypatch):
         with pytest.raises(ToolError) as err:
             tools.find_images(None, "Nike")
         assert json.loads(str(err.value))["code"] == "PROVIDER_UNAVAILABLE"
+
+
+def test_the_regions_flag_reads_a_sidecar_index_after_the_first_parse(tmp_path, monkeypatch):
+    """The first flagged search parses the 40 MB admin-1 file once and writes regions-index.json beside it;
+    every search after that reads the index and never opens the GeoJSON."""
+    import builtins
+    import io
+    import json
+
+    from reelmachine.recipes.mapreel import regions
+
+    with _tools(tmp_path, regions=True) as tools:
+        first = {p["code"]: p.get("regions") for p in tools.find_places(None, "united states")["places"]}
+        index = geodata.geo_cache(tools.engine.settings) / "regions-index.json"
+        assert json.loads(index.read_text()) == {"IND": 1, "JPN": 3, "PAK": 1, "USA": 5}
+
+        name = geodata.FILES["regions"][0]
+        real_open, real_io_open = builtins.open, io.open
+
+        def guarded(opener):
+            def inner(file, *args, **kwargs):
+                if str(file).endswith(name):
+                    raise AssertionError("the regions GeoJSON was opened")
+                return opener(file, *args, **kwargs)
+            return inner
+
+        def boom(*args, **kwargs):
+            raise AssertionError("the regions atlas was loaded")
+
+        monkeypatch.setattr(builtins, "open", guarded(real_open))
+        monkeypatch.setattr(io, "open", guarded(real_io_open))
+        monkeypatch.setattr(regions, "region_atlas_for", boom)
+        monkeypatch.setattr(regions.RegionAtlas, "load", boom)
+        monkeypatch.setattr(regions, "_load", boom)
+        again = {p["code"]: p.get("regions") for p in tools.find_places(None, "united states")["places"]}
+        japan = tools.find_places(None, "japan")["places"]
+    assert first == again and again["USA"] is True
+    assert japan[0]["code"] == "JPN" and japan[0]["regions"] is True
+
+
+def test_a_stale_or_damaged_regions_index_is_rebuilt(tmp_path):
+    import json
+    import os
+
+    with _tools(tmp_path, regions=True) as tools:
+        root = geodata.geo_cache(tools.engine.settings)
+        index = root / "regions-index.json"
+        index.write_text("{not json")
+        assert tools.find_places(None, "united states")["places"][0].get("regions") is True
+        assert json.loads(index.read_text())["USA"] == 5
+        # an index older than the admin-1 file it counts (a fresh download) is counted again
+        index.write_text(json.dumps({"USA": 0}))
+        old = (root / geodata.FILES["regions"][0]).stat().st_mtime_ns - 10**9
+        os.utime(index, ns=(old, old))
+        assert tools.find_places(None, "united states")["places"][0].get("regions") is True
+        assert json.loads(index.read_text())["USA"] == 5
+        assert not [p for p in root.iterdir() if p.name.startswith("regions-index") and p != index]

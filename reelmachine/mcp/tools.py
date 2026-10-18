@@ -443,7 +443,7 @@ class McpTools:
 
         from ..recipes.mapreel import geodata
         from ..recipes.mapreel.places import atlas_for
-        from ..recipes.mapreel.regions import region_atlas_for
+        from ..recipes.mapreel.regions import region_atlas_for, region_counts
 
         self._caller(ctx)
         settings, limit = self.engine.settings, max(1, min(int(limit), 50))
@@ -453,13 +453,12 @@ class McpTools:
             found = region_atlas_for(settings).search(query, code, limit)
         else:
             found = atlas.search(query, limit=limit)
-            cached = (geodata.geo_cache(settings) / geodata.FILES["regions"][0]).is_file()
             if re.fullmatch(r"[A-Za-z]{2}-[A-Za-z0-9]{1,3}", (query or "").strip()):  # 'US-TX', 'JP-1'
                 found += region_atlas_for(settings).search_all(query, limit - len(found))
-            elif cached:  # never a download for a plain country search
-                with_regions = region_atlas_for(settings).countries()
+            else:  # never a download for a plain country search, and the 40 MB file parsed once, ever
+                counts = region_counts(geodata.geo_cache(settings)) or {}
                 for place in found:
-                    if place["code"] in with_regions:
+                    if counts.get(place["code"]):
                         place["regions"] = True
         if country:
             hint = (
