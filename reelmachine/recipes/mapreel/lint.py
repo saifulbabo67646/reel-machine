@@ -23,6 +23,9 @@ HOOK_SIGNAL = re.compile(
     rf"\d|\?|\b(you|your|you're|only|never|nobody|no one|secret|surprise\w*|guess|wait|actually|why|how|"
     rf"what|which|most|least|biggest|smallest|richest|poorest|best|worst|weirdest|\w+est|{NUMBER_WORDS})\b", re.I)
 WEAK_START = re.compile(r"^(welcome|today|hi|hello|hey guys|in this video|this is|let's talk)\b|^[\w .'-]{1,30}\s(has|have|is home to)\b", re.I)
+#: "number five", "number 5", "no. 5": the ranks one to ten a line can tease or pay
+RANK_WORDS = ("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
+NUMBER_N = re.compile(rf"\b(?:number |no\. ?)({'|'.join(RANK_WORDS)}|10|[1-9])\b", re.I)
 TEASE = re.compile(r"\b(number (one|1)|no\.? ?1|the last one|surprise\w*|guess|wait (for|till|until)|stay (until|till)|at the end|the answer)\b", re.I)
 PAYOFF = re.compile(r"\b(number (one|1)|no\.? ?1|finally|the answer|the winner|and the last|last but not least|drumroll)\b", re.I)
 REHOOK = re.compile(r"\b(but|wait|here's|now|guess|surprising\w*|plot twist|believe it or not|number \w+|even|actually|meanwhile|and the)\b|\?", re.I)
@@ -184,7 +187,7 @@ def _rule_unsourced(inputs: MapReelInputs) -> list[Finding]:
     for i, segment in enumerate(inputs.segments):
         if segment.source:
             continue
-        if segment.kind == "rank":
+        if segment.kind == "rank" and not (segment.stat and segment.stat.source):
             names.append(f"seg-{i + 1} (rank {segment.rank})")
         for stat in (getattr(segment, "stat", None), *getattr(segment, "stats", [])):
             if stat is not None and not stat.source:
@@ -204,24 +207,59 @@ def _rule_ending(inputs: MapReelInputs) -> list[Finding]:
                     "end on a question or a call to comment, like 'Which one did I miss?'", f"seg-{len(inputs.segments)}")]
 
 
+def _weak_start(text: str) -> bool:
+    """A greeting, or a plain list statement ("The United States has Nike, Apple..."): an "X has" start is weak
+    only when what comes before "has" holds no hook and the first sentence asks no question."""
+    m = WEAK_START.search(text)
+    if m is None:
+        return False
+    if m.group(1):
+        return True
+    sentence = re.split(r"(?<=[.!?])\s", text, maxsplit=1)[0]
+    return not HOOK_SIGNAL.search(text[:m.start(2)]) and "?" not in sentence
+
+
+def _ranks_named(text: str) -> set[int]:
+    """The ranks one to ten a line names as "number N" (digit or word)."""
+    return {int(n) if n.isdigit() else RANK_WORDS.index(n.lower()) + 1 for n in NUMBER_N.findall(text)}
+
+
+#: what pays any tease without naming a number: PAYOFF's own words less its "number one"
+_GENERAL_PAYOFF = re.compile(r"\b(finally|the answer|the winner|and the last|last but not least|drumroll)\b", re.I)
+
+
+def _rule_unpaid(inputs: MapReelInputs, first: str, hard: Literal["error", "warning"]) -> list[Finding]:
+    """A tease in the opening needs a payoff later. A tease naming "number N" is paid by a rank N segment or a
+    later line saying "number N" (or a general reveal like "finally"); any other tease by rank 1 or PAYOFF."""
+    teased = _ranks_named(first)
+    if not (TEASE.search(first) or teased):
+        return []
+    later = inputs.segments[1:]
+    if teased:
+        paid = any((s.kind == "rank" and s.rank in teased) or teased & _ranks_named(_text(s))
+                   or _GENERAL_PAYOFF.search(_text(s)) for s in later)
+        n = min(teased)
+        hint = f"add a rank {n} segment, or say 'and number {RANK_WORDS[n - 1]} is...' in a later line"
+    else:
+        paid = any((s.kind == "rank" and s.rank == 1) or PAYOFF.search(_text(s)) for s in later)
+        hint = "end with a rank 1 segment, or say 'and number one is...' in a later line"
+    if paid:
+        return []
+    return [Finding("unpaid-loop", hard, "the opening teases a payoff that never comes", hint, "seg-1")]
+
+
 def check(inputs: MapReelInputs, windows: Sequence[ShotWindow], *,
           names: Mapping[str, Sequence[str]] | None = None) -> list[Finding]:
     hard = "error" if inputs.mode == "build" and inputs.lint == "strict" else "warning"
     found: list[Finding] = []
     first = _text(inputs.segments[0])
     head = " ".join(first.split()[:HOOK_WINDOW_WORDS])
-    if WEAK_START.search(first) or not HOOK_SIGNAL.search(head):
+    if _weak_start(first) or not HOOK_SIGNAL.search(head):
         found.append(Finding(
             "weak-opener", hard, f"the opening line has no hook: {head!r}",
             "open on a surprise, a number, a challenge or 'you' in the first seven words, never 'X has...'",
             "seg-1"))
-    if TEASE.search(first):
-        later = inputs.segments[1:]
-        paid = any((s.kind == "rank" and s.rank == 1) or PAYOFF.search(_text(s)) for s in later)
-        if not paid:
-            found.append(Finding(
-                "unpaid-loop", hard, "the opening teases a payoff that never comes",
-                "end with a rank 1 segment, or say 'and number one is...' in a later line", "seg-1"))
+    found.extend(_rule_unpaid(inputs, first, hard))
     found.extend(_rule_beat_gap(windows, estimate_beats(inputs, windows, names=names)))
     found.extend(_rule_rehook(inputs, windows))
     found.extend(_rule_monotony(inputs))

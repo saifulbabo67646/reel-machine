@@ -98,11 +98,13 @@ GUIDE: dict[str, Any] = {
     ],
     "lint": [
         "weak-opener (an error in a strict build): the first seven words have no hook (a number, a question, "
-        "'you', a superlative, 'only') or open 'Welcome…', 'Today…', 'X has…'. Fix: rewrite the opening with "
+        "'you', a superlative, 'only') or open 'Welcome…', 'Today…', or a plain 'X has…' list ('Which country has…?' "
+        "and 'Only one country has…' are fine). Fix: rewrite the opening with "
         "a formula from `hooks`.",
         "unpaid-loop (an error in a strict build): the opening teases ('number one', 'guess', 'surprise', 'at "
         "the end') and nothing pays it off. Fix: end on a rank 1 segment, or say 'and number one is…' or "
-        "'finally' in a later line.",
+        "'finally' in a later line. A tease of 'number five' is paid by a rank 5 segment or a later "
+        "'number five'.",
         "beat-gap: more than 1.2 s of narration with nothing new on screen. Fix: name an item sooner, add an "
         "item, or split the line into two segments.",
         "no-rehook: more than 12 s without a rank, versus or highlight segment or a re-hook line. Fix: add one "

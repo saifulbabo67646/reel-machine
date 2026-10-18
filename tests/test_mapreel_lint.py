@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from reelmachine.recipes.mapreel import kinds, lint
 from reelmachine.recipes.mapreel.models import MapReelInputs
 from reelmachine.recipes.mapreel.stages import estimated_windows
@@ -54,6 +56,23 @@ def test_a_hook_with_a_number_passes_the_opener():
     assert "weak-opener" not in rules(run([highlight("Only 3 countries dress the whole world.")]))
 
 
+@pytest.mark.parametrize("opener", [
+    "Which country has the most McDonald's per person?",
+    "Guess which country has the weirdest breakfast.",
+    "Only one country has a flag that is not a rectangle.",
+    "You have never heard of these five brands.",
+    "Most people have no idea where Nike is from.",
+    "How many countries have a coastline?",
+])
+def test_a_strong_hook_with_has_or_have_passes_the_opener(opener):
+    assert "weak-opener" not in rules(run([highlight(opener)]))
+
+
+def test_a_plain_list_statement_is_still_a_weak_opener():
+    found = run([highlight("The United States has Nike, Apple, Coca-Cola and Ford.")])
+    assert "weak-opener" in rules(found)
+
+
 def test_weak_opener_is_an_error_only_in_a_strict_build():
     weak = [highlight("Welcome to a map of the brands you know.")]
     err = [f for f in run(weak) if f.rule == "weak-opener"][0]
@@ -76,6 +95,33 @@ def test_unpaid_loop_is_paid_by_a_rank_one():
 
 def test_unpaid_loop_accepts_a_spoken_reveal():
     assert "unpaid-loop" not in rules(run([highlight(HOOK), country(), highlight(PAYOFF)]))
+
+
+def test_a_tease_of_number_n_is_paid_by_saying_number_n_later():
+    found = run([highlight("Number five will surprise you."), country(), highlight("And number five? Sweden.")])
+    assert "unpaid-loop" not in rules(found)
+
+
+@pytest.mark.parametrize("later", ["And number 5 is Sweden.", "Number five is Sweden."])
+def test_a_tease_of_number_n_accepts_the_digit_or_the_word(later):
+    assert "unpaid-loop" not in rules(run([highlight("Wait for number 5."), country(), highlight(later)]))
+
+
+def test_no_one_is_not_a_tease_of_number_one():
+    assert "unpaid-loop" not in rules(run([highlight("No one knows where 3 brands come from."), country()]))
+
+
+def test_a_tease_of_number_n_is_paid_by_a_rank_n_segment():
+    found = run([highlight("Number five will surprise you."), country(), rank(5, "Sweden makes it.")])
+    assert "unpaid-loop" not in rules(found)
+
+
+def test_a_tease_of_number_n_is_not_paid_by_number_one_and_its_hint_names_n():
+    found = run([highlight("Number five will surprise you."), country(), highlight("And number one is Turkey.")])
+    finding = [f for f in found if f.rule == "unpaid-loop"]
+    assert finding
+    assert "number five" in finding[0].hint and "rank 5" in finding[0].hint
+    assert "number one" not in finding[0].hint and "rank 1 " not in finding[0].hint
 
 
 # -- 3 beat-gap ----------------------------------------------------------------------
@@ -155,6 +201,16 @@ def test_unsourced_lists_every_item_without_a_source_in_one_finding():
 def test_unsourced_passes_with_a_segment_or_item_source():
     own = {**country(), "source": None, "items": [{"name": n, "source": "https://x.org"} for n in ("A", "B")]}
     assert "unsourced" not in rules(run([highlight("Only 3 countries dress the world."), country(), own]))
+
+
+def test_unsourced_leaves_out_a_rank_whose_stat_has_its_own_source():
+    sourced = rank(2, "Italy makes 70% of it.", source=None, country="ITA",
+                   stat={"value": "70%", "source": "https://x.org"})
+    found = run([highlight("Only 3 countries dress the world."), sourced])
+    assert "unsourced" not in rules(found)
+    bare = rank(2, "Italy makes 70% of it.", source=None, country="ITA", stat={"value": "70%"})
+    finding = [f for f in run([highlight("Only 3 countries dress the world."), bare]) if f.rule == "unsourced"]
+    assert finding and "rank 2" in finding[0].message
 
 
 # -- 8 no-ending ---------------------------------------------------------------------
