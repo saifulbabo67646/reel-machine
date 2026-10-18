@@ -169,7 +169,9 @@ class Engine:
             recipe.spec, self.settings, overrides=self.provider_overrides, registry=self.registry
         )
         try:
-            ctx = ProbeContext(config=self.settings, providers=providers)
+            caller_dir = getattr(self.store, "caller_dir", None)
+            ctx = ProbeContext(config=self.settings, providers=providers,
+                               caller_root=caller_dir(caller) if caller_dir else None)
             return recipe.probe(model, ctx)
         finally:
             providers.close()

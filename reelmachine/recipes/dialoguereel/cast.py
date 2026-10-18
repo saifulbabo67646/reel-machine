@@ -9,34 +9,16 @@ import re
 import tempfile
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
-
 from reelmachine.config import Settings
 from reelmachine.core.errors import InvalidInput
 from reelmachine.core.stage import StageContext
 from reelmachine.recipes.dialoguereel.library import load_builtin
-from reelmachine.recipes.dialoguereel.models import CastSpec
+from reelmachine.recipes.dialoguereel.models import CastSpec, ResolvedCast, ResolvedCharacter
 from reelmachine.recipes.dialoguereel.svg import check_svg
 
+__all__ = ["CAST_ID", "ResolvedCast", "ResolvedCharacter", "caller_root", "cast_id", "load", "resolve", "save"]
+
 CAST_ID = re.compile(r"^cast_[0-9a-f]{12}$")
-
-
-class ResolvedCharacter(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    name: str
-    voice: str
-    side: str
-    svg: str                      # recoloured, not yet scoped
-    parts: list[str]
-
-
-class ResolvedCast(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    characters: list[ResolvedCharacter]
 
 
 def cast_id(spec: CastSpec) -> str:
