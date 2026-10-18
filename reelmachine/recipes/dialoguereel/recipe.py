@@ -78,7 +78,7 @@ class DialogueReelRecipe:
         cost=CostNote(unit="tts_characters", estimate="the dialogue's length",
                       notes="the fake and macOS voices are free; cloud voices bill per character",
                       providers=("elevenlabs", "cartesia", "macos", "fake")),
-        artifacts=("reel.mp4", "captions.srt", "reel.json", "storyboard.jpg", "cast.png", "script.resolved.json"),
+        artifacts=("reel.mp4", "captions.srt", "reel.json", "storyboard.jpg", "cast.png", "script.resolved.json", "post.md"),
         render_modes=("hyperframes",),
         example=EXAMPLE,
         guide=GUIDE,

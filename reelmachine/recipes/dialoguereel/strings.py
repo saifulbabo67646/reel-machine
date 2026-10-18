@@ -4,6 +4,7 @@ from __future__ import annotations
 
 STRINGS: dict[str, dict[str, str]] = {
     "en": {
+        "dialogue": "Dialogue",
         "listen": "👂 Listen first — how much did you catch?",
         "bridge": "Now with subtitles",
         "recap": "Words from this video",
@@ -13,6 +14,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "follow_plain": "Follow for more",
     },
     "ja": {
+        "dialogue": "会話",
         "listen": "👂 まずは聞いてみよう — どれくらい分かった？",
         "bridge": "字幕つきでもう一度",
         "recap": "この動画のことば",
@@ -22,6 +24,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "follow_plain": "フォローしてね",
     },
     "ko": {
+        "dialogue": "대화",
         "listen": "👂 먼저 들어봐요 — 얼마나 들렸나요?",
         "bridge": "이제 자막과 함께",
         "recap": "이 영상의 단어",
@@ -31,6 +34,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "follow_plain": "팔로우하세요",
     },
     "es": {
+        "dialogue": "Diálogo",
         "listen": "👂 Escucha primero — ¿cuánto entendiste?",
         "bridge": "Ahora con subtítulos",
         "recap": "Palabras de este video",
@@ -40,6 +44,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "follow_plain": "Sígueme para más",
     },
     "zh": {
+        "dialogue": "对话",
         "listen": "👂 先听一听 — 你听懂了多少？",
         "bridge": "现在带字幕",
         "recap": "本视频的单词",

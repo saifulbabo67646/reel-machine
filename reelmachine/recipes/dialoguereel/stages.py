@@ -28,7 +28,7 @@ from ..explainer3d.audio import mix, pad_speech, silence, synth_sfx
 from ..explainer3d.stages import speak_line
 from ..explainer3d.video import mux
 from . import cast as casts
-from . import compose, lint
+from . import compose, lint, post
 from .keys import match_keys
 from .models import (CastSpec, ComposeOutput, DialogueReelInputs, LineWindowModel, NarrationOutput, PreviewOutput,
                      RenderOutput, ScriptOutput)
@@ -287,6 +287,8 @@ class ComposeStage:
         }
         (_artifacts(ctx) / "script.resolved.json").write_text(
             json.dumps(resolved, indent=2, ensure_ascii=False), encoding="utf-8")
+        if inputs.mode != "cast":
+            (_artifacts(ctx) / "post.md").write_text(post.post_markdown(inputs, cast), encoding="utf-8")
         return ComposeOutput(narration=payload, project=str(project), key=compose.project_key(doc, cast))
 
 
