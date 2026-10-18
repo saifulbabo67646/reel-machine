@@ -45,11 +45,16 @@ def finding_path(finding: lint.Finding) -> str:
     """Where in the inputs a lint finding points."""
     if finding.rule == "no-title":
         return "title"
-    if finding.rule == "line-count":
+    if finding.rule in ("line-count", "length", "key-count"):
         return "lines"
+    if finding.rule == "quiz-line":
+        return "quiz"
     if finding.line is None:
         return ""
-    field = {"unknown-speaker": "speaker", "ruby": "text"}.get(finding.rule)
+    if finding.key is not None:
+        return f"lines[{finding.line}].keys[{finding.key}]"
+    field = {"unknown-speaker": "speaker", "same-speaker": "speaker", "ruby": "text", "long-line": "text",
+             "no-reading": "reading"}.get(finding.rule)
     return f"lines[{finding.line}].{field}" if field else f"lines[{finding.line}]"
 
 
