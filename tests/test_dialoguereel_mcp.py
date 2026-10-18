@@ -192,3 +192,19 @@ def test_make_cast_without_a_preview_does_not_mention_one(tmp_path):
     with _tools(tmp_path) as tools:
         out = tools.make_cast(None, CHARACTERS, preview=False)
     assert out["previewJobId"] is None and "previewJobId" not in out["hint"] and "castId" in out["hint"]
+
+
+def test_the_guide_teaches_situations_writing_hooks_endings_emotions_and_levels():
+    from reelmachine.recipes.dialoguereel.guide import GUIDE
+
+    assert {"situations", "writing", "hooks", "endings", "emotions", "levels", "workflow"} <= set(GUIDE)
+    situations = GUIDE["situations"]
+    assert len(situations) >= 25
+    for s in situations:
+        assert set(s) == {"level", "situation", "example_title"} and all(str(v).strip() for v in s.values())
+    assert {s["level"] for s in situations} >= {"N5", "N4", "N3"}
+    text = json.dumps(GUIDE, ensure_ascii=False)
+    for word in ("listen_first", "slow", "keys", "quiz", "emotion"):
+        assert word in text, word
+    assert {"neutral", "happy", "surprised", "sad", "thinking"} <= set(GUIDE["emotions"])
+    assert {"JLPT", "TOPIK", "CEFR"} <= set(GUIDE["levels"])

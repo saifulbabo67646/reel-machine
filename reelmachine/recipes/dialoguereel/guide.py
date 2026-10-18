@@ -51,16 +51,21 @@ EXAMPLE_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
 
 GUIDE: dict[str, Any] = {
     "workflow": [
-        "1. Pick the learner's level (N5, A1, ...) and one everyday situation (helping at home, ordering food): "
-        "it becomes the title, and `scene` takes one emoji for it.",
+        "1. Pick the learner's level (N5, TOPIK 1, A1, ...; see `levels`) and one everyday situation (see "
+        "`situations`): it becomes the title (see `hooks`), and `scene` takes one emoji for it.",
         "2. make_cast with two characters: built-ins by name (see `builtins`) or your own SVG (see `characters`). "
         "It is free and instant and returns a castId you can reuse across reels.",
         "3. Look at the preview: get_job(previewJobId), then get_artifact(previewJobId, \"cast.png\"). "
         "Fix a character that looks wrong before writing lines for it.",
-        "4. Write 3 to 12 short lines (see `lines`), each spoken by one of the two cast ids, with `cast` set to the castId.",
-        "5. probe the inputs: it checks the script, the lint, the voices and the renderer and spends nothing.",
-        "6. start_job in `storyboard` mode (the default) and look at storyboard.jpg: one still per line.",
-        "7. start_job again in `full` mode for reel.mp4, captions.srt and reel.json.",
+        "4. Write 5 to 9 short lines (3 to 12 are allowed; see `lines` and `writing`), each spoken by one of the two cast ids, with "
+        "`cast` set to the castId. Mark 2 to 6 `keys` across the reel, an `emotion` on a beat or two, and `slow` "
+        "on the hardest line.",
+        "5. Choose the ending (see `endings`): `quiz` true (the default) asks about the line with the most keys; "
+        "`flow: \"listen_first\"` plays the dialogue once without subtitles before the subtitled pass.",
+        "6. probe the inputs: it checks the script, the lint, the voices and the renderer and spends nothing. "
+        "Fix every `key-missing` and `level` finding; the other warnings are advice.",
+        "7. start_job in `storyboard` mode (the default) and look at storyboard.jpg: one still per line.",
+        "8. start_job again in `full` mode for reel.mp4, captions.srt and reel.json.",
     ],
     "builtins": builtin_names(),
     "characters": {
@@ -105,8 +110,13 @@ GUIDE: dict[str, Any] = {
         "use": 'Pass it as {"kind": "svg", "svg": "<svg ...>"} in a character\'s "source".',
     },
     "lines": {
-        "shape": "Each line is {speaker, text, reading, meaning}: speaker is a cast id, text is what is said in the "
-                 "target language, meaning is its translation.",
+        "shape": "Each line is {speaker, text, reading, meaning, keys, emotion, slow}: speaker is a cast id, text is "
+                 "what is said in the target language, meaning is its translation; keys, emotion and slow are "
+                 "optional (see `writing` and `emotions`).",
+        "keys": "Up to 4 per line, each {text, reading, meaning}: text is the word in dictionary form (あらう for "
+                "あらって, だす for だして) and may carry ruby (手伝{てつだ}う); it is found in the line by its plain "
+                "text or its stem, then underlined and shown as a chip, and every key returns on the recap card. "
+                "reading is romanised like the line's (arau); meaning is short (to wash).",
         "ruby": {
             "rule": "Furigana: put the reading in braces right after a kanji run; it attaches to that run only.",
             "example": "手伝{てつだ}いましょうか。",
@@ -120,6 +130,97 @@ GUIDE: dict[str, Any] = {
             "Use the level's grammar and vocabulary only; repeat a useful phrase rather than adding new ones.",
             "`meaning` is natural English (or meaning_language), not a word-by-word gloss.",
         ],
+    },
+    "situations": [
+        {"level": "N5", "situation": "Offering to help at home", "example_title": "Helping Mom at home"},
+        {"level": "N5", "situation": "Ordering at a café", "example_title": "Ordering coffee in Japanese"},
+        {"level": "N5", "situation": "Buying a ticket at the station", "example_title": "Your first train ticket"},
+        {"level": "N5", "situation": "Asking where the toilet is", "example_title": "Where is the toilet?"},
+        {"level": "N5", "situation": "Introducing yourself to a classmate", "example_title": "Your first day at school"},
+        {"level": "N5", "situation": "Paying at a convenience store", "example_title": "At the konbini till"},
+        {"level": "N5", "situation": "Asking the price at a market", "example_title": "How much is this?"},
+        {"level": "N5", "situation": "Saying good morning and talking about breakfast", "example_title": "What did you eat today?"},
+        {"level": "N5", "situation": "Making weekend plans with a friend", "example_title": "What are you doing Sunday?"},
+        {"level": "N5", "situation": "Asking the time and the day", "example_title": "What time is it now?"},
+        {"level": "N5", "situation": "Talking about the weather", "example_title": "Is it cold today?"},
+        {"level": "N5", "situation": "Choosing a drink at a vending machine", "example_title": "Hot or cold?"},
+        {"level": "N4", "situation": "Calling in sick to a part-time job", "example_title": "I can't come in today"},
+        {"level": "N4", "situation": "Asking a stranger for directions", "example_title": "Lost in Tokyo"},
+        {"level": "N4", "situation": "Returning an item at a shop", "example_title": "Can I return this?"},
+        {"level": "N4", "situation": "Inviting a friend to a movie", "example_title": "Want to see a movie?"},
+        {"level": "N4", "situation": "At the doctor's: saying what hurts", "example_title": "My head hurts"},
+        {"level": "N4", "situation": "Borrowing something from a coworker", "example_title": "Can I borrow your pen?"},
+        {"level": "N4", "situation": "Checking in at a hotel", "example_title": "Checking in, the polite way"},
+        {"level": "N4", "situation": "Apologising for being late", "example_title": "Sorry I'm late!"},
+        {"level": "N4", "situation": "Asking a teacher to repeat", "example_title": "One more time, please"},
+        {"level": "N4", "situation": "Talking about what you want to do on holiday", "example_title": "Where do you want to go?"},
+        {"level": "N3", "situation": "Turning down an invitation politely", "example_title": "How to say no nicely"},
+        {"level": "N3", "situation": "Complaining about noise to a neighbour", "example_title": "My neighbour is too loud"},
+        {"level": "N3", "situation": "Giving advice to a friend who is tired", "example_title": "You should rest"},
+        {"level": "N3", "situation": "A job interview: talking about strengths", "example_title": "Your first Japanese interview"},
+        {"level": "N3", "situation": "Making a reservation by phone", "example_title": "Booking a table by phone"},
+        {"level": "N3", "situation": "Telling a friend about rumours you heard", "example_title": "Did you hear?"},
+        {"level": "N3", "situation": "Asking a senior colleague for a favour", "example_title": "Asking your senpai for help"},
+        {"level": "N3", "situation": "Talking about a change of plans", "example_title": "The plan changed"},
+    ],
+    "writing": [
+        "Write what two people would really say, not textbook sentences: short turns, fillers a learner should know "
+        "(えっと, あ, そうか), and lines that answer each other.",
+        "Choose polite (です/ます) or casual (plain form) on purpose and keep each speaker consistent: strangers, "
+        "staff and seniors speak politely; family and friends speak casually. A kid offering help politely to a "
+        "mom who answers casually is a lesson in itself.",
+        "Teach one new grammar point per reel (〜ましょうか, 〜てください, 〜たい); everything else stays at or "
+        "below the level, and the new point appears at least twice if it can.",
+        "Mark 2 to 6 `keys` across the reel: the words worth saving, at the reel's level or easier. Put the most "
+        "useful line's keys on one line so the quiz asks about it.",
+        "Set `slow` on the hardest line (at N5 nearly always; at N3 only for a long or fast one): it is replayed at "
+        "0.75x right after it is spoken. One or two slow lines per reel, never every line.",
+        "Use `flow: \"listen_first\"` when the dialogue is short and easy enough to guess by ear (N5-N4, 5-7 lines): "
+        "the viewer hears it once without subtitles (\"how much did you catch?\"), then sees it subtitled. It "
+        "doubles the dialogue's time, so skip it for long reels and harder levels.",
+        "Give a line an `emotion` (see `emotions`) where the feeling changes: a happy offer, a surprised reply, a "
+        "thinking question. Two or three per reel; neutral is the default.",
+        "End on a resolution (お願い, ありがとう, I'll do it now) so the conversation feels finished before the quiz.",
+    ],
+    "hooks": {
+        "rule": "The title is the hook shown in the first 1.5 s: name the situation or the learner's goal, at most "
+                "about 40 characters, in the meaning language.",
+        "formulas": [
+            "How to <do the thing> in <language>: How to order coffee in Japanese",
+            "Your first <situation>: Your first train ticket",
+            "<A line from the reel, translated>?: Can I borrow your pen?",
+            "<Level> <situation>: N5 shopping in 30 seconds",
+            "Don't say X, say Y: Don't say すみません, say ありがとう",
+            "Can you understand this? (with listen_first): Can you understand this kitchen chat?",
+        ],
+    },
+    "endings": {
+        "quiz": "`quiz: true` (the default) asks \"How do you say:\" with the meaning of the line with the most keys "
+                "(ties go to the earliest; with no keys, the longest meaning), counts down 3 s, then speaks the "
+                "answer. Pass a 0-based line index to choose the line, or false for no quiz. An index outside the "
+                "lines is the `quiz-line` error.",
+        "cta": "After the quiz the reel shows \"Comment your answer 👇\" and \"Follow for daily <level>\" in the "
+               "meaning language (en, ja, ko, es, zh; others fall back to en). Set `level` so the follow line names it.",
+        "recap": "With at least one key the reel shows the recap card (\"Words from this video\") before the quiz.",
+    },
+    "emotions": {
+        "neutral": "the default: the character's normal face",
+        "happy": "eyes-happy and mouth-smile when not talking, ❤️",
+        "surprised": "eyes-surprised, ❗",
+        "sad": "sweat, 💦",
+        "thinking": "the head tilts 8°, ❓",
+        "note": "A character without the optional part falls back to its neutral part; the emoji still shows.",
+    },
+    "levels": {
+        "JLPT": "Japanese: N5 (first words, です/ます, 〜てください) → N4 (〜たい, 〜てもいい, plain past) → N3 "
+                "(〜そう, 〜ようにする, keigo basics) → N2 → N1. Write `level` as \"N5\".",
+        "TOPIK": "Korean: TOPIK 1-2 (beginner, 해요체) → 3-4 (intermediate, connectives) → 5-6 (advanced). "
+                 "Write `level` as \"TOPIK 1\".",
+        "CEFR": "Other languages: A1 (fixed phrases, present tense) → A2 (past, everyday tasks) → B1 (opinions, "
+                "plans) → B2 → C1. Write `level` as \"A1\".",
+        "check": "probe checks each key's JLPT level only when `language` is Japanese and `level` is N1-N5: a key "
+                 "harder than the reel is a `level` warning. Other languages and ladders are not checked, so "
+                 "choose their words with care.",
     },
     "voices": {
         "rule": "A deployment serves one narration provider; every character's voice must name it "

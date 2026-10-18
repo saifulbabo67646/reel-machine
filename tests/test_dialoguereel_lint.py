@@ -130,4 +130,7 @@ def test_reference_dialogue_regression():
     inputs = DialogueReelInputs(cast="x", title="", language="ja", lines=EXAMPLE["lines"])
     found = check(inputs, SP)
     assert [(f.rule, f.severity) for f in found if f.severity == "error"] == [("no-title", "error")]
-    assert "key-count" in rules(found)
+    assert "key-count" not in rules(found)
+    keyless = [{k: v for k, v in line.items() if k != "keys"} for line in EXAMPLE["lines"]]
+    assert "key-count" in rules(check(inputs.model_copy(update={"lines": DialogueReelInputs(
+        cast="x", lines=keyless).lines}), SP))

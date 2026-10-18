@@ -152,3 +152,13 @@ def test_plan_of_round_trips_every_section():
     plain = schedule([900, 1300])
     assert plan_of(NarrationOutput(script=script, duration_ms=plain.duration_ms,
                                    lines=[model(w) for w in plain.lines])) == plain
+
+
+def test_the_example_teaches_with_keys_that_match_and_fit_its_level():
+    report = probe(EXAMPLE)
+    rules = {f["rule"] for f in report.details["lint"]}
+    assert not rules & {"key-missing", "level", "key-count"}, report.details["lint"]
+    keyed = [line for line in EXAMPLE["lines"] if line.get("keys")]
+    assert 4 <= len(keyed) <= 5 and EXAMPLE["quiz"] is True and EXAMPLE["scene"]
+    assert len({line.get("emotion", "neutral") for line in EXAMPLE["lines"]} - {"neutral"}) >= 2
+    assert EXAMPLE["lines"][1]["slow"] is True
