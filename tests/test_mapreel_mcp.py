@@ -94,3 +94,42 @@ def test_a_bare_country_prefix_with_a_dash_is_not_a_region_code(tmp_path, monkey
     with _tools(tmp_path) as tools:
         tools.find_places(None, "ab-")
         tools.find_places(None, "JP-")
+
+
+def test_find_images_tool_payload_and_errors(tmp_path, monkeypatch):
+    import json
+
+    import pytest
+    from mcp.server.mcpserver.exceptions import ToolError
+
+    from reelmachine.recipes.mapreel import commons
+
+    seen = []
+
+    def fake(params):
+        seen.append(params)
+        return {"query": {"pages": {"1": {
+            "title": "File:Nike.svg", "index": 1,
+            "imageinfo": [{"url": "u", "thumburl": "t", "width": 1, "height": 2, "mime": "image/svg+xml",
+                           "extmetadata": {"LicenseShortName": {"value": "CC0"}}}],
+        }}}}
+
+    monkeypatch.setattr(commons, "_http_json", fake)
+    with _tools(tmp_path) as tools:
+        found = tools.find_images(None, "Nike", kind="logo", limit=999)
+        assert found["results"][0]["id"] == "commons:File:Nike.svg"
+        assert found["results"][0]["permitted"] is True
+        assert "image" in found["note"] and "trademark" in found["note"]
+        assert seen[0]["gsrlimit"] == 50
+        with pytest.raises(ToolError) as err:
+            tools.find_images(None, "  ")
+        assert json.loads(str(err.value))["code"] == "INVALID_INPUT"
+
+        def down(params):
+            from reelmachine.core.errors import ProviderUnavailable
+            raise ProviderUnavailable("Wikimedia Commons did not answer", hint="retry")
+
+        monkeypatch.setattr(commons, "_http_json", down)
+        with pytest.raises(ToolError) as err:
+            tools.find_images(None, "Nike")
+        assert json.loads(str(err.value))["code"] == "PROVIDER_UNAVAILABLE"

@@ -248,6 +248,19 @@ country search never downloads it.
 {"query": "texas", "country": "USA"}
 ```
 
+### `find_images`
+
+Wikimedia Commons images for a `mapreel` item (`logo`, `photo` or `flag` bias the search).
+Each result has an `id` like `commons:File:Nike.svg` (use it as an item's `image`), a 320 px
+`thumb_url`, the original `url`, size, `mime`, `licence`, `attribution` (plain text) and
+`permitted`: true when the licence is free. Files without a free licence are hidden unless
+`include_nonfree` is set, and `restrictions` (for example `trademarked`) is passed through.
+`limit` is clamped to 1..50. Commons being down is a `PROVIDER_UNAVAILABLE` error.
+
+```json
+{"query": "Nike", "kind": "logo"}
+```
+
 ### `find_assets`
 
 CC0 models, skies (360° photos of real places — kitchens, living rooms, workshops, streets

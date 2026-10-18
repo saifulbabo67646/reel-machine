@@ -59,6 +59,7 @@ TOOL_NAMES = {
     "find_models",
     "find_assets",
     "find_places",
+    "find_images",
 }
 
 FIXTURE_ENTRY = EntryPoint(
