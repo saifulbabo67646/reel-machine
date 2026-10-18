@@ -1,7 +1,7 @@
 # reel-machine
 
 A modular reel production engine. A reel is a **Timeline plus Assets**; rendering is a
-separate step that turns `(timeline, assets, style)` into a video file. Seven recipes ship
+separate step that turns `(timeline, assets, style)` into a video file. Eight recipes ship
 with it:
 
 | recipe | what it makes | needs |
@@ -13,6 +13,7 @@ with it:
 | `wordreel` | English word / phrase learning reels: an agent picks a word, the recipe finds real lines of dialogue that use it by searching the subtitles of **your own** media, cuts each one out, and joins them with the word pinned on screen and highlighted where it is spoken | ffmpeg + `REEL_WORDREEL_LIBRARY` (media with subtitles beside it, or subtitle tracks inside it) |
 | `explainer3d` | narrated 3D explainer reels: an agent writes a scene script (cast, shots, moves, camera); each shot is a three.js scene rendered by HyperFrames, objects carry over between shots and a camera can continue across a cut; `storyboard` mode renders one still per shot first. The `cinematic` look adds CC0 models (`find_models`), a golden-hour lake and an underwater set, impact moves (leap, slam, burst, drizzle, smash, throw…), viral captions, synthesised music and a `length` target (15–90 s). Sets are data — presets (lake, underwater, kitchen, living-room, workshop, studio, cafe) or built from a sky, floor, walls, props and marks (`find_assets`); stylised CC0 people walk, talk, sit and carry props; the agent can build objects from parts or, where the deployment allows (`REEL_EXPLAINER3D_CUSTOM_CODE`), write components as code — see `examples/explainer3d/` | ffmpeg **and ffprobe**, Node ≥ 22 (HyperFrames runs through `npx`, pinned); cloud voices need a key |
 | `mapreel` | narrated world-map fact reels: an agent writes a script of country, highlight, rank, versus and regions segments; the camera flies to each place, fills it and pops in the brands, dishes and numbers the voice names. Three looks (satellite, flat, dark), Commons images with licences credited in `sources.md`, and a hook lint that refuses a weak opening. `storyboard` mode renders one still per segment first. See [docs/MAPREEL.md](docs/MAPREEL.md) | ffmpeg **and ffprobe**, Node ≥ 22 (HyperFrames); the macOS voice is free, cloud voices need a key |
+| `dialoguereel` | language-learning conversation reels for beginners (JLPT N5–N3, TOPIK 1, CEFR A1, any language): two cute characters act out a short dialogue, each line voiced and shown with furigana or a romanised reading, a meaning and underlined key words, then a recap card and a quiz. Characters are built-in SVGs, SVGs the agent writes, or images (OpenAI-generated poses with a quota, or PNGs you supply) via `make_cast`. Three looks (pop, pastel, night), a lint with a JLPT level check, `post.md` with a caption and hashtags, `captions.srt`, and `verify`. `storyboard` mode renders one sheet of stills first. See [docs/DIALOGUEREEL.md](docs/DIALOGUEREEL.md) | ffmpeg **and ffprobe**, Node ≥ 22 (HyperFrames); the macOS voices are free, cloud voices need a key; generated characters need `REEL_OPENAI_API_KEY` |
 
 The engine is a library. The CLI (`reel`) and the MCP server are both thin clients of it;
 an agent over MCP is a first-class caller.
@@ -77,6 +78,22 @@ REEL_TTS=fake REEL_HYPERFRAMES_WORKERS=1 uv run reel run mapreel -i @examples/ma
 
 The agent workflow, the script model, the hook lint, the voices and the troubleshooting
 are in [docs/MAPREEL.md](docs/MAPREEL.md).
+
+## Conversation reels (`dialoguereel`)
+
+Two characters act out a short conversation in the language being learned. One command
+renders a storyboard from the bundled Japanese example (a Korean one sits beside it),
+free and with the fake voice:
+
+```bash
+REEL_TTS=fake REEL_HYPERFRAMES_WORKERS=1 uv run reel run dialoguereel \
+  -i @reelmachine/recipes/dialoguereel/examples/konbini-n5-ja.json
+```
+
+Add `-i '{"mode": "full"}'` for the video, and `REEL_TTS=macos` with a voice per character
+(`macos:Kyoko`, `macos:Yuna`) for real speech. The script model, the characters (built-in,
+agent-written SVG or image poses), the looks, the lint and `verify` are in
+[docs/DIALOGUEREEL.md](docs/DIALOGUEREEL.md).
 
 ## The engine
 
@@ -227,6 +244,8 @@ reelmachine/
     storyreel/      acquire (vidvault) → subtitles → transcript → concepts → script
                     → voiceover → prep → compose → render
     explainer3d/    script → assets → narration → shots → prep (HyperFrames) → compose → render
+    mapreel/        script → geo → images → narration → segments → prep (HyperFrames) → compose → render
+    dialoguereel/   script → cast → narration → compose → preview → render (HyperFrames)
   render/      the plain/karaoke ASS writer and the audio profiles
   mcp/         the MCP server (optional extra)
   align.py ffmpeg.py subtitles.py vocab.py …   the media machinery, moved not rewritten
@@ -235,6 +254,7 @@ reelmachine/
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the design of record
 - [docs/MCP.md](docs/MCP.md) — the agent interface, one example per tool
+- [docs/MAPREEL.md](docs/MAPREEL.md) · [docs/DIALOGUEREEL.md](docs/DIALOGUEREEL.md) — the map and conversation reel guides
 - [docs/RECIPES.md](docs/RECIPES.md) — write your own recipe, provider or style pack
 - [docs/adr/](docs/adr/) — the load-bearing decisions
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) — vendored code and licences
