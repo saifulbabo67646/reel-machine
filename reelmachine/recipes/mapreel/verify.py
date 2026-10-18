@@ -139,11 +139,22 @@ def reel_items(compose: Any) -> list[dict[str, Any]]:
     return out
 
 
+DEGRADATION_MAX = 5  # warnings listed in the report; script.resolved.json holds them all
+
+
+def image_degradation(outputs: dict[str, Any]) -> list[str]:
+    """The images that fell back to a text badge, from the images stage's warnings, capped."""
+    images = outputs.get("images")
+    return list(getattr(images, "warnings", None) or [])[:DEGRADATION_MAX]
+
+
 def verify_mapreel(ctx: Any, outputs: dict[str, Any]) -> VerificationReport:
     settings: Settings = ctx.config
+    degraded = image_degradation(outputs)
     render, compose = outputs.get("render"), outputs.get("compose")
     if render is None or compose is None:  # storyboard mode: nothing to verify yet
-        return VerificationReport(ok=True, render_mode="hyperframes", notes="storyboard")
+        return VerificationReport(ok=True, render_mode="hyperframes", notes="storyboard",
+                                  visible_degradation=degraded)
     video = Path(render.video)
     info = ffmpeg.probe(video)
     timeline = compose.timeline
@@ -161,4 +172,5 @@ def verify_mapreel(ctx: Any, outputs: dict[str, Any]) -> VerificationReport:
     checks.append(CheckResult(name="renderer", ok=len(named) == 1 and "" not in named,
                               detail=f"segments by {compose.prep.renderer!r}, manifest names "
                                      f"{manifest.get('renderer', '')!r}"))
-    return VerificationReport(ok=all(c.ok for c in checks), checks=checks, render_mode="hyperframes")
+    return VerificationReport(ok=all(c.ok for c in checks), checks=checks, render_mode="hyperframes",
+                              visible_degradation=degraded)

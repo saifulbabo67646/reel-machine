@@ -27,7 +27,7 @@ REEL_TTS=macos REEL_HYPERFRAMES_WORKERS=1 uv run reel run mapreel \
   -i @examples/mapreel/food.json -i '{"mode": "build", "voice": "macos:Samantha"}'
 ```
 
-Later `-i` values win. The build writes `reel.mp4` under `out/` (`REEL_OUTDIR`).
+Later `-i` values win. `reel run` prints the path of every file the job made, `reel.mp4` among them; over MCP, `get_artifact` fetches one.
 
 What you need: ffmpeg and ffprobe, and for a build Node 22 or newer (HyperFrames runs
 through `npx`) and Chrome. `REEL_HYPERFRAMES_WORKERS=1` streams frames straight into the
@@ -292,5 +292,6 @@ Cartesia plan cannot use that voice`. The keys are `CARTESIA_API_KEY` and
 `macos:Samantha` to keep working for free.
 
 **An image shows as a text badge.** The id was wrong, its licence was not free, or the
-download failed. `find_images` again, check `permitted`, or use an `emoji`. The job's
-warnings list what happened.
+download failed. `find_images` again, check `permitted`, or use an `emoji`. What happened
+is in `verification.visible_degradation` (the first five) and in `warnings` in
+`script.resolved.json` (all of them), in storyboard and build mode alike.

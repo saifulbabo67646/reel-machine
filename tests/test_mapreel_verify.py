@@ -3,6 +3,7 @@
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -179,6 +180,16 @@ def test_verify_runs_on_an_engine_build(tmp_path):
     assert all(checks[name]["ok"] for name in ("format", "duration", "audio", "frozen", "renderer")), checks
     assert checks["audio"]["detail"].startswith("narration")
     assert not checks["items"]["ok"] and "Gucci" in checks["items"]["detail"]
+    assert any("Versace" in line and "badge" in line for line in _report(job)["visible_degradation"])
+
+
+def test_a_storyboard_report_lists_the_images_that_fell_back_to_badges():
+    warnings = [f"seg-1 item{i}: image not usable (404); shown as a badge" for i in range(8)]
+    images = SimpleNamespace(warnings=warnings)
+    report = v.verify_mapreel(SimpleNamespace(config=SETTINGS), {"images": images})
+    assert report.ok and report.notes == "storyboard"
+    assert report.visible_degradation == warnings[:v.DEGRADATION_MAX]
+    assert v.verify_mapreel(SimpleNamespace(config=SETTINGS), {}).visible_degradation == []
 
 
 @slow
@@ -187,6 +198,7 @@ def test_a_storyboard_verifies_as_storyboard(tmp_path):
     assert job.state == JobState.SUCCEEDED, job.error
     report = _report(job)
     assert report["ok"] and report["notes"] == "storyboard"
+    assert any("Versace" in line and "badge" in line for line in report["visible_degradation"])  # /nope.png
 
 
 @slow

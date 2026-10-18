@@ -50,7 +50,7 @@ REEL_TTS=cartesia REEL_HYPERFRAMES_WORKERS=1 uv run reel run mapreel \
 
 Run `probe` first: `details.cost.ttsCharacters` is what the voice will bill.
 
-Each build writes `reel.mp4`, `storyboard.jpg` and `sources.md` under `out/`
-(`REEL_OUTDIR`). The first build downloads the map data and the Commons images into
+Each build writes `reel.mp4`, `storyboard.jpg` and `sources.md` into the job's folder;
+`reel run` prints each file's path (over MCP, `get_artifact` fetches one). The first build downloads the map data and the Commons images into
 the shared cache; later builds reuse them. Paste `sources.md` into the video
 description: it credits every fact's source and every image's author and licence.

@@ -243,7 +243,7 @@ An empty `query` lists them all, up to `limit`. A code-shaped query without `cou
 admin-1 data, but only once the larger regions file (about 40 MB) is already cached; a plain
 country search never downloads it.
 
-The result is `{"places": [...], "hint": "..."}`.
+The result is `{"schemaVersion": 1, "query": "...", "places": [...], "hint": "..."}`.
 
 ```json
 {"query": "korea"}
@@ -259,6 +259,8 @@ Each result has an `id` like `commons:File:Nike.svg` (use it as an item's `image
 `permitted`: true when the licence is free. Files without a free licence are hidden unless
 `include_nonfree` is set, and `restrictions` (for example `trademarked`) is passed through.
 `limit` is clamped to 1..50. Commons being down is a `PROVIDER_UNAVAILABLE` error.
+The result is `{"schemaVersion": 1, "query": "...", "results": [...], "note": "..."}`; `note` says
+how to use a hit, or what to try when nothing matched.
 
 ```json
 {"query": "Nike", "kind": "logo"}
