@@ -29,15 +29,22 @@ try {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   const renderAt = (t) => drawFrame(ctx, doc, images, t);
-  window.addEventListener("hf-seek", (event) => renderAt(event.detail.time));
+  window.addEventListener("hf-seek", (event) => {
+    try {
+      renderAt(event.detail.time);
+    } catch (error) {
+      console.error(`mapreel: frame at ${event.detail.time}s could not be drawn`, error);
+    }
+  });
   window.__mapRenderAt = renderAt;
   renderAt(window.__hfThreeTime || 0);
 } catch (error) {
-  window.__mapError = String((error && error.stack) || error);
+  // the first line only (the error's name and message): the rest of a stack names local paths
+  window.__mapError = String((error && error.stack) || error).split("\n")[0];
   console.error("mapreel: the segment could not be built", error);
 } finally {
-  // HyperFrames polls window.__hfStartupError before every capture and fails the render with its text,
-  // so a map that could not be drawn fails the job instead of shipping a blank segment
+  // HyperFrames reads window.__hfStartupError while it waits for the page to be ready, before capture starts,
+  // and fails the render with its text: a map that could not be drawn fails the job, not a blank segment
   if (window.__mapError) window.__hfStartupError = window.__mapError;
   done();
 }

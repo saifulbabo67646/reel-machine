@@ -16,7 +16,8 @@ MOTION_MIN = 0.5  # mean absolute grey difference (0–255) between a shot's ear
 _W, _H = 108, 192
 
 
-def _grey(video: Path, at_s: float, settings: Settings) -> np.ndarray:
+def _grey(video: Path, at_s: float, settings: Settings, *, strict: bool = False) -> np.ndarray | None:
+    """One frame, downscaled and grey. An unreadable frame is black, or None when `strict`."""
     proc = subprocess.run(
         [settings.ffmpeg, "-hide_banner", "-nostdin", "-ss", f"{at_s:.3f}", "-i", str(video),
          "-frames:v", "1", "-vf", f"scale={_W}:{_H}", "-f", "rawvideo", "-pix_fmt", "gray", "-"],
@@ -24,7 +25,7 @@ def _grey(video: Path, at_s: float, settings: Settings) -> np.ndarray:
     )
     pixels = np.frombuffer(proc.stdout or b"", dtype=np.uint8)
     if pixels.size != _W * _H:
-        return np.zeros((_H, _W), np.float32)
+        return None if strict else np.zeros((_H, _W), np.float32)
     return pixels.reshape(_H, _W).astype(np.float32)
 
 
