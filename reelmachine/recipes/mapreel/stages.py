@@ -8,6 +8,8 @@ import json
 import math
 import os
 import shutil
+import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -42,6 +44,9 @@ from .timing import FLY_MS, MIN_SEGMENT_MS
 
 IMAGE_MAX_BYTES = 8 * 1024 * 1024
 IMAGE_MAX_SIDE = 1024  # every item image is normalised to a PNG no longer than this on its longest side
+IMAGE_MAX_PIXELS = 40_000_000  # refused before decoding: RGBA at this size is already 160 MB
+IMAGE_DEADLINE_S = 60  # wall clock for one image download, however slowly it trickles in
+PILLOW_MISSING = "Pillow is not installed, so images cannot be read (pip install Pillow)"
 COMMONS_ORIGINAL_MAX = 2048  # a Commons original wider than this is fetched as its 1024 px thumb instead
 SVG_REFUSED = "SVG is not drawn; give a PNG or JPEG, or a Commons id (its PNG render is used)"
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
@@ -233,6 +238,10 @@ class _TooLarge(ValueError):
     pass
 
 
+class _TooManyPixels(ValueError):
+    pass
+
+
 def _download(ref: str, *, user_agent: str = geodata.USER_AGENT) -> tuple[bytes, str]:
     """An http(s) image, streamed and capped at 8 MB: its bytes and content type."""
     with httpx.stream("GET", ref, timeout=30, follow_redirects=True, headers={"User-Agent": user_agent}) as response:
@@ -241,10 +250,13 @@ def _download(ref: str, *, user_agent: str = geodata.USER_AGENT) -> tuple[bytes,
         if kind not in IMAGE_TYPES:
             raise ValueError(f"not an image ({kind or 'no content type'})")
         chunks, size = [], 0
+        deadline = time.monotonic() + IMAGE_DEADLINE_S
         for chunk in response.iter_bytes():
             size += len(chunk)
             if size > IMAGE_MAX_BYTES:
                 raise _TooLarge("larger than 8 MB")
+            if time.monotonic() > deadline:
+                raise ValueError(f"the download took too long (over {IMAGE_DEADLINE_S:g} s)")
             chunks.append(chunk)
     return b"".join(chunks), kind
 
@@ -254,18 +266,33 @@ def _is_svg(data: bytes) -> bool:
     return head.startswith(b"<svg") or (head.startswith(b"<?xml") and b"<svg" in data[:4096].lower())
 
 
+def _have_pillow() -> bool:
+    try:
+        import PIL  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def _normalise(data: bytes) -> bytes:
     """Any raster image as an RGBA PNG whose longest side is at most IMAGE_MAX_SIDE, alpha kept."""
     if _is_svg(data):
         raise ValueError(SVG_REFUSED)
     try:
         from PIL import Image, ImageOps
-    except ImportError as exc:  # pragma: no cover - Pillow ships with the dev group and the extras
-        raise ValueError("Pillow is not installed, so images cannot be read (pip install Pillow)") from exc
+    except ImportError as exc:  # a safety net: Pillow is a base dependency and the stage checks for it first
+        raise ValueError(PILLOW_MISSING) from exc
     try:
         with Image.open(io.BytesIO(data)) as img:
+            # refused from the header alone: a few KB of PNG can decode to gigabytes
+            if img.width * img.height > IMAGE_MAX_PIXELS:
+                raise _TooManyPixels(f"{img.width}x{img.height} is over {IMAGE_MAX_PIXELS // 1_000_000} M pixels")
+            if img.format == "JPEG":
+                img.draft("RGB", (IMAGE_MAX_SIDE, IMAGE_MAX_SIDE))  # decode at a reduced scale where it can
             img.load()
             img = ImageOps.exif_transpose(img).convert("RGBA")
+    except _TooManyPixels:
+        raise
     except (OSError, SyntaxError, ValueError, Image.DecompressionBombError) as exc:
         raise ValueError(f"not a readable image ({exc})") from exc
     img.thumbnail((IMAGE_MAX_SIDE, IMAGE_MAX_SIDE), Image.LANCZOS)
@@ -274,13 +301,22 @@ def _normalise(data: bytes) -> bytes:
     return out.getvalue()
 
 
+def _write_atomic(path: Path, data: bytes) -> None:
+    """Write through a uniquely named temp file beside it, so concurrent jobs never collide."""
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as tmp:
+        tmp.write(data)
+    try:
+        os.replace(tmp.name, path)
+    except OSError:
+        Path(tmp.name).unlink(missing_ok=True)
+        raise
+
+
 def _write_stable(path: Path, data: bytes) -> Path:
     """Write a content-named file once, atomically, with a fixed mtime so project keys stay stable."""
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.is_file():
-        tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-        tmp.write_bytes(data)
-        os.replace(tmp, path)
+        _write_atomic(path, data)
     os.utime(path, (STABLE_MTIME, STABLE_MTIME))
     return path
 
@@ -303,7 +339,10 @@ def _fetch_image(ref: str, dest_dir: Path) -> Path:
             raise ValueError(SVG_REFUSED)
         if src.suffix.lower() not in IMAGE_SUFFIXES:
             raise ValueError(f"{src.suffix or 'no extension'} is not an image type the renderer draws")
-        data = src.read_bytes()
+        with src.open("rb") as handle:
+            data = handle.read(IMAGE_MAX_BYTES + 1)
+        if len(data) > IMAGE_MAX_BYTES:
+            raise ValueError("larger than 8 MB")
     return _place(_normalise(data), dest_dir)
 
 
@@ -337,9 +376,7 @@ def _fetch_commons(ref: str, item_name: str, dest_dir: Path, cache: Path) -> tup
     meta = {"source": "commons", "id_or_path": hit.id, "licence": hit.licence, "licence_url": hit.licence_url,
             "attribution": hit.attribution, "restrictions": hit.restrictions}
     _write_stable(png_path, png)
-    tmp = meta_path.with_name(f".{meta_path.name}.{os.getpid()}.tmp")
-    tmp.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, meta_path)
+    _write_atomic(meta_path, json.dumps(meta, ensure_ascii=False).encode("utf-8"))
     return _place(png, dest_dir), {"name": item_name, **meta}
 
 
@@ -364,6 +401,7 @@ class ImagesStage:
         credits: dict[str, dict] = {}
         warnings: list[str] = []
         dest = ctx.workdir / "images"
+        pillow = _have_pillow()  # checked once, before any network work
         for seg, spec in zip(payload.segments, payload.inputs.segments):
             for j, item in enumerate(getattr(spec, "items", [])):
                 key = f"{seg.id}/{j}"
@@ -371,6 +409,9 @@ class ImagesStage:
                 if not item.image:
                     continue
                 ctx.cancel.raise_if_cancelled()
+                if not pillow:
+                    warnings.append(f"{seg.id} {item.name}: image not usable ({PILLOW_MISSING}); shown as a badge")
+                    continue
                 try:
                     if item.image.startswith("commons:"):
                         path, credit = _fetch_commons(item.image, item.name, dest, _image_cache(ctx))
