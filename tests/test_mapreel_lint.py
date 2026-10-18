@@ -303,3 +303,77 @@ def test_an_iso_coded_highlight_country_gets_a_matched_beat_when_its_name_is_sai
 def test_a_name_matches_whole_words_only():
     assert lint._at("I can afford it", ["Ford"]) is None
     assert lint._at("a ford and Ford", ["ford"]) == 2 / len("a ford and Ford")
+
+
+# -- regions: lint hears the names the voice says, and floors fills as the runtime does ----------------------
+
+FIXTURES = Path(__file__).parent / "fixtures" / "mapreel"
+
+
+def _resolved(inputs):
+    from reelmachine.recipes.mapreel.places import Atlas
+    from reelmachine.recipes.mapreel.regions import RegionAtlas
+    from reelmachine.recipes.mapreel.stages import resolve_segments
+
+    atlas = Atlas.load(FIXTURES / "countries.geojson")
+    return atlas, resolve_segments(inputs, atlas, lambda: RegionAtlas.load(FIXTURES / "regions.geojson"))
+
+
+def _regions(narration, regions):
+    return {"kind": "regions", "country": "USA", "narration": narration, "source": "https://example.com",
+            "regions": regions}
+
+
+def test_heard_names_cover_region_entries_by_say_else_their_name_never_the_code():
+    from reelmachine.recipes.mapreel.stages import heard_names
+
+    inputs = _inputs([_regions("Texas and Cali.", [{"region": "US-TX"}, {"region": "US-CA", "say": "Cali"}])])
+    atlas, resolved = _resolved(inputs)
+    names = heard_names(inputs, resolved, atlas)
+    assert names["seg-1/region-0"] == ["Texas"]
+    assert names["seg-1/region-1"][0] == "Cali" and "US-CA" not in names["seg-1/region-1"]
+
+
+def _speech_ms(window, text, phrase):
+    return window.start_ms + window.speech_offset_ms + int(text.index(phrase) / len(text) * window.speech_ms)
+
+
+def test_a_coded_region_gets_its_beat_where_its_name_is_said():
+    from reelmachine.recipes.mapreel.stages import heard_names
+
+    text = "Only one state here matters more than any other, and it is Texas, believe it or not."
+    inputs = _inputs([_regions(text, [{"region": "US-TX"}])])
+    atlas, resolved = _resolved(inputs)
+    window = estimated_windows(inputs)[0]
+    beats = lint.estimate_beats(inputs, [window], names=heard_names(inputs, resolved, atlas))[0]
+    want = _speech_ms(window, text, "Texas") / 1000
+    assert any(abs(b - want) < 0.002 for b in beats)
+
+
+def test_an_item_said_before_its_region_waits_for_the_region_to_fill():
+    """build_regions floors each item at its region's fill: lint's beat for it is that fill, not its word."""
+    from reelmachine.recipes.mapreel.stages import heard_names
+
+    text = "Rodeos, cowboys and the biggest steak you have ever seen: welcome to Texas, the lone star state."
+    inputs = _inputs([_regions(text, [{"region": "US-TX", "items": [{"name": "Steak"}, {"name": "Rodeos"}]}])])
+    atlas, resolved = _resolved(inputs)
+    window = estimated_windows(inputs)[0]
+    beats = lint.estimate_beats(inputs, [window], names=heard_names(inputs, resolved, atlas))[0]
+    # the region fills on its first item, Steak; Rodeos is said first but pops after that fill
+    fill = _speech_ms(window, text, "steak") / 1000
+    assert not any(abs(b - _speech_ms(window, text, "Rodeos") / 1000) < 0.002 for b in beats)
+    assert min(b for b in beats if b > window.start_ms / 1000 + 1.0) >= fill - 0.002
+
+
+def test_a_region_never_fills_before_its_backdrop(monkeypatch):
+    """The faint country and its borders come first (kinds.build_regions): lint floors fills at the backdrop."""
+    from reelmachine.recipes.mapreel.stages import heard_names
+
+    text = "Texas, believe it or not, is bigger than France, and that is only the start of it."
+    inputs = _inputs([_regions(text, [{"region": "US-TX"}])])
+    atlas, resolved = _resolved(inputs)
+    window = estimated_windows(inputs)[0]
+    monkeypatch.setattr(lint, "fill_ms", lambda fly: 2500)
+    beats = lint.estimate_beats(inputs, [window], names=heard_names(inputs, resolved, atlas))[0]
+    assert beats == sorted([window.start_ms / 1000, (window.start_ms + 2500) / 1000,
+                            (window.start_ms + 2500) / 1000])

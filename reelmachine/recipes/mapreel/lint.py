@@ -86,28 +86,56 @@ def _entries(segment: Any, index: int = 0,
                 for j, (c, stat) in enumerate(zip(segment.countries, segment.stats))]
     out: list[tuple[list[str], float | None]] = []
     for entry in segment.regions:
-        out.append(([entry.say or entry.region], None))
         out.extend(item(i) for i in entry.items)
+    return out
+
+
+def _region_phrases(segment: Any, index: int, names: Mapping[str, Sequence[str]] | None) -> list[list[str]]:
+    """What fills each region, as kinds.build_regions hears it: its names (stages.heard_names; without them, its
+    `say` or what was written) or its first item, whichever is said first."""
+    out = []
+    for j, entry in enumerate(segment.regions):
+        key = f"seg-{index + 1}/region-{j}"
+        phrases = list(names[key]) if names and key in names else [entry.say or entry.region]
+        if entry.items:
+            phrases.append(entry.items[0].say or entry.items[0].name)
+        out.append(phrases)
     return out
 
 
 def estimate_beats(inputs: MapReelInputs, windows: Sequence[ShotWindow], *,
                    names: Mapping[str, Sequence[str]] | None = None) -> list[list[float]]:
     """Reel-time seconds of everything that happens on screen, per segment, sorted. `names` maps
-    "seg-N/j" (country j of a highlight or versus) to what the voice says for it."""
+    "seg-N/j" (country j of a highlight or versus) and "seg-N/region-j" (region j of a regions segment) to what
+    the voice says for it (stages.heard_names)."""
     out = []
     for index, (segment, window) in enumerate(zip(inputs.segments, windows)):
         text = _text(segment)
         entries = _entries(segment, index, names)
         start, off, speech = window.start_ms, window.speech_offset_ms, window.speech_ms
+        # the camera flies except into the first segment, a held one or a versus (as SegmentsStage decides)
+        fill = fill_ms(0 if index == 0 or segment.camera.hold or segment.kind == "versus" else FLY_MS)
+        floors = None
+        beats: list[int] = []
+        regions = segment.kind == "regions"
+        if regions:
+            # each state fills when heard but never before the faint country (the backdrop), and its items
+            # never before it (kinds.build_regions)
+            heard = [None if (f := _at(text, p)) is None else int(f * speech)
+                     for p in _region_phrases(segment, index, names)]
+            fills, _ = pop_times(heard, overrides=[None] * len(heard), speech_start_ms=off,
+                                 speech_end_ms=off + speech)
+            fills = [max(t, fill) for t in fills]
+            floors = [t for entry, t in zip(segment.regions, fills) for _ in entry.items]
+            beats += fills
         spoken = [None if (f := _at(text, p)) is None else int(f * speech) for p, _ in entries]
         forced = [None if at is None else int(at * 1000) for _, at in entries]
         times, _ = pop_times(spoken, overrides=forced, speech_start_ms=off, speech_end_ms=off + speech)
-        beats = list(times)
+        if regions:
+            times = [max(t, floor) for t, floor in zip(times, floors)]
+        beats += times
         if not segment.camera.hold:
             beats.append(0)
-        # the camera flies except into the first segment, a held one or a versus (as SegmentsStage decides)
-        fill = fill_ms(0 if index == 0 or segment.camera.hold or segment.kind == "versus" else FLY_MS)
         if segment.kind in ("country", "rank", "regions"):
             beats.append(fill)
         if segment.kind == "rank":

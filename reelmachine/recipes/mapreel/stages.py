@@ -155,12 +155,18 @@ def estimated_windows(inputs: MapReelInputs) -> list[ShotWindow]:
 
 
 def heard_names(inputs: MapReelInputs, resolved: list[ResolvedSegment], atlas: Atlas) -> dict[str, list[str]]:
-    """What the voice says for each highlight or versus country, keyed "seg-N/j" (the runtime's `heard_as`)."""
+    """What the voice says for each highlight or versus country, keyed "seg-N/j" (the runtime's `heard_as`), and
+    for each region of a regions segment, keyed "seg-N/region-j": its `say`, else its name (and what the script
+    wrote, unless that is an ISO code: "US-TX" is never said), as kinds.build_regions hears it."""
     out = {}
     for seg, spec in zip(resolved, inputs.segments):
         if spec.kind in ("highlight", "versus"):
             for j, (code, query) in enumerate(zip(seg.codes, spec.countries)):
                 out[f"{seg.id}/{j}"] = atlas.heard_as(code, query)
+        elif spec.kind == "regions":
+            for j, (entry, info) in enumerate(zip(spec.regions, seg.regions)):
+                written = None if entry.region.strip().upper() == info["code"] else entry.region
+                out[f"{seg.id}/region-{j}"] = list(dict.fromkeys(p for p in (entry.say, info["name"], written) if p))
     return out
 
 
