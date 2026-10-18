@@ -170,3 +170,7 @@ def test_levels_are_not_linted_for_other_languages():
     for language in ("jam", "zh", "en-JA"):
         assert "level" not in rules(check(script(lines=lines, level="N5", language=language), SP))
         assert recap_card(key, language)["level"] is None
+
+
+def test_no_title_not_reported_in_cast_mode():
+    assert "no-title" not in {f.rule for f in check(script(title=" ", mode="cast", lines=[]), SP)}

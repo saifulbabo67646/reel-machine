@@ -120,7 +120,8 @@ def test_the_spec_declares_its_providers_and_artifacts():
     assert [s.stage.id for s in spec.stages] == ["script", "cast", "narration", "compose", "preview", "render"]
     assert spec.providers["narration"].default == "fake" and spec.providers["renderer"].default == "hyperframes"
     assert set(spec.artifacts) == {"reel.mp4", "captions.srt", "reel.json", "storyboard.jpg", "cast.png",
-                                   "script.resolved.json", "post.md"}
+                                   "script.resolved.json", "post.md",
+                                    "cast-<id>-<pose>.png"}
     assert spec.example["mode"] == "storyboard" and JobRequest(recipe="dialoguereel", inputs=dict(spec.example))
 
 
@@ -163,3 +164,42 @@ def test_the_example_teaches_with_keys_that_match_and_fit_its_level():
     assert 4 <= len(keyed) <= 5 and EXAMPLE["quiz"] is True and EXAMPLE["scene"]
     assert len({line.get("emotion", "neutral") for line in EXAMPLE["lines"]} - {"neutral"}) >= 2
     assert EXAMPLE["lines"][1]["slow"] is True
+
+
+def _image_cast(provider="fake"):
+    return {"characters": [
+        {"id": "kid", "name": "Rice", "voice": "fake:default", "side": "left",
+         "source": {"kind": "image", "provider": provider, "description": "an onigiri"}},
+        {"id": "mom", "name": "Mug", "voice": "fake:default", "side": "right",
+         "source": {"kind": "builtin", "name": "mug"}}]}
+
+
+def test_probe_reports_image_calls_without_spending(tmp_path):
+    report = probe(EXAMPLE | {"cast": _image_cast()}, tmp_path)
+    assert report.details["castImages"] == {"provider": "fake", "calls": 4, "cached": False}
+    assert _check(report, "images").ok
+    assert not list((tmp_path / "w").rglob("*.png")) if (tmp_path / "w").exists() else True
+
+
+def test_probe_openai_without_key_fails_images_check(tmp_path):
+    report = probe(EXAMPLE | {"cast": _image_cast("openai")}, tmp_path)
+    assert report.details["castImages"]["provider"] == "openai" and report.details["castImages"]["calls"] == 4
+    assert not _check(report, "images").ok and not report.ok
+
+
+def test_probe_supplied_poses_cost_nothing(tmp_path):
+    poses = {"neutral": "https://example.invalid/n.png"}
+    cast_spec = _image_cast()
+    cast_spec["characters"][0]["source"] = {"kind": "image", "poses": poses}
+    report = probe(EXAMPLE | {"cast": cast_spec}, tmp_path)
+    assert report.details["castImages"] == {"provider": "supplied", "calls": 0, "cached": True}
+    assert _check(report, "images").ok
+
+
+def test_probe_without_image_characters_has_no_images_entry():
+    assert "castImages" not in probe(EXAMPLE).details
+
+
+def test_probe_keeps_lint_key_when_script_fails():
+    report = probe(EXAMPLE | {"cast": "cast_nonexistent0"})
+    assert not report.ok and report.details["lint"] == []

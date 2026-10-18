@@ -510,7 +510,10 @@ class McpTools:
             ) from exc
         resolved = casts.resolve(spec, path="")
         self.engine.check_can_store("dialoguereel", caller=caller)  # the recipe is enabled, the disk not full
-        ident = casts.save(self.engine.store.caller_dir(caller), spec)
+        root = self.engine.store.caller_dir(caller)
+        ident = casts.save(root, spec)
+        has_images = any(c.kind == "image" for c in resolved.characters)
+        calls = casts.poses_on_disk(root, resolved) if has_images else 0
         job_id, why = None, None
         if preview:
             try:
@@ -524,21 +527,26 @@ class McpTools:
         use = 'pass castId as the reel\'s "cast"'
         if job_id:
             hint = f'{use}; get_job(previewJobId) then get_artifact(…, "cast.png") to see the characters'
+            if calls:
+                hint += f"; the preview job draws the poses and spends {calls} OpenAI image calls"
         elif why is not None:
             hint = (f"{use}. The cast is saved, but its preview did not start ({why.message}); "
                     "call make_cast again later with preview=true to see it")
         else:
             hint = f"{use} (no preview was asked for)"
-        return {
+        reply: dict[str, Any] = {
             "schemaVersion": SCHEMA_VERSION,
             "castId": ident,
             "characters": [
-                {"id": c.id, "name": c.name, "side": c.side, "voice": c.voice, "parts": c.parts}
+                {"id": c.id, "name": c.name, "kind": c.kind, "side": c.side, "voice": c.voice, "parts": c.parts}
                 for c in resolved.characters
             ],
             "previewJobId": job_id,
             "hint": hint,
         }
+        if has_images:
+            reply["images"] = {"calls": calls, "cached": calls == 0}
+        return reply
 
     @_guard
     def find_images(

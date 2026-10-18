@@ -63,7 +63,7 @@ def test_make_cast_returns_a_reusable_id_and_a_preview_job(tmp_path):
     assert out["castId"] == again["castId"] and out["previewJobId"] and again["previewJobId"] is None
     assert {c["id"] for c in out["characters"]} == {"kid", "mom"}
     kid = next(c for c in out["characters"] if c["id"] == "kid")
-    assert kid == {"id": "kid", "name": "Cupcake", "side": "left", "voice": "fake:default", "parts": kid["parts"]}
+    assert kid == {"id": "kid", "name": "Cupcake", "kind": "svg", "side": "left", "voice": "fake:default", "parts": kid["parts"]}
     assert "arm-right" in kid["parts"]
     assert saved.is_file()
     assert len(submitted) == 1  # preview=False starts nothing
@@ -208,3 +208,29 @@ def test_the_guide_teaches_situations_writing_hooks_endings_emotions_and_levels(
         assert word in text, word
     assert {"neutral", "happy", "surprised", "sad", "thinking"} <= set(GUIDE["emotions"])
     assert {"JLPT", "TOPIK", "CEFR"} <= set(GUIDE["levels"])
+
+
+def test_make_cast_image_cast(tmp_path):
+    chars = copy.deepcopy(CHARACTERS)
+    chars[1]["source"] = {"kind": "image", "provider": "fake", "description": "an onigiri"}
+    with _tools(tmp_path) as tools:
+        out = tools.make_cast(None, chars, preview=False)
+        plain = tools.make_cast(None, CHARACTERS, preview=False)
+    assert [c["kind"] for c in out["characters"]] == ["svg", "image"]
+    assert out["images"] == {"calls": 4, "cached": False}
+    assert "images" not in plain
+
+
+def test_make_cast_hint_names_the_openai_calls(tmp_path):
+    chars = copy.deepcopy(CHARACTERS)
+    chars[1]["source"] = {"kind": "image", "provider": "openai", "description": "an onigiri"}
+    with _tools(tmp_path) as tools:
+        out = tools.make_cast(None, chars)
+    assert "4 OpenAI image calls" in out["hint"]
+
+
+def test_guide_has_images_looks_post():
+    from reelmachine.recipes.dialoguereel.guide import GUIDE
+
+    assert {"images", "looks", "post"} <= set(GUIDE)
+    assert "variant" in json.dumps(GUIDE["images"]) and "post.md" in json.dumps(GUIDE["post"])

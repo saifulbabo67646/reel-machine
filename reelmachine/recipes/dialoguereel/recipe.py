@@ -78,9 +78,11 @@ class DialogueReelRecipe:
                                     description="Renders the reel (Node >= 22, HyperFrames, Chrome, ffprobe)"),
         },
         cost=CostNote(unit="tts_characters", estimate="the dialogue's length",
-                      notes="the fake and macOS voices are free; cloud voices bill per character",
-                      providers=("elevenlabs", "cartesia", "macos", "fake")),
-        artifacts=("reel.mp4", "captions.srt", "reel.json", "storyboard.jpg", "cast.png", "script.resolved.json", "post.md"),
+                      notes="the fake and macOS voices are free; cloud voices bill per character. "
+                      "Each generated image character draws 4 poses: 4 OpenAI image calls, once per cast",
+                      providers=("elevenlabs", "cartesia", "macos", "openai", "fake")),
+        artifacts=("reel.mp4", "captions.srt", "reel.json", "storyboard.jpg", "cast.png", "script.resolved.json", "post.md",
+                   "cast-<id>-<pose>.png"),
         render_modes=("hyperframes",),
         example=EXAMPLE,
         guide=GUIDE,
@@ -91,9 +93,11 @@ class DialogueReelRecipe:
         checks: list[CheckResult] = []
         details: dict[str, Any] = {}
         spec = None
+        config = ctx.config or get_settings()
+        details["lint"] = []
+        root = ctx.caller_root or config.cache_dir
         try:
             if isinstance(inputs.cast, str):
-                root = ctx.caller_root or (ctx.config or get_settings()).cache_dir
                 spec = casts.load(root, inputs.cast)
             else:
                 spec = inputs.cast
@@ -101,6 +105,17 @@ class DialogueReelRecipe:
             resolved = casts.resolve(spec)
             checks.append(CheckResult(name="script", ok=True,
                                       detail=f"{len(inputs.lines)} lines, cast {resolved.id}"))
+            images = [c for c in resolved.characters if c.kind == "image"]
+            if images:  # counts what is missing on disk; fetches and generates nothing
+                calls = casts.poses_on_disk(root, resolved)
+                generators = {c.provider for c in images if c.provider}
+                provider = "openai" if "openai" in generators else next(iter(generators), "supplied")
+                details["castImages"] = {"provider": provider, "calls": calls, "cached": calls == 0}
+                missing_key = provider == "openai" and calls > 0 and not config.openai_api_key
+                checks.append(CheckResult(
+                    name="images", ok=not missing_key,
+                    detail="REEL_OPENAI_API_KEY is not set, so the OpenAI poses cannot be drawn" if missing_key
+                    else f"{calls} image calls needed ({provider})" if calls else "every pose is on disk or supplied"))
             found = lint_findings(inputs, {c.id for c in resolved.characters})
             details["lint"] = found
             errors = [f"{f['path']}: {f['message']}" for f in found if f["severity"] == "error"]
