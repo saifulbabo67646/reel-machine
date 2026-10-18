@@ -122,7 +122,7 @@ def test_a_place_too_narrow_for_whole_badges_gets_disjoint_badges_centred_on_it(
     assert all(g.inside(rings, x, y) for x, y in anchors)
     for i, a in enumerate(anchors):
         for b in anchors[i + 1:]:
-            assert not g._boxes_overlap(a, b, size)
+            assert not g._boxes_overlap(a, b, *g._legacy_extent(size))
 
 
 def test_a_world_frame_never_shows_the_top_edge():
@@ -158,18 +158,56 @@ def test_frame_for_frames_inside_a_panel_view():
     assert (frame.x, frame.y) == pytest.approx((0.51, 0.31))
 
 
+FOOD = [{"name": "Live maggots", "emoji": "🪱"}, {"name": "Casu martzu", "emoji": "🧀"},
+        {"name": "Dangerous", "emoji": "⚠️"}, {"name": "Love it", "emoji": "❤️"}]
+
+
 @pytest.mark.parametrize("code,n", [("GBR", 4), ("FRA", 4), ("USA", 4), ("NOR", 3), ("ITA", 4)])
 def test_every_badge_as_drawn_stays_off_the_caption_band(code, n):
-    """Captions sit at 71 % of the height: a badge's emoji (above its anchor) and its text (below) never
-    reach the band. Britain's four food badges put "Love it" on the caption word before."""
+    """Captions sit at 71 % of the height: no badge, emoji over plate and risen as it holds, reaches the band.
+    Britain's four food badges put "Love it" on the caption word before."""
     from reelmachine.recipes.mapreel.kinds import RANK_SAFE
 
+    items = FOOD[:n]
     shape = g.shape_of(ATLAS.resolve(code))
+    y0, y1 = g.CAPTION_BAND
+    assert y0 == pytest.approx(0.71 * 1920 - 43) and y1 == pytest.approx(0.71 * 1920 + 43)
     for safe in (g.SAFE, RANK_SAFE):
         frame = g.frame_for(shape.main, safe=safe)
         rings = [g.to_screen(frame, r) for r in shape.rings]
-        anchors, size = g.item_layout(rings, n, safe=safe)
-        y0, y1 = g.CAPTION_BAND
-        assert y0 == pytest.approx(0.71 * 1920 - 43) and y1 == pytest.approx(0.71 * 1920 + 43)
+        anchors, size = g.item_layout(rings, n, safe=safe, extent=lambda px: g.badge_extent(items, px))
+        _, hh = g.badge_extent(items, size)
         for _, y in anchors:
-            assert y + g.BADGE_DOWN * size <= y0 or y - g.BADGE_UP * size >= y1, (code, safe, y, size)
+            assert y + hh <= y0 or y - hh - g.BADGE_RISE >= y1, (code, safe, y, size)
+
+
+def test_a_badge_extent_is_its_emoji_over_its_plate():
+    """runtime/pure.mjs badgeLayout pins the same numbers: size 200, a 48 px font."""
+    two = {"name": "Dried fish", "emoji": "🐟"}
+    assert g.badge_lines("Dried fish") == ["Dried", "fish"] and g.badge_lines("Natto") == ["Natto"]
+    assert g.badge_extent([two], 200)[1] == pytest.approx(99.8)
+    assert g.badge_extent([{"name": "Natto", "emoji": "🫘"}], 200)[1] == pytest.approx(74.6)
+    assert g.badge_extent([{"name": "Natto"}], 200)[1] == pytest.approx(37.2)
+    assert g.badge_extent([{"name": "x", "image": "a.png"}], 200) == pytest.approx((100, 62))
+    # the widest name sets the width; a long name is capped where the runtime shrinks its font
+    hw, _ = g.badge_extent([{"name": "Dried fish"}, {"name": "Natto"}], 200)  # "Dried" over "fish"
+    assert hw == pytest.approx((0.8 * 48 * 5 + 0.9 * 48) / 2)
+    assert g.badge_extent([{"name": "Supercalifragilistic"}], 200)[0] == pytest.approx((1.1 * 200 + 0.9 * 48) / 2)
+
+
+@pytest.mark.parametrize("code,items", [("NOR", FOOD[:3]), ("GBR", FOOD), ("FRA", FOOD), ("JPN", FOOD[:2]),
+                                        ("ITA", FOOD)])
+def test_whole_badges_never_touch(code, items):
+    """Items are spaced by the whole badge, emoji and plate: a lower badge's emoji never touches the plate
+    above it (Norway's Lye under Dried fish, before)."""
+    from reelmachine.recipes.mapreel.kinds import RANK_SAFE
+
+    shape = g.shape_of(ATLAS.resolve(code))
+    frame = g.frame_for(shape.main, safe=RANK_SAFE)
+    rings = [g.to_screen(frame, r) for r in shape.rings]
+    anchors, size = g.item_layout(rings, len(items), safe=RANK_SAFE, extent=lambda px: g.badge_extent(items, px))
+    hw, hh = g.badge_extent(items, size)
+    hw, hh = hw + g.BADGE_AIR, hh + g.BADGE_AIR  # with air between: plates never touch edge to edge
+    for i, a in enumerate(anchors):
+        for b in anchors[i + 1:]:
+            assert abs(a[0] - b[0]) >= 2 * hw or abs(a[1] - b[1]) >= 2 * hh, (code, a, b, size)

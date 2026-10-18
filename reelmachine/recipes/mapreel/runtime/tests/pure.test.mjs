@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_Y, LEGEND_H, LEGEND_AIR } from "../pure.mjs";
+import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_Y, LEGEND_H, LEGEND_AIR, badgeLayout, panelNameY } from "../pure.mjs";
 
 const A = { x: 0.2, y: 0.4, s: 1080 };
 const B = { x: 0.55, y: 0.35, s: 20000 };
@@ -178,4 +178,30 @@ test("the legend sits in the top band when the band holds it, else in its usual 
   for (const band of [276, 300, 340, 420]) {
     assert.ok(legendY(band) + LEGEND_H / 2 + LEGEND_AIR <= band, `${band}`); // clear of the map's edge
   }
+});
+
+test("a badge stacks its emoji over its plate about its anchor; the half heights geometry.py spaces by", () => {
+  const close = (a, b) => Math.abs(a - b) < 1e-9;
+  // size 200 at the nominal font (0.24 x size = 48 px): the numbers tests/test_mapreel_geometry.py pins
+  const two = badgeLayout(200, 48, 2, true);
+  assert.ok(close(two.halfH, 99.8), `${two.halfH}`);
+  assert.ok(close(badgeLayout(200, 48, 1, true).halfH, 74.6));
+  assert.ok(close(badgeLayout(200, 48, 1, false).halfH, 37.2));
+  // the emoji's glyph ends on the plate's top edge, overlapping it a little; the plate ends at the half height
+  assert.ok(close(two.emojiY + 0.6 * 0.34 * 200, two.plateY + 0.1 * 0.34 * 200));
+  assert.ok(close(two.plateY + two.plateH, two.halfH));
+  assert.ok(close(two.emojiY - 0.6 * 0.34 * 200, -two.halfH));
+  // lines are centred in the plate
+  assert.ok(close((two.lineYs[0] + two.lineYs[1]) / 2, two.plateY + two.plateH / 2));
+});
+
+test("the third versus panel's name drops above its stat card, well clear of the caption", () => {
+  const band = { y0: 1320, y1: 1406 };
+  const third = [0, 1280, 1080, 640];
+  const y = panelNameY(third, 72, -Infinity, band, 1732);
+  assert.equal(y, 1732 - 14 - 36);
+  assert.ok(y - 36 >= band.y1 + 40, `${y}`);
+  // panels whose name is clear of the caption keep it at their top
+  assert.equal(panelNameY([0, 0, 1080, 640], 72, -Infinity, band, 452), 0.12 * 640);
+  assert.equal(panelNameY([0, 640, 1080, 640], 72, 640 + 95 + 14, band, 1092), 640 + 95 + 14 + 36);
 });

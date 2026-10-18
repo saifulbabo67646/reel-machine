@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Sequence
+from typing import Callable, Sequence
 
 import numpy as np
 
@@ -200,25 +200,75 @@ def inside(rings_px: list[np.ndarray], x: float | np.ndarray, y: float | np.ndar
 #: a badge's footprint around its anchor, as fractions of its size: the text may be
 #: size * 1.1 wide (draw.mjs) and two lines tall
 BADGE_HALF_W, BADGE_HALF_H = 0.55, 0.3
-#: how far a badge is drawn above and below its anchor, as fractions of its size: its emoji reaches 0.45 above
-#: (draw.mjs drawItem: centred 0.23 up, a 0.34 font whose glyph runs a little taller), two lines of text 0.31 below
-BADGE_UP, BADGE_DOWN = 0.45, 0.31
 #: px a badge rises after it pops (draw.mjs drawItem: 6 px a second), allowed for over a 5 s hold
 BADGE_RISE = 30.0
+#: an item badge without an image, as runtime/pure.mjs badgeLayout stacks it about its anchor: an emoji (font
+#: EMOJI_EM x size, its glyph EMOJI_TALL em) overlapping the top of a pill plate around the name's lines (font
+#: FONT_K x size, LINE_STEP apart, PLATE_PAD of the font above and below, PLATE_SIDE of it across)
+FONT_K, EMOJI_EM, EMOJI_TALL, EMOJI_OVERLAP = 0.24, 0.34, 1.2, 0.1
+LINE_STEP, PLATE_PAD, PLATE_SIDE, TEXT_MAX = 1.05, 0.25, 0.9, 1.1
+LETTER_EM = 0.8  # Arial Black runs about 0.8 em a letter
+IMAGE_HALF_W, IMAGE_HALF_H = 0.5, 0.31  # an image fits size x 0.62 size (draw.mjs drawItem)
+BADGE_AIR = 8.0  # px kept clear around each laid-out badge: two plates never touch edge to edge
 #: the caption band (runtime/draw.mjs CAPTION_Y, CAPTION_HALF): 60 px words at 71 % of the height, stroke and air
 CAPTION_BAND = (HEIGHT * 0.71 - 43, HEIGHT * 0.71 + 43)
 BADGE_MAX, BADGE_MIN, BADGE_STEP = 300, 180, 20
 COLUMN_SPACING = 220.0
 
 
-def clear_of_captions(y: np.ndarray, size: float, band: tuple[float, float] = CAPTION_BAND) -> np.ndarray:
-    """Which anchors keep a badge of `size`, as drawn (emoji above, text below), off the caption band."""
+def badge_lines(name: str) -> list[str]:
+    """runtime/pure.mjs badgeLines: a name over 8 letters breaks at the space nearest its middle."""
+    text = str(name or "")
+    if len(text) <= 8:
+        return [text]
+    spaces = [i for i, c in enumerate(text) if c == " "]
+    if not spaces:
+        return [text]
+    best = min(spaces, key=lambda i: abs(i - len(text) / 2))  # the first of equals, as the runtime picks
+    return [text[:best], text[best + 1:]]
+
+
+def badge_extent(items: Sequence[dict], size: float) -> tuple[float, float]:
+    """The half width and half height of the largest of these items' badges, as drawn at `size`: the box every
+    one of them is laid out and spaced by."""
+    hw = hh = 0.0
+    for item in items:
+        if item.get("image"):
+            w, h = IMAGE_HALF_W * size, IMAGE_HALF_H * size
+        else:
+            f = FONT_K * size
+            lines = badge_lines(item.get("name", ""))
+            text = min(TEXT_MAX * size, LETTER_EM * f * max(len(line) for line in lines))
+            w = (text + PLATE_SIDE * f) / 2
+            h = len(lines) * LINE_STEP * f + 2 * PLATE_PAD * f
+            if item.get("emoji"):
+                e = EMOJI_EM * size
+                w = max(w, EMOJI_TALL * e / 2)
+                h += (EMOJI_TALL - EMOJI_OVERLAP) * e
+            h /= 2
+        hw, hh = max(hw, w), max(hh, h)
+    return hw, hh
+
+
+def _legacy_extent(size: float) -> tuple[float, float]:
+    return BADGE_HALF_W * size, BADGE_HALF_H * size
+
+
+def _with_air(extent: Callable[[float], tuple[float, float]]) -> Callable[[float], tuple[float, float]]:
+    def padded(size: float) -> tuple[float, float]:
+        hw, hh = extent(size)
+        return hw + BADGE_AIR, hh + BADGE_AIR
+    return padded
+
+
+def clear_of_captions(y: np.ndarray, hh: float, band: tuple[float, float] = CAPTION_BAND) -> np.ndarray:
+    """Which anchors keep a badge `hh` px tall either side (risen as it holds) off the caption band."""
     y = np.asarray(y, dtype=float)
-    return (y + BADGE_DOWN * size <= band[0]) | (y - BADGE_UP * size - BADGE_RISE >= band[1])
+    return (y + hh <= band[0]) | (y - hh - BADGE_RISE >= band[1])
 
 
-def _boxes_overlap(a: tuple[float, float], b: tuple[float, float], size: float) -> bool:
-    return abs(a[0] - b[0]) < 2 * BADGE_HALF_W * size and abs(a[1] - b[1]) < 2 * BADGE_HALF_H * size
+def _boxes_overlap(a: tuple[float, float], b: tuple[float, float], hw: float, hh: float) -> bool:
+    return abs(a[0] - b[0]) < 2 * hw and abs(a[1] - b[1]) < 2 * hh
 
 
 def _box_points(x: np.ndarray, y: np.ndarray, hw: float, hh: float) -> list[tuple[np.ndarray, np.ndarray]]:
@@ -227,12 +277,15 @@ def _box_points(x: np.ndarray, y: np.ndarray, hw: float, hh: float) -> list[tupl
 
 
 def item_layout(rings_px: list[np.ndarray], n: int, *, max_size: int = BADGE_MAX, min_size: int = BADGE_MIN,
+                extent: Callable[[float], tuple[float, float]] | None = None,
                 step: float = 24.0, cell: float = 12.0,
                 safe: tuple[float, float, float, float] = SAFE) -> tuple[list[tuple[float, float]], int]:
-    """`n` badge anchors and one badge size. Every badge box (size*1.1 x size*0.6) lies inside
-    the place and the safe area, every badge as drawn stays off the caption band, and no two boxes overlap; anchors spread as far apart as they
-    can (greedy farthest-point). The size steps down to `min_size` until they fit. A place too
-    small even then gets a column at its centre, which may overhang."""
+    """`n` badge anchors and one badge size. Every badge box (`extent(size)`: its half width and half height,
+    badge_extent for the badges as drawn; size*1.1 x size*0.6 when not given) lies inside the place and the safe
+    area, stays off the caption band, and no two boxes overlap; anchors spread as far apart as they can (greedy
+    farthest-point). The size steps down to `min_size` until they fit. A place too small even then gets a column
+    at its centre, which may overhang."""
+    extent = _with_air(extent) if extent else _legacy_extent
     sx0, sy0, sx1, sy1 = safe
     # inside-mask on a fine raster over the safe area; a summed-area table answers "is this whole box inside"
     rx = np.arange(sx0 * WIDTH, sx1 * WIDTH + cell, cell)
@@ -242,7 +295,7 @@ def item_layout(rings_px: list[np.ndarray], n: int, *, max_size: int = BADGE_MAX
     table = np.zeros((out.shape[0] + 1, out.shape[1] + 1), dtype=np.int32)
     table[1:, 1:] = out.cumsum(0).cumsum(1)
     for size in range(max_size, min_size - 1, -BADGE_STEP):
-        hw, hh = BADGE_HALF_W * size, BADGE_HALF_H * size
+        hw, hh = extent(size)
         gx, gy = np.meshgrid(np.arange(sx0 * WIDTH + hw, sx1 * WIDTH - hw + 1e-9, step),
                              np.arange(sy0 * HEIGHT + hh, sy1 * HEIGHT - hh + 1e-9, step))
         gx, gy = gx.ravel(), gy.ravel()
@@ -254,7 +307,7 @@ def item_layout(rings_px: list[np.ndarray], n: int, *, max_size: int = BADGE_MAX
         r0 = np.clip(np.floor((gy - hh - ry[0]) / cell).astype(int), 0, len(ry) - 1)
         r1 = np.clip(np.ceil((gy + hh - ry[0]) / cell).astype(int), 0, len(ry) - 1) + 1
         outside = table[r1, c1] - table[r0, c1] - table[r1, c0] + table[r0, c0]
-        keep = (outside == 0) & clear_of_captions(gy, size)
+        keep = (outside == 0) & clear_of_captions(gy, hh)
         gx, gy = gx[keep], gy[keep]
         if len(gx):  # exact check of the box outline
             ok = np.ones(len(gx), dtype=bool)
@@ -281,11 +334,11 @@ def item_layout(rings_px: list[np.ndarray], n: int, *, max_size: int = BADGE_MAX
     # too narrow for whole badges even at min_size (Italy's boot, Japan): best effort at min_size,
     # anchors inside the place, boxes still disjoint, the least overhang first
     size = min_size
-    hw, hh = BADGE_HALF_W * size, BADGE_HALF_H * size
+    hw, hh = extent(size)
     gx, gy = np.meshgrid(np.arange(sx0 * WIDTH + hw, sx1 * WIDTH - hw + 1e-9, step),
                          np.arange(sy0 * HEIGHT + hh, sy1 * HEIGHT - hh + 1e-9, step))
     gx, gy = gx.ravel(), gy.ravel()
-    ok = (inside(rings_px, gx, gy) & clear_of_captions(gy, size)) if len(gx) else np.zeros(0, dtype=bool)
+    ok = (inside(rings_px, gx, gy) & clear_of_captions(gy, hh)) if len(gx) else np.zeros(0, dtype=bool)
     gx, gy = gx[ok], gy[ok]
     if len(gx) >= n:
         c0 = np.clip(np.floor((gx - hw - rx[0]) / cell).astype(int), 0, len(rx) - 1)
@@ -296,7 +349,7 @@ def item_layout(rings_px: list[np.ndarray], n: int, *, max_size: int = BADGE_MAX
         chosen: list[tuple[float, float]] = []
         for k in np.argsort(outside, kind="stable"):
             p = (float(gx[k]), float(gy[k]))
-            if all(not _boxes_overlap(p, q, size) for q in chosen):
+            if all(not _boxes_overlap(p, q, hw, hh) for q in chosen):
                 chosen.append(p)
                 if len(chosen) == n:
                     chosen.sort(key=lambda q: (q[1], q[0]))
@@ -304,9 +357,10 @@ def item_layout(rings_px: list[np.ndarray], n: int, *, max_size: int = BADGE_MAX
     allpts = np.concatenate(rings_px)
     cx = float(np.clip(allpts[:, 0].mean(), sx0 * WIDTH + 180, sx1 * WIDTH - 180))
     cy = float(np.clip(allpts[:, 1].mean(), sy0 * HEIGHT + 200, sy1 * HEIGHT - 200))
-    top = cy - COLUMN_SPACING * (n - 1) / 2
     size = int(max(min_size, min(max_size, COLUMN_SPACING * 0.95)))
-    return [(cx, top + i * COLUMN_SPACING) for i in range(n)], size
+    spacing = max(COLUMN_SPACING, 2 * extent(size)[1])  # whole badges never overlap in the column either
+    top = cy - spacing * (n - 1) / 2
+    return [(cx, top + i * spacing) for i in range(n)], size
 
 
 def item_anchors(rings_px: list[np.ndarray], n: int, **kwargs) -> list[tuple[float, float]]:

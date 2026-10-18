@@ -175,3 +175,29 @@ export function legendY(band) {
   if (band < LEGEND_Y + LEGEND_H / 2 + LEGEND_AIR) return LEGEND_Y;
   return Math.max(LEGEND_Y, band / 2);
 }
+
+// An item badge without an image, stacked about its anchor (0, 0): its emoji (font `size` x 0.34, its glyph about
+// 1.2 em tall) sitting just over the top edge of a pill plate holding the name's lines (font `fontPx`). Returns
+// the emoji's centre y, the pill's top y and height, each line's centre y, and the half height of the whole badge:
+// geometry.badge_extent mirrors it, so items are spaced by what is drawn.
+export const EMOJI_EM = 0.34, EMOJI_TALL = 1.2, EMOJI_OVERLAP = 0.1, LINE_STEP = 1.05, PLATE_PAD = 0.25;
+export function badgeLayout(size, fontPx, lines, emoji) {
+  const e = EMOJI_EM * size;
+  const plateH = lines * LINE_STEP * fontPx + 2 * PLATE_PAD * fontPx;
+  const emojiH = emoji ? EMOJI_TALL * e : 0, overlap = emoji ? EMOJI_OVERLAP * e : 0;
+  const total = emojiH - overlap + plateH;
+  const top = -total / 2, plateY = top + emojiH - overlap;
+  const lineYs = Array.from({ length: lines }, (_, k) => plateY + PLATE_PAD * fontPx + (k + 0.5) * LINE_STEP * fontPx);
+  return { emojiY: top + emojiH / 2, plateY, plateH, lineYs, halfH: total / 2 };
+}
+
+// A versus panel's name: across the panel's top, never above `minY` (clear of the VS disc). When that would touch
+// the caption `band` ({y0, y1}) by less than `air` px, it drops to sit just above the panel's stat card (`cardTop`),
+// well below the caption, so the caption word never reads as part of the name.
+export const NAME_AIR = 40;
+export function panelNameY(rect, size, minY, band, cardTop, gap = 14, air = NAME_AIR) {
+  const [, ry, , rh] = rect;
+  const y = Math.max(ry + 0.12 * rh, minY + size / 2);
+  if (!band || y - size / 2 >= band.y1 + air || y + size / 2 <= band.y0 - air) return y;
+  return cardTop - gap - size / 2;
+}

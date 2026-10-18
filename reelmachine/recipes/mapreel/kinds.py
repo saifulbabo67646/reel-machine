@@ -10,7 +10,7 @@ from typing import Any
 
 from ...core.timeline import WordSpan
 from . import compose
-from .geometry import BADGE_DOWN, BADGE_HALF_W, BADGE_RISE, BADGE_UP, HEIGHT, SAFE, WIDTH, Frame, Shape, shape_of
+from .geometry import BADGE_RISE, HEIGHT, SAFE, WIDTH, Frame, Shape, badge_extent, shape_of
 from .models import ResolvedSegment
 from .places import Atlas
 from .regions import RegionAtlas
@@ -106,6 +106,8 @@ def _items(seg: ResolvedSegment, spec: Any, ctx: KindContext, built: Built,
     """The segment's items, popping as each is said, laid out inside its one country."""
     items_in = _timed(seg, spec.items, ctx, built)
     built.items = compose.item_entries(items_in, shape_of(ctx.atlas.places[seg.codes[0]]), ctx.landed, safe=safe)
+    for item in built.items:  # every name on a plate in its country's colour, as a region's items are
+        item["plate"] = seg.colours[seg.codes[0]]
     built.cues.extend((it["atMs"], "pop") for it in built.items)
 
 
@@ -207,11 +209,11 @@ def tag_boxes(tags: list[tuple[str, dict[str, float]]], items: list[dict[str, An
     """Where each region's name tag goes on the landed frame: at its label point or, when it would cover an item
     badge or an earlier tag, beside what it hits (left, then right) and only then above it. A state's label
     point is near its middle, where its first item lands."""
-    # each badge as drawn: its emoji reaches higher above its anchor than its text below, and it rises as it holds
+    # each badge as drawn (emoji over its plate), and risen as it holds
     taken: list[Box] = []
     for it in items:
-        top, bottom = it["y"] - BADGE_UP * it["size"] - BADGE_RISE, it["y"] + BADGE_DOWN * it["size"]
-        taken.append((it["x"], (top + bottom) / 2, BADGE_HALF_W * it["size"], (bottom - top) / 2))
+        hw, hh = badge_extent([it], it["size"])
+        taken.append((it["x"], it["y"] - BADGE_RISE / 2, hw, hh + BADGE_RISE / 2))
     out = []
     for text, label in tags:
         half_w, half_h = 0.4 * TAG_PX * len(text) + 4, TAG_PX / 2 + 4  # Arial Black runs about 0.8 em a letter

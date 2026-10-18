@@ -2,7 +2,7 @@
 // Draws one frame of a map segment on a 2D canvas.
 import {
   cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, clamp01, POP_MS, cardLayout,
-  slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_H,
+  slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_H, badgeLayout, panelNameY,
 } from "./pure.mjs";
 
 const W = 1080, H = 1920;
@@ -226,30 +226,23 @@ function drawItem(ctx, item, ms, images) {
     }
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    if (item.emoji) {
+    // every name sits on a pill in its place's colour, white-edged: readable over sea, dark land or its own fill
+    const at = badgeLayout(item.size, size, lines.length, Boolean(item.emoji));
+    const pw = widest() + size * 0.9;
+    ctx.beginPath();
+    ctx.roundRect(-pw / 2, at.plateY, pw, at.plateH, at.plateH / 2);
+    ctx.fillStyle = item.plate || "#222222";
+    ctx.fill();
+    ctx.shadowColor = "transparent";
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    lines.forEach((line, k) => ctx.fillText(line, 0, at.lineYs[k]));
+    if (item.emoji) { // drawn last: it sits over the pill's top edge
       ctx.font = `${Math.round(item.size * 0.34)}px sans-serif`;
-      ctx.fillText(item.emoji, 0, -size * 0.95);
-      ctx.font = `900 ${size}px ${FONT}`;
+      ctx.fillText(item.emoji, 0, at.emojiY);
     }
-    const top = (item.emoji ? size * 0.25 : 0) - ((lines.length - 1) * size * 1.05) / 2;
-    if (item.plate) { // a plate in its region's colour, white-edged: readable over sea or dark land
-      const pw = widest() + size * 0.9, ph = lines.length * size * 1.05 + size * 0.5;
-      ctx.beginPath();
-      ctx.roundRect(-pw / 2, top - size * 0.525 - size * 0.25, pw, ph, ph / 2);
-      ctx.fillStyle = item.plate;
-      ctx.fill();
-      ctx.shadowColor = "transparent";
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = "#ffffff";
-      ctx.stroke();
-      ctx.fillStyle = "#ffffff";
-    } else {
-      ctx.shadowColor = "rgba(255,255,255,0.75)";
-      ctx.shadowBlur = 14;
-      ctx.shadowOffsetY = 0;
-      ctx.fillStyle = "#111111";
-    }
-    lines.forEach((line, k) => ctx.fillText(line, 0, top + k * size * 1.05));
   }
   ctx.restore();
 }
@@ -336,20 +329,31 @@ const STAT_TOP = 150, STAT_PAD = 28, COUNT_MS = 700;
 // A white card, top right of the rank badge: the stat's value in the place colour counting up, its label below.
 // `at` ({x0, x1, cy, scale, maxY}) places it elsewhere: centred in x0..x1 at height cy, scaled, its bottom
 // never below maxY (a versus panel).
+// Where a stat card lands, measured at its final text so it never jitters: {cx, cy, width, height (unscaled),
+// valuePx, labelPx, top (on screen, scaled)}.
+function statBox(ctx, stat, at = null) {
+  ctx.save();
+  ctx.font = `900 104px ${FONT}`;
+  const valueW = ctx.measureText(stat.value).width;
+  ctx.font = `700 40px ${FONT}`;
+  const labelW = stat.label ? ctx.measureText(stat.label).width : 0;
+  ctx.restore();
+  const { cx, width, valuePx, labelPx } = at ? cardLayout(valueW, labelW, at.x0, at.x1) : cardLayout(valueW, labelW);
+  const height = STAT_PAD * 2 + valuePx + (stat.label ? 12 + labelPx : 0);
+  const k = at ? at.scale : 1;
+  const cy = at ? Math.min(at.cy, at.maxY - (height * k) / 2) : STAT_TOP + height / 2;
+  return { cx, cy, width, height, valuePx, labelPx, top: cy - (height * k) / 2 };
+}
+
 function statCard(ctx, stat, ms, colour, at = null) {
   const pop = popState(stat.atMs, ms);
   if (!pop.visible) return;
+  const { cx, cy, width, height, valuePx, labelPx } = statBox(ctx, stat, at);
   ctx.save();
-  ctx.font = `900 104px ${FONT}`;
-  const valueW = ctx.measureText(stat.value).width; // measured at its final text, so the card never jitters
-  ctx.font = `700 40px ${FONT}`;
-  const labelW = stat.label ? ctx.measureText(stat.label).width : 0;
-  const { cx, width, valuePx, labelPx } = at ? cardLayout(valueW, labelW, at.x0, at.x1) : cardLayout(valueW, labelW);
-  const height = STAT_PAD * 2 + valuePx + (stat.label ? 12 + labelPx : 0);
   const scale = pop.scale * (at ? at.scale : 1);
   ctx.globalAlpha = pop.alpha;
   if (pop.blur > 0.2) ctx.filter = `blur(${pop.blur.toFixed(1)}px)`;
-  ctx.translate(cx, at ? Math.min(at.cy, at.maxY - (height * at.scale) / 2) : STAT_TOP + height / 2);
+  ctx.translate(cx, cy);
   ctx.scale(scale, scale);
   ctx.shadowColor = "rgba(0,0,0,0.45)";
   ctx.shadowBlur = 18;
@@ -376,9 +380,9 @@ function statCard(ctx, stat, ms, colour, at = null) {
 const PANEL_CARD_INSET = 60, VS_R = 95, VS_GAP = 14;
 
 // The country's name across the top of its panel: white, dark-stroked, shrunk to the panel's width,
-// never higher than `minY` (the panel under the VS disc keeps its name clear of it) and never on the
-// caption band (with three panels the third name would sit on it: it moves just below).
-function panelName(ctx, name, rect, minY) {
+// never higher than `minY` (the panel under the VS disc keeps its name clear of it) and never near the
+// caption band (with three panels the third name would: it drops to just above its stat card, panelNameY).
+function panelName(ctx, name, rect, minY, cardTop) {
   const [rx, ry, rw, rh] = rect;
   ctx.save();
   ctx.font = `900 72px ${FONT}`;
@@ -389,10 +393,7 @@ function panelName(ctx, name, rect, minY) {
   ctx.lineJoin = "round";
   ctx.lineWidth = 10;
   ctx.strokeStyle = "rgba(0,0,0,0.85)";
-  let y = Math.max(ry + 0.12 * rh, minY + size / 2);
-  if (y + size / 2 > CAPTION_Y - CAPTION_HALF && y - size / 2 < CAPTION_Y + CAPTION_HALF) {
-    y = CAPTION_Y + CAPTION_HALF + VS_GAP + size / 2;
-  }
+  const y = panelNameY(rect, size, minY, { y0: CAPTION_Y - CAPTION_HALF, y1: CAPTION_Y + CAPTION_HALF }, cardTop, VS_GAP);
   ctx.strokeText(name, rx + rw / 2, y);
   ctx.fillStyle = "#ffffff";
   ctx.fillText(name, rx + rw / 2, y);
@@ -416,10 +417,10 @@ function drawPanel(ctx, doc, panel, k, ms, seconds, images, discY) {
   drawLayers(ctx, panel.camera, [...doc.layers, ...panel.layers], images, view);
   fillPlace(ctx, panel.camera, panel.place, fillAlpha(0, ms), seconds, view);
   const below = discY !== null && ry === discY, above = discY !== null && ry + rh === discY;
-  panelName(ctx, panel.name, panel.rect, below ? discY + VS_R + VS_GAP : -Infinity);
-  statCard(ctx, panel.stat, ms, panel.place.colour,
-           { x0: rx + PANEL_CARD_INSET, x1: rx + rw - PANEL_CARD_INSET, cy: ry + 0.8 * rh, scale: Math.min(1, rh / 960),
-             maxY: above ? discY - VS_R - VS_GAP : ry + rh });
+  const card = { x0: rx + PANEL_CARD_INSET, x1: rx + rw - PANEL_CARD_INSET, cy: ry + 0.8 * rh, scale: Math.min(1, rh / 960),
+                 maxY: above ? discY - VS_R - VS_GAP : ry + rh };
+  panelName(ctx, panel.name, panel.rect, below ? discY + VS_R + VS_GAP : -Infinity, statBox(ctx, panel.stat, card).top);
+  statCard(ctx, panel.stat, ms, panel.place.colour, card);
   ctx.restore();
 }
 

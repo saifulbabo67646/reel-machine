@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from .geometry import BADGE_MIN, HEIGHT, SAFE, WIDTH, Frame, Shape, frame_for, item_layout, merc, simplify, simplify_for, to_screen
+from .geometry import BADGE_MIN, HEIGHT, SAFE, WIDTH, Frame, Shape, badge_extent, frame_for, item_layout, merc, simplify, simplify_for, to_screen
 
 HERE = Path(__file__).resolve().parent
 RUNTIME_DIR = HERE / "runtime"
@@ -98,7 +98,7 @@ def item_entries(items: list[dict[str, Any]], shape: Shape | None, frame: Frame,
         # a pixel of tolerance on screen: the same answer, a fraction of the vertices to test
         rings_px = [simplify(to_screen(frame, _near(frame, shape, r)), 1.0) for r in shape.rings]
         anchors, size = item_layout([r for r in rings_px if len(r) >= 3], len(items), max_size=max_size,
-                                   min_size=min_size, safe=safe)
+                                   min_size=min_size, safe=safe, extent=lambda px: badge_extent(items, px))
     return [{"name": it["name"], "image": it.get("image"), "emoji": it.get("emoji"), "atMs": int(it["atMs"]),
              "x": round(x, 1), "y": round(y, 1), "size": size} for it, (x, y) in zip(items, anchors)]
 

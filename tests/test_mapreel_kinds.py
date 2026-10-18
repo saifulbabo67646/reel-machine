@@ -228,9 +228,7 @@ def test_items_lie_inside_their_region(atlas, region_atlas):
 
 
 def test_a_region_name_tag_never_covers_an_item(atlas, region_atlas):
-    from reelmachine.recipes.mapreel.geometry import BADGE_HALF_H
-
-    from reelmachine.recipes.mapreel.geometry import BADGE_HALF_W
+    from reelmachine.recipes.mapreel.geometry import badge_extent
 
     built, landed = _regions(atlas, region_atlas, "Texas has BBQ and California has avocados.")
     for region in built.extras["regions"]:
@@ -238,8 +236,9 @@ def test_a_region_name_tag_never_covers_an_item(atlas, region_atlas):
         tag_y = (region["label"]["y"] - landed.y) * landed.s + 960
         half_w = 0.4 * kinds.TAG_PX * len(region["tag"])
         for item in built.items:
-            apart_x = abs(tag_x - item["x"]) >= half_w + BADGE_HALF_W * item["size"]
-            apart_y = abs(tag_y - item["y"]) >= kinds.TAG_PX / 2 + BADGE_HALF_H * item["size"]
+            hw, hh = badge_extent([item], item["size"])
+            apart_x = abs(tag_x - item["x"]) >= half_w + hw
+            apart_y = abs(tag_y - item["y"]) >= kinds.TAG_PX / 2 + hh
             assert apart_x or apart_y, (region["tag"], tag_x, tag_y, item)
 
 
@@ -281,13 +280,15 @@ def test_a_blocked_tag_moves_sideways_before_it_stacks_up():
     from reelmachine.recipes.mapreel.geometry import Frame
 
     frame = Frame(0.5, 0.5, 2000.0)
-    item = {"x": 540.0, "y": 960.0, "size": 120}
+    item = {"name": "Sushi", "x": 540.0, "y": 960.0, "size": 120}
     (box,) = kinds.tag_boxes([("Tokyo", {"x": 0.5, "y": 0.5})], [item], frame)
-    assert box[1] == 960.0 and abs(box[0] - 540) >= box[2] + 0.55 * 120  # same height, beside the badge
+    from reelmachine.recipes.mapreel.geometry import badge_extent
+
+    assert box[1] == 960.0 and abs(box[0] - 540) >= box[2] + badge_extent([item], 120)[0]  # beside the badge
     # no room either side: up it goes
-    wide = {"x": 540.0, "y": 960.0, "size": 900}
+    wide = {"name": "Supercalifragilistic", "x": 540.0, "y": 960.0, "size": 900}
     (box,) = kinds.tag_boxes([("Tokyo", {"x": 0.5, "y": 0.5})], [wide], frame)
-    assert box[1] < 960 - 0.3 * 900
+    assert box[1] < 960 - badge_extent([wide], 900)[1]
 
 
 def test_tags_are_short_names_and_items_sit_on_plates(atlas, region_atlas):
@@ -324,14 +325,15 @@ def test_a_regions_segment_hands_its_fills_to_the_next_segments_fade(atlas, regi
 
 
 def test_a_tag_above_a_badge_clears_its_emoji():
-    """A badge's emoji reaches 0.45 x its size above its anchor, higher than its text box, and the badge rises as
-    it holds: a tag that only cleared the text box sat on the emoji (Ōsaka on the octopus)."""
-    from reelmachine.recipes.mapreel.geometry import BADGE_RISE, BADGE_UP, Frame
+    """A badge's emoji sits above its plate and the badge rises as it holds: a tag that only cleared a text box
+    sat on the emoji (Ōsaka on the octopus)."""
+    from reelmachine.recipes.mapreel.geometry import BADGE_RISE, Frame, badge_extent
 
     frame = Frame(0.5, 0.5, 2000.0)
-    # food.json's Osaka: its tag point 110 px above the octopus, whose text box it clears by 20 px
-    item = {"x": 566.2, "y": 1023.4, "size": 209, "emoji": "🐙"}
+    # food.json's Osaka: its tag point 110 px above the octopus's anchor
+    item = {"name": "Octopus", "x": 566.2, "y": 1023.4, "size": 209, "emoji": "🐙"}
     label = {"x": 0.5 + (571.6 - 540) / 2000.0, "y": 0.5 + (913.6 - 960.0) / 2000.0}
     (box,) = kinds.tag_boxes([("Osaka", label)], [item], frame)
-    beside = abs(box[0] - item["x"]) >= box[2] + 0.55 * item["size"]
-    assert beside or box[1] + box[3] <= item["y"] - BADGE_UP * item["size"] - BADGE_RISE, box
+    hw, hh = badge_extent([item], item["size"])
+    beside = abs(box[0] - item["x"]) >= box[2] + hw
+    assert beside or box[1] + box[3] <= item["y"] - hh - BADGE_RISE, box
