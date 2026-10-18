@@ -42,6 +42,13 @@ BORDER_PX = 2.0
 DETAIL_SPAN_PX = WIDTH * 1.25
 SUPERSAMPLE = 2  # drawn at twice the size and scaled down: smooth coasts
 
+#: NASA's Blue Marble has a hard edge along this latitude (row 150 of 2700, row 600 of 10800: measured)
+SEAM_LAT = 80.0
+#: the seam is cross-faded over this many source rows each side of it
+SEAM_FADE_PX = 12
+#: bumped when the satellite reprojection changes (2: the seam fade), so cached layers are rebuilt
+SATELLITE_REV = 2
+
 
 def _raw(settings: Settings, src: Path, *, x: int, y: int, w: int, h: int, out_w: int, out: Path) -> np.ndarray:
     ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-v", "error", "-y", "-i", str(src),
@@ -87,6 +94,10 @@ def _mercator(settings: Settings, src: Path, lon0: float, lon1: float, y0: float
     lat_top, lat_bot = float(lat_of(y0)), float(lat_of(y1))
     row0 = max(0, int(math.floor((90 - lat_top) / 180 * sh)))
     row1 = min(sh, int(math.ceil((90 - lat_bot) / 180 * sh)) + 1)
+    seam = int(round((90 - SEAM_LAT) / 180 * sh))
+    fade = row0 < seam + SEAM_FADE_PX and row1 > seam - SEAM_FADE_PX
+    if fade:  # the fade reads the band's rows on both sides, even past the crop's own rows
+        row0, row1 = max(0, min(row0, seam - SEAM_FADE_PX)), min(sh, max(row1, seam + SEAM_FADE_PX))
     pieces, span = [], lon1 - lon0
     lon = lon0
     while lon < lon1 - 1e-9:  # split at the antimeridian
@@ -102,6 +113,8 @@ def _mercator(settings: Settings, src: Path, lon0: float, lon1: float, y0: float
     if strip.shape[1] != out_w:  # rounding across pieces
         idx = np.linspace(0, strip.shape[1] - 1, out_w).round().astype(int)
         strip = strip[:, idx]
+    if fade:
+        strip = _fade_seam(strip, seam - row0)
     ys = y0 + (np.arange(out_h) + 0.5) / out_h * (y1 - y0)
     src_rows = (90 - lat_of(ys)) / 180 * sh - row0 - 0.5
     lo = np.clip(np.floor(src_rows).astype(int), 0, strip.shape[0] - 1)
@@ -110,13 +123,32 @@ def _mercator(settings: Settings, src: Path, lon0: float, lon1: float, y0: float
     return (strip[lo] * (1 - t) + strip[hi] * t).astype(np.uint8)
 
 
+def _fade_seam(strip: np.ndarray, seam: int) -> np.ndarray:
+    """Cross-fade the rows around `seam` (the first row south of the texture's edge). Each side's texture is
+    mirrored across the seam, and the two are blended with a ramp from all-north to all-south over the band:
+    the edge goes, and neither side is smeared into a flat gradient."""
+    n = SEAM_FADE_PX
+    if seam - n < 0 or seam + n > strip.shape[0]:
+        return strip
+    north = strip[seam - n:seam].astype(np.float32)  # rows seam-n .. seam-1
+    south = strip[seam:seam + n].astype(np.float32)  # rows seam .. seam+n-1
+    north_ext = np.concatenate([north, north[::-1]])  # the north texture continued south, mirrored
+    south_ext = np.concatenate([south[::-1], south])  # the south texture continued north, mirrored
+    w = ((np.arange(2 * n) + 0.5) / (2 * n))[:, None, None]
+    out = strip.copy()
+    out[seam - n:seam + n] = np.round(north_ext * (1 - w) + south_ext * w).astype(np.uint8)
+    return out
+
+
 def layer_name(look: str, bbox: tuple[float, float, float, float] | None) -> str:
-    """A layer's file name in the cache: the world (bbox None) or a crop, per look. The satellite names are
-    the ones every cache already holds; a drawn look's carry the look and VECTOR_REV."""
+    """A layer's file name in the cache: the world (bbox None) or a crop, per look. Satellite names carry
+    SATELLITE_REV; a drawn look's carry the look and VECTOR_REV."""
     if bbox is None:
-        return f"world-{WORLD_PX}.jpg" if look == "satellite" else f"world-{look}-v{VECTOR_REV}-{WORLD_PX}.jpg"
+        if look == "satellite":
+            return f"world-v{SATELLITE_REV}-{WORLD_PX}.jpg"
+        return f"world-{look}-v{VECTOR_REV}-{WORLD_PX}.jpg"
     rounded = tuple(round(v, 5) for v in bbox)
-    keyed = rounded if look == "satellite" else (look, VECTOR_REV, *rounded)
+    keyed = (look, SATELLITE_REV, *rounded) if look == "satellite" else (look, VECTOR_REV, *rounded)
     return f"detail-{hashlib.sha256(repr(keyed).encode()).hexdigest()[:16]}.jpg"
 
 

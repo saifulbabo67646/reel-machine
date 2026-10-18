@@ -255,11 +255,87 @@ def test_look_is_part_of_the_layer_cache_key(tmp_path):
     dark, _ = basemap.detail_layer(None, root, bbox, look="dark")
     assert flat != dark and flat.is_file() and dark.is_file()
     assert basemap.world_layer(None, root, look="flat") != basemap.world_layer(None, root, look="dark")
-    # the satellite names are the ones already in every cache: unchanged
-    assert basemap.layer_name("satellite", None) == f"world-{basemap.WORLD_PX}.jpg"
+    # satellite names carry SATELLITE_REV (the seam fade moved them on: see the seam tests below)
+    assert basemap.layer_name("satellite", None) == f"world-v{basemap.SATELLITE_REV}-{basemap.WORLD_PX}.jpg"
     assert basemap.layer_name("flat", None) != basemap.layer_name("satellite", None)
     assert basemap.layer_name("satellite", bbox) == basemap.layer_name("satellite", tuple(bbox))
     names = {look: basemap.layer_name(look, bbox) for look in ("satellite", "flat", "dark")}
     assert len(set(names.values())) == 3
     again, _ = basemap.detail_layer(None, root, bbox, look="flat")
     assert again == flat
+
+
+# -- the Blue Marble seam: NASA's texture has a hard edge at 80° N; the reprojection cross-fades it ---------
+
+
+def _fake_source(monkeypatch, src: np.ndarray):
+    """`_mercator` over an in-memory equirectangular source: no ffmpeg."""
+    sh, sw = src.shape[:2]
+    monkeypatch.setattr(basemap.ffmpeg, "probe", lambda _path: type("Info", (), {"width": sw, "height": sh})())
+
+    def raw(_settings, _src, *, x, y, w, h, out_w, out):
+        crop = src[y:y + h, x:x + w]
+        idx = np.linspace(0, crop.shape[1] - 1, out_w).round().astype(int)
+        return crop[:, idx].copy()
+
+    monkeypatch.setattr(basemap, "_raw", raw)
+
+
+def _hard_edge(sw=64, sh=2700, north=200, south=40):
+    rows = np.where(np.arange(sh) < round((90 - basemap.SEAM_LAT) / 180 * sh), north, south)
+    return np.repeat(rows[:, None, None], sw, axis=1).repeat(3, axis=2).astype(np.uint8)
+
+
+def test_the_seam_latitude_is_cross_faded_over_twelve_source_rows_each_side(monkeypatch, tmp_path):
+    from reelmachine.recipes.mapreel.geometry import merc
+
+    _fake_source(monkeypatch, _hard_edge())
+    _, y0 = merc(0.0, 84.0)
+    _, y1 = merc(0.0, 76.0)
+    out = basemap._mercator(None, Path("bm.jpg"), -10.0, 10.0, float(y0), float(y1), 32, 800, tmp_path)
+    col = out[:, 16, 0].astype(int)
+    lats = basemap.lat_of(y0 + (np.arange(800) + 0.5) / 800 * (y1 - y0))
+    band = 12 * 180 / 2700  # ±12 source rows, in degrees
+    assert (col[lats > basemap.SEAM_LAT + band + 0.1] == 200).all()  # north of the band: untouched
+    assert (col[lats < basemap.SEAM_LAT - band - 0.1] == 40).all()   # south of it: untouched
+    assert np.abs(np.diff(col)).max() <= 12  # no hard step anywhere: 160 spread over the band
+    mid = col[np.argmin(np.abs(lats - basemap.SEAM_LAT))]
+    assert abs(mid - 120) <= 12  # half and half at the seam
+
+
+def test_a_crop_that_ends_inside_the_band_still_fades(monkeypatch, tmp_path):
+    """The crop's own rows stop at the seam; the fade reads the rows beyond it anyway."""
+    from reelmachine.recipes.mapreel.geometry import merc
+
+    _fake_source(monkeypatch, _hard_edge())
+    _, y0 = merc(0.0, 84.0)
+    _, y1 = merc(0.0, basemap.SEAM_LAT - 0.05)
+    out = basemap._mercator(None, Path("bm.jpg"), -10.0, 10.0, float(y0), float(y1), 32, 400, tmp_path)
+    col = out[:, 16, 0].astype(int)
+    assert col[-1] > 100 and np.abs(np.diff(col)).max() <= 12
+
+
+def test_the_seam_fade_keeps_the_texture_on_each_side(monkeypatch, tmp_path):
+    """Mirrored, not smeared: stripes north of the seam still alternate inside the band."""
+    from reelmachine.recipes.mapreel.geometry import merc
+
+    src = _hard_edge(sh=2700, north=0, south=0)
+    seam = round((90 - basemap.SEAM_LAT) / 180 * 2700)
+    src[:seam, ::2] = 255  # vertical stripes in the north, flat black in the south
+    _fake_source(monkeypatch, src)
+    _, y0 = merc(0.0, 82.0)
+    _, y1 = merc(0.0, 78.0)
+    out = basemap._mercator(None, Path("bm.jpg"), -180.0, 180.0, float(y0), float(y1), 64, 600, tmp_path)
+    lats = basemap.lat_of(y0 + (np.arange(600) + 0.5) / 600 * (y1 - y0))
+    row = out[np.argmin(np.abs(lats - (basemap.SEAM_LAT + 0.2))), :, 0].astype(int)
+    assert row[::2].mean() - row[1::2].mean() > 100  # the stripes survive just north of the seam
+
+
+def test_satellite_layers_carry_a_revision_so_seamed_caches_are_not_reused():
+    """Every satellite layer cached before the seam fade has the seam; the names moved on."""
+    bbox = (0.40, 0.30, 0.55, 0.45)
+    assert basemap.layer_name("satellite", None) == f"world-v{basemap.SATELLITE_REV}-{basemap.WORLD_PX}.jpg"
+    assert basemap.layer_name("satellite", None) != f"world-{basemap.WORLD_PX}.jpg"
+    import hashlib
+    old = f"detail-{hashlib.sha256(repr(tuple(round(v, 5) for v in bbox)).encode()).hexdigest()[:16]}.jpg"
+    assert basemap.layer_name("satellite", bbox) != old
