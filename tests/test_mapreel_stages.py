@@ -1,6 +1,7 @@
 """mapreel's images stage: a bad image is a badge and a warning, never a failed job or a stray file."""
 
 import json
+import socket
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -59,7 +60,12 @@ def _fake_stream(content_type, body):
     "https://" + "a" * 70 + ".com/a.png",      # an over-long host label: UnicodeError
     "~no-such-user-here/a.png",                # expanduser: RuntimeError
 ])
-def test_an_unusable_ref_becomes_a_badge_with_a_warning(tmp_path, ref):
+def test_an_unusable_ref_becomes_a_badge_with_a_warning(tmp_path, monkeypatch, ref):
+    def resolver(host, *args, **kwargs):  # what getaddrinfo does first, with no lookup after it
+        host.encode("idna")
+        raise socket.gaierror("offline")
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolver)
     out = _run(tmp_path, [ref])
     assert out.images == {"seg-1/0": None}
     assert len(out.warnings) == 1 and "item0" in out.warnings[0] and "badge" in out.warnings[0]
