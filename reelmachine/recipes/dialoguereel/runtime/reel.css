@@ -1,0 +1,117 @@
+/* reelmachine/recipes/dialoguereel/runtime/reel.css — the reel's layout; motion is set per frame by main.mjs */
+/* Noto Sans JP is supplied by HyperFrames; the rest are OS fonts, named for the lint and for previews
+   (bundling fonts per language is Plan 3) */
+@font-face { font-family: "Hiragino Sans"; font-weight: 100 499; src: local("HiraginoSans-W3"), local("Hiragino Sans W3"); }
+@font-face { font-family: "Hiragino Sans"; font-weight: 500 749; src: local("HiraginoSans-W6"), local("Hiragino Sans W6"); }
+@font-face { font-family: "Hiragino Sans"; font-weight: 750 1000; src: local("HiraginoSans-W8"), local("Hiragino Sans W8"); }
+@font-face { font-family: "Yu Gothic"; src: local("Yu Gothic Bold"), local("YuGothic-Bold"), local("Yu Gothic"); }
+@font-face { font-family: "Noto Sans KR"; src: local("Noto Sans KR"), local("NotoSansKR-Bold"); }
+@font-face { font-family: "Apple SD Gothic Neo"; src: local("AppleSDGothicNeo-Bold"), local("Apple SD Gothic Neo"); }
+html, body { margin: 0; background: #000; }
+#root {
+  --bg: #4b2bff; --text: #fff; --reading: #7fd3ff; --meaning: #9fe0ff; --accent: #ffe066; --bubble: rgba(255,255,255,0.10);
+  position: relative; width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); color: var(--text);
+  font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", "Noto Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+#root * { box-sizing: border-box; }
+
+/* a soft light from above and a floor the characters stand on */
+.glow {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(1200px 900px at 50% 18%, rgba(255,255,255,0.10), rgba(255,255,255,0) 70%),
+    radial-gradient(900px 520px at 50% 108%, rgba(10,0,80,0.35), rgba(10,0,80,0) 70%);
+}
+.floor {
+  position: absolute; left: 40px; right: 40px; top: 1640px; height: 120px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255,255,255,0.10), rgba(255,255,255,0));
+}
+
+.progress { position: absolute; left: 0; top: 0; width: 1080px; height: 8px; background: rgba(255,255,255,0.16); z-index: 5; }
+.progress .fill { width: 100%; height: 100%; background: var(--accent); transform-origin: 0 50%; transform: scaleX(0); }
+
+.badge {
+  position: absolute; left: 64px; top: 96px; height: 52px; padding: 0 22px; border-radius: 26px; z-index: 4;
+  display: flex; align-items: center; background: var(--accent); color: #241466;
+  font-size: 30px; font-weight: 800; letter-spacing: 0.04em; line-height: 1;
+  box-shadow: 0 6px 0 rgba(20,0,90,0.25);
+}
+
+/* the hook card */
+.hook {
+  position: absolute; left: 60px; right: 60px; top: 410px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  transform-origin: 50% 60%;
+}
+.hook .scene { font-size: 150px; line-height: 1; margin-bottom: 36px; filter: drop-shadow(0 10px 0 rgba(20,0,90,0.25)); }
+.hook .title {
+  font-size: 92px; font-weight: 900; line-height: 1.08; letter-spacing: -0.01em; text-wrap: balance;
+  text-shadow: 0 6px 0 rgba(20,0,90,0.30);
+}
+.hook .sub {
+  margin-top: 30px; padding: 12px 30px; border-radius: 40px; background: var(--bubble);
+  color: var(--reading); font-size: 42px; font-weight: 700;
+}
+
+/* the dialogue: history rows above one speech bubble */
+.stage { position: absolute; left: 0; top: 0; width: 1080px; height: 1240px; }
+.row {
+  position: absolute; top: 0; height: 54px; max-width: 936px; padding: 0 24px; border-radius: 27px;
+  display: flex; align-items: baseline; gap: 18px; white-space: nowrap; overflow: hidden;
+  background: var(--bubble); line-height: 54px; opacity: 0;
+}
+.row.left { left: 72px; }
+.row.right { right: 72px; }
+.row-text { font-size: 36px; font-weight: 800; }
+.row-meaning { font-size: 28px; font-weight: 600; color: var(--meaning); overflow: hidden; text-overflow: ellipsis; }
+
+.bubble {
+  position: absolute; left: 72px; top: 300px; width: 936px; opacity: 0;
+}
+.bubble.left { transform-origin: 26% 100%; }
+.bubble.right { transform-origin: 74% 100%; }
+.bubble .body {
+  position: relative; padding: 52px 52px 56px; border-radius: 56px; background: var(--bubble);
+  text-align: center;
+}
+.bubble .tail {
+  position: absolute; bottom: -62px; width: 92px; height: 64px; background: var(--bubble);
+}
+.bubble.left .tail { left: 150px; clip-path: polygon(0 0, 100% 0, 18% 100%); }
+.bubble.right .tail { right: 150px; clip-path: polygon(0 0, 100% 0, 82% 100%); }
+
+.bubble .text {
+  font-weight: 900; line-height: 1.5; letter-spacing: 0.02em; text-wrap: balance; word-break: keep-all;
+  line-break: strict; overflow-wrap: anywhere;
+}
+.bubble .text .ch { color: var(--text); text-shadow: 0 5px 0 rgba(20,0,90,0.28); }
+.bubble .text .ch.lit { color: var(--accent); }
+.bubble ruby { ruby-position: over; }
+.bubble rt {
+  font-size: 0.38em; font-weight: 700; letter-spacing: 0.04em; color: rgba(255,255,255,0.78);
+  text-shadow: none; transform: translateY(-2px);
+}
+.bubble rt.lit { color: var(--accent); }
+.bubble .reading {
+  margin-top: 8px; color: var(--reading); font-size: 50px; font-weight: 700; line-height: 1.25; letter-spacing: 0.01em;
+}
+.bubble .meaning {
+  margin: 30px auto 0; padding-top: 26px; max-width: 832px; text-wrap: balance; border-top: 3px solid rgba(255,255,255,0.16);
+  color: var(--meaning); font-size: 56px; font-weight: 800; line-height: 1.2; opacity: 0;
+}
+
+/* the characters: 440 px squares standing on y = 1680, centred at x 290 and 790 */
+.char {
+  position: absolute; top: 1240px; width: 440px; height: 440px; transform-origin: 50% 100%; z-index: 2;
+  will-change: transform;
+}
+.char.left { left: 70px; }
+.char.right { left: 570px; }
+.char svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.shadow {
+  position: absolute; top: 1652px; width: 300px; height: 44px; border-radius: 50%; z-index: 1;
+  background: radial-gradient(closest-side, rgba(16,0,80,0.45), rgba(16,0,80,0)); opacity: 0;
+}
+.shadow.left { left: 140px; }
+.shadow.right { left: 640px; }
