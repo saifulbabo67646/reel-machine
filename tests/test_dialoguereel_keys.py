@@ -41,3 +41,8 @@ def test_jlpt_levels():
     assert jlpt_level("あさって") == 5 and jlpt_level("zzzz") is None
     assert jlpt_level("zzzz", "あさって") == 5
     assert n_level("N4") == 4 and n_level("n3") == 3 and n_level("TOPIK 2") is None
+
+
+def test_a_key_with_ruby_matches_by_its_plain_text():
+    assert match_keys("手伝{てつだ}う？", [kw("手伝{てつだ}う")]) == [KeySpan(0, 0, 3)]
+    assert match_keys("手伝{てつだ}いましょうか。", [kw("手伝{てつだ}う")]) == [KeySpan(0, 0, 2)]

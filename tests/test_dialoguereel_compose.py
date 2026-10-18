@@ -261,8 +261,10 @@ def test_the_document_carries_the_matched_keys_with_their_offsets_and_levels():
     lines = reel_document(_learning(), CAST, plan, WORDS)["lines"]
     # 手伝いましょうか。: 手伝 (its stem) at 0..2, ましょう at 3..7
     assert lines[0]["keys"] == [
-        {"text": "手伝う", "reading": "てつだう", "meaning": "to help", "level": 4, "start": 0, "end": 2},
-        {"text": "ましょう", "reading": None, "meaning": "let's", "level": None, "start": 3, "end": 7},
+        {"text": "手伝う", "runs": [{"t": "手伝う", "r": None}], "reading": "てつだう", "meaning": "to help", "level": 4,
+         "start": 0, "end": 2},
+        {"text": "ましょう", "runs": [{"t": "ましょう", "r": None}], "reading": None, "meaning": "let's", "level": None,
+         "start": 3, "end": 7},
     ]
     assert lines[1]["keys"] == [] and lines[2]["keys"] == []
     assert [line["emotion"] for line in lines] == ["happy", "thinking", "neutral"]
@@ -324,10 +326,10 @@ def test_the_section_strings_follow_the_meaning_language():
     assert fr["bridge"] == "Now with subtitles" and fr["follow"] == "Follow for more"
 
 
-def test_the_recap_lists_the_matched_keys_in_order_at_most_six():
+def test_the_recap_lists_every_key_in_reel_order_each_once_at_most_six():
     data = INPUTS.model_dump()
     data["lines"][0]["keys"] = [{"text": "手伝う", "reading": "てつだう", "meaning": "to help"},
-                                {"text": "ねこ", "meaning": "cat"},             # not in the line: not in the recap
+                                {"text": "ねこ", "meaning": "cat"},             # not in the line: still in the recap
                                 {"text": "ましょう", "meaning": "let's"}]
     data["lines"][1]["text"] = "なにをしますか？いつですか？"
     data["lines"][1]["keys"] = [{"text": "なに", "meaning": "what"}, {"text": "します", "meaning": "to do"},
@@ -338,15 +340,22 @@ def test_the_recap_lists_the_matched_keys_in_order_at_most_six():
     inputs = DialogueReelInputs.model_validate(data)
     assert reel_document(inputs, CAST, PLAN, WORDS)["recap"] == [], "no recap section, no cards"
     recap = reel_document(inputs, CAST, schedule([1000, 1200, 900], recap=True), WORDS)["recap"]
-    assert [card["text"] for card in recap] == ["手伝う", "ましょう", "なに", "します", "いつ", "です"]
+    assert [card["text"] for card in recap] == ["手伝う", "ねこ", "ましょう", "なに", "します", "いつ"]
     assert recap[0] == {"text": "手伝う", "runs": [{"t": "手伝う", "r": None}], "reading": "てつだう",
                         "meaning": "to help", "level": 4}
-    assert recap[2] == {"text": "なに", "runs": [{"t": "なに", "r": None}], "reading": None, "meaning": "what",
-                        "level": recap[2]["level"]}
+    assert recap[1] == {"text": "ねこ", "runs": [{"t": "ねこ", "r": None}], "reading": None, "meaning": "cat",
+                        "level": recap[1]["level"]}
 
 
-def test_a_recap_card_keeps_the_ruby_in_its_key():
-    from reelmachine.recipes.dialoguereel.models import KeyWord
-    card = compose.recap_card(KeyWord(text="手伝{てつだ}う", meaning="to help"), None)
-    assert card == {"text": "手伝う", "runs": [{"t": "手伝", "r": "てつだ"}, {"t": "う", "r": None}], "reading": None,
-                    "meaning": "to help", "level": None}
+def test_a_key_with_ruby_keeps_its_runs_in_the_chip_and_the_recap():
+    from reelmachine.recipes.dialoguereel.levels import jlpt_level
+    data = INPUTS.model_dump()
+    data["lines"][0]["keys"] = [{"text": "手伝{てつだ}う", "meaning": "to help"}]
+    data["lines"][1]["keys"] = [{"text": "手伝う", "meaning": "to help"}]   # the same word: one card
+    doc = reel_document(DialogueReelInputs.model_validate(data), CAST, schedule([1000, 1200, 900], recap=True), WORDS)
+    runs = [{"t": "手伝", "r": "てつだ"}, {"t": "う", "r": None}]
+    level = jlpt_level("手伝う", None)
+    assert level is not None
+    assert doc["lines"][0]["keys"] == [{"text": "手伝う", "runs": runs, "reading": None, "meaning": "to help",
+                                        "level": level, "start": 0, "end": 2}]
+    assert doc["recap"] == [{"text": "手伝う", "runs": runs, "reading": None, "meaning": "to help", "level": level}]

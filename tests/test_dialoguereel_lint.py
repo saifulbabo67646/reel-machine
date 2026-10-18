@@ -96,6 +96,10 @@ def test_level_flags_a_harder_word():
     assert [f["path"] for f in hard] == ["lines[1].keys[0]"]
     assert not levels("一応", "N2") and not levels("ぬえぬえ")
     assert not levels("一応", "")
+    # a key with ruby is looked up (and found in its line) by its plain text
+    lines = [line(), line(text="これは一応{いちおう}です", keys=[KeyWord(text="一応{いちおう}", meaning="m")]), line()]
+    found = lint_findings(script(lines=lines, level="N5"), SP)
+    assert [f["rule"] for f in found if f["rule"] in ("level", "key-missing")] == ["level"]
 
 
 def test_key_count():

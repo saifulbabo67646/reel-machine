@@ -51,11 +51,12 @@ def match_keys(text: str, keys: Sequence[KeyWord]) -> list[KeySpan | None]:
     taken: list[tuple[int, int]] = []
     out: list[KeySpan | None] = []
     for i, key in enumerate(keys):
-        latin = not _JAPANESE.search(key.text)
-        hit = _find(plain, key.text, taken, latin, whole=True)
+        text = plain_text(parse_ruby(key.text)[0])   # a key may carry ruby markup too
+        latin = not _JAPANESE.search(text)
+        hit = _find(plain, text, taken, latin, whole=True)
         if hit is None:
-            stem = _stem(key.text)
-            if stem != key.text:
+            stem = _stem(text)
+            if stem != text:
                 hit = _find(plain, stem, taken, latin)
         if hit is None:
             out.append(None)

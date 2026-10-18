@@ -78,11 +78,24 @@ function buildCharacter(root, char, index) {
   };
 }
 
-/** A key word's chip: the word (its reading above it, as in the bubble), a dot, the meaning and its JLPT level. */
+/** A key's word with the ruby it was written with (a recap card, a chip). */
+function buildRuns(word, runs) {
+  for (const run of runs) {
+    if (run.r) el("rt", null, el("ruby", null, word, run.t), run.r);
+    else el("span", null, word, run.t);
+  }
+}
+
+const hasRuby = (key) => (key.runs || []).some((run) => run.r);
+
+/** A key word's chip: the word (its own ruby, else its reading above it, as in the bubble), a dot, the meaning
+    and its JLPT level. */
 function buildChip(parent, key) {
   const chip = el("div", "chip", parent);
   const word = el("span", "chip-word", chip);
-  if (key.reading && key.reading !== key.text) {
+  if (hasRuby(key)) {
+    buildRuns(word, key.runs);
+  } else if (key.reading && key.reading !== key.text) {
     const ruby = el("ruby", null, word, key.text);
     el("rt", null, ruby, key.reading);
   } else {
@@ -138,10 +151,7 @@ function buildBubble(stage, line, side) {
 function buildCard(parent, entry) {
   const card = el("div", "card", parent);
   const word = el("div", "card-word", card);
-  for (const run of entry.runs) {
-    if (run.r) el("rt", null, el("ruby", null, word, run.t), run.r);
-    else el("span", null, word, run.t);
-  }
+  buildRuns(word, entry.runs);
   if (entry.reading && entry.reading !== entry.text) el("div", "card-reading", card, entry.reading);
   el("div", "card-meaning", card, entry.meaning);
   const level = Number.isInteger(entry.level) ? el("div", "card-level", card, `N${entry.level}`) : null;

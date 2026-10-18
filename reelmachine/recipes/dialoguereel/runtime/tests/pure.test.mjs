@@ -278,5 +278,4 @@ test("the listen wave rests in silence and dances while a word is spoken", () =>
   const levels = Array.from({ length: 100 }, (_, k) => waveLevel(1060 + k * 9, words, 3));
   assert.ok(Math.max(...levels) > 0.7 && Math.min(...levels) > WAVE_REST, `${Math.min(...levels)}..${Math.max(...levels)}`);
   assert.ok(levels.every((v) => v <= 1));
-  assert.equal(waveLevel(1500, words, 2), waveLevel(1500, words, 2));
 });

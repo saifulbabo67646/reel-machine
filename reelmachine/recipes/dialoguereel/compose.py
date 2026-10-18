@@ -51,34 +51,33 @@ def _primary(language: str) -> str:
     return language.strip().lower().replace("_", "-").split("-")[0]
 
 
-def _keys(line: Line, language: str) -> list[dict[str, Any]]:
-    """The line's key words that were found in it, with their place in its plain text (for the underline);
-    a JLPT level only for Japanese."""
-    japanese = _primary(language) == "ja"
-    out = []
-    for span in match_keys(line.text, line.keys):
-        if span is None:
-            continue
-        key = line.keys[span.index]
-        out.append({"text": key.text, "reading": key.reading, "meaning": key.meaning,
-                    "level": jlpt_level(key.text, key.reading) if japanese else None,
-                    "start": span.start, "end": span.end})
-    return out
-
-
-def recap_card(key: KeyWord, level: int | None) -> dict[str, Any]:
-    """A recap card: the key as ruby runs (one plain run when it has no ruby), its reading, meaning and level."""
+def _key_word(key: KeyWord, japanese: bool) -> dict[str, Any]:
+    """A key as the page shows it: its plain text, its ruby runs (one plain run when it has no ruby), reading,
+    meaning, and a JLPT level (Japanese only) looked up from the plain text."""
     runs, _ = parse_ruby(key.text)
-    return {"text": plain_text(runs), "runs": [{"t": run.text, "r": run.ruby} for run in runs],
-            "reading": key.reading, "meaning": key.meaning, "level": level}
+    text = plain_text(runs)
+    return {"text": text, "runs": [{"t": run.text, "r": run.ruby} for run in runs], "reading": key.reading,
+            "meaning": key.meaning, "level": jlpt_level(text, key.reading) if japanese else None}
+
+
+def _keys(line: Line, language: str) -> list[dict[str, Any]]:
+    """The line's key words that were found in it, with their place in its plain text (for the underline)."""
+    japanese = _primary(language) == "ja"
+    return [{**_key_word(line.keys[span.index], japanese), "start": span.start, "end": span.end}
+            for span in match_keys(line.text, line.keys) if span is not None]
+
+
+def recap_card(key: KeyWord, language: str) -> dict[str, Any]:
+    """A recap card: the key's plain text, ruby runs, reading, meaning and level."""
+    return _key_word(key, _primary(language) == "ja")
 
 
 def _recap(inputs: DialogueReelInputs) -> list[dict[str, Any]]:
-    """The matched keys of every line in order, each word once, at most six."""
+    """Every key in the reel, found in its line or not, in reel order, each word (its plain text) once, at most six."""
     cards: list[dict[str, Any]] = []
     for line in inputs.lines:
-        for key in _keys(line, inputs.language):
-            card = recap_card(KeyWord(text=key["text"], reading=key["reading"], meaning=key["meaning"]), key["level"])
+        for key in line.keys:
+            card = recap_card(key, inputs.language)
             if len(cards) < RECAP_MAX and all(c["text"] != card["text"] for c in cards):
                 cards.append(card)
     return cards

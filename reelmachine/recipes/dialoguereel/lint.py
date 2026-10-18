@@ -79,7 +79,7 @@ def _script_rules(inputs: DialogueReelInputs) -> list[Finding]:
             if span is None:
                 found.append(Finding("key-missing", "warning", f"line {i}: key {key.text!r} is not in the line",
                                      "use the word as it appears in the line, or drop the key", i, j))
-            level = jlpt_level(key.text, key.reading) if ceiling is not None else None
+            level = jlpt_level(plain_text(parse_ruby(key.text)[0]), key.reading) if ceiling is not None else None
             if level is not None and level < ceiling:
                 found.append(Finding("level", "warning", f"line {i}: key {key.text!r} is N{level}, harder than N{ceiling}",
                                      f"pick an N{ceiling} or easier word, or raise the reel's `level`", i, j))
