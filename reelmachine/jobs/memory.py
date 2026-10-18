@@ -18,6 +18,9 @@ class InMemoryJobStore:
     def root(self) -> Path:
         return self._root
 
+    def caller_dir(self, caller: str) -> Path:
+        return self._root / caller
+
     def workdir(self, job_id: str, *, caller: str) -> Path:
         return self._root / caller / job_id
 
