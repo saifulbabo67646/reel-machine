@@ -219,6 +219,10 @@ class Settings:
     #: Override the video extensions the library scan accepts.
     wordreel_media_suffixes: list[str] = field(default_factory=list)
 
+    # Image generation (dialoguereel characters)
+    openai_api_key: str = ""
+    openai_image_model: str = "gpt-image-1"
+
     # Binaries
     ffmpeg: str = "ffmpeg"
     ffprobe: str = "ffprobe"
@@ -232,6 +236,10 @@ class Settings:
     #: caller-supplied JavaScript (linted, dry-run in an isolated context, rendered in
     #: Chrome's sandbox) on this machine; turn on only for agents you trust.
     explainer3d_custom_code: bool = False
+
+    #: Recipes may read files named in a request (dialoguereel pose paths). On for the CLI
+    #: and stdio; the MCP server turns it off when it serves over HTTP.
+    local_files: bool = True
 
     # --- derived helpers -------------------------------------------------
     @property
@@ -371,8 +379,11 @@ def get_settings() -> Settings:
         wordreel_library=_csv("REEL_WORDREEL_LIBRARY", ""),
         wordreel_embedded=_env("REEL_WORDREEL_EMBEDDED", "true").lower() in {"1", "true", "yes"},
         explainer3d_custom_code=_env("REEL_EXPLAINER3D_CUSTOM_CODE", "").lower() in {"1", "true", "yes"},
+        local_files=_env("REEL_LOCAL_FILES", "true").lower() in {"1", "true", "yes"},
         wordreel_max_media=_env_int("REEL_WORDREEL_MAX_MEDIA", 400),
         wordreel_media_suffixes=_csv("REEL_WORDREEL_MEDIA_SUFFIXES", ""),
+        openai_api_key=_env("REEL_OPENAI_API_KEY"),
+        openai_image_model=_env("REEL_OPENAI_IMAGE_MODEL", "gpt-image-1") or "gpt-image-1",
         ffmpeg=_env("REEL_FFMPEG", "ffmpeg"),
         ffprobe=_env("REEL_FFPROBE", "ffprobe"),
     )

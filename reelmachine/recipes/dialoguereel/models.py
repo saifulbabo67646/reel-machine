@@ -10,9 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, field_
 from reelmachine.core.stage import StageOutput
 from reelmachine.core.timeline import WordSpan
 
-Look = Literal["pop"]
+Look = Literal["pop", "pastel", "night"]
 Mode = Literal["cast", "storyboard", "full"]
 Emotion = Literal["neutral", "happy", "surprised", "sad", "thinking"]
+Pose = Literal["neutral", "talk", "happy", "surprised"]
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
@@ -43,7 +44,33 @@ class SvgSource(BaseModel):
     svg: str = Field(min_length=1, max_length=60_000)
 
 
-CharacterSource = Annotated[BuiltinSource | SvgSource, Field(discriminator="kind")]
+class ImageSource(BaseModel):
+    """A character drawn as PNG poses: generated from a description, or supplied by the caller."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["image"]
+    provider: Literal["openai", "fake"] | None = None
+    description: str | None = Field(default=None, min_length=1, max_length=300)
+    poses: dict[Pose, Annotated[str, Field(min_length=1, max_length=500)]] | None = None
+    variant: int = Field(default=0, ge=0, le=99)
+
+    @model_validator(mode="after")
+    def _one_form(self) -> ImageSource:
+        generated = self.provider is not None or self.description is not None
+        if generated == (self.poses is not None):
+            raise ValueError("give either provider with description, or poses")
+        if generated and (self.provider is None or self.description is None):
+            raise ValueError("a generated character needs both provider and description")
+        if self.poses is not None:
+            if "neutral" not in self.poses:
+                raise ValueError("poses need a neutral pose")
+            if self.variant:
+                raise ValueError("variant only applies to a generated character")
+        return self
+
+
+CharacterSource = Annotated[BuiltinSource | SvgSource | ImageSource, Field(discriminator="kind")]
 
 
 class Character(BaseModel):
@@ -122,8 +149,11 @@ class ResolvedCharacter(BaseModel):
     name: str
     voice: str
     side: str
-    svg: str                      # recoloured source, checked; compose re-checks, scopes and serializes it
-    parts: list[str]
+    kind: Literal["svg", "image"] = "svg"
+    svg: str = ""                 # recoloured source, checked; compose re-checks, scopes and serializes it
+    parts: list[str]              # an image character's poses
+    provider: str = ""            # the image provider of a generated character; empty when its poses are supplied
+    poses: dict[str, str] = Field(default_factory=dict)   # pose -> absolute PNG path, once the cast stage drew them
 
 
 class ResolvedCast(BaseModel):

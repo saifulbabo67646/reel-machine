@@ -273,17 +273,29 @@ lint, then `start_job` in `storyboard` mode and again in `build` mode. See
 
 ### `make_cast`
 
-The two characters of a `dialoguereel`: each is a built-in by name (`cupcake`, `mug`, …; the list
-is `describe_recipe("dialoguereel").guide.builtins`) or the caller's own SVG following
+The two characters of a `dialoguereel`. Each is a built-in by name (`cupcake`, `mug`, …; the
+list is `describe_recipe("dialoguereel").guide.builtins`), the caller's own SVG following
 `guide.characters` (a `viewBox="0 0 400 400"`, the required part ids, no scripts, no `<style>`
-element — inline `style` attributes are fine). The cast is checked and saved for the caller
-only (another caller cannot use its id) and its id is a hash of how the characters look, so
-the same cast always gets the same `castId`. A bad character is an `INVALID_INPUT` error whose
-`details.path` names it, like `characters[0].source.svg`. Free and instant: unless `preview` is
-false it starts a `dialoguereel` job in `cast` mode whose `cast.png` shows both characters.
-The result is `{"schemaVersion": 1, "castId": "cast_…", "characters": [{"id", "name", "side",
-"voice", "parts"}], "previewJobId": "…" | null, "hint": "…"}`; `parts` lists the optional groups
-each character has. Pass `castId` as the reel's `cast`.
+element — inline `style` attributes are fine), or an image character (`guide.images`): either
+generated, `{"kind": "image", "provider": "openai", "description": "…", "variant": 0}`, or
+supplied as PNG poses, `{"kind": "image", "poses": {"neutral": "https://…", "talk": "…"}}`
+(`neutral` required; URLs must resolve to public hosts; local paths only on local runs). The cast
+is checked and saved for the caller only (another caller cannot use its id) and its id is a hash
+of how the characters look, so the same cast always gets the same `castId`. A bad character is an
+`INVALID_INPUT` error whose `details.path` names it, like `characters[0].source.svg`. Unless
+`preview` is false it starts a `dialoguereel` job in `cast` mode whose `cast.png` shows both
+characters (and `cast-<id>-<pose>.png` each image pose). The result is `{"schemaVersion": 1,
+"castId": "cast_…", "characters": [{"id", "name", "kind", "side", "voice", "parts"}],
+"previewJobId": "…" | null, "hint": "…"}`; `kind` is `svg` or `image`, and `parts` lists the
+optional groups of an SVG character or the poses of an image one. Pass `castId` as the reel's
+`cast`.
+
+Built-in and SVG casts are free and instant. A cast with an image character also replies
+`"images": {"calls": 4, "cached": false}`: the OpenAI image calls its preview job will spend
+(4 per generated character, 0 once drawn, 0 for supplied poses). They are drawn once and reused,
+count against the caller's `openai` quota (`"quotas": {"openai": 40}` in the tenants file,
+checked when the job is submitted) and need `REEL_OPENAI_API_KEY` on the server.
+`probe` reports the same as `details.castImages` (`{provider, calls, cached}`) and spends nothing.
 
 ```json
 {"characters": [
@@ -293,7 +305,7 @@ each character has. Pass `castId` as the reel's `cast`.
 
 **dialoguereel workflow.** `describe_recipe("dialoguereel")` for the guide, `make_cast` and a look
 at its `cast.png`, then write the lines, `probe`, `start_job` in `storyboard` mode and again in
-`full` mode.
+`full` mode. See [DIALOGUEREEL.md](DIALOGUEREEL.md).
 
 ### `find_assets`
 

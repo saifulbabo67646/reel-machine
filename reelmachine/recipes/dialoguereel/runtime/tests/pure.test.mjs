@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { activeLine, dropIn, hop, mouthOpen, blinking, litChars, fade, history, progress, bob, seedOf, fitFont, flag, partId,
   keyVisible, emotionParts, emojiPop, slowActive, slowWords, rowFit, SLOW_FLAP_MS,
-  section, countdown, RING_IN_MS, recapCard, RECAP_CARD_PX, shiftLine, bridgeSlide, nod, loopBack, waveLevel, WAVE_BARS, WAVE_REST } from "../pure.mjs";
+  section, countdown, RING_IN_MS, recapCard, RECAP_CARD_PX, shiftLine, bridgeSlide, nod, loopBack, waveLevel, WAVE_BARS, WAVE_REST, imagePose } from "../pure.mjs";
 
 test("a line is active from its start until the next starts", () => {
   const lines = [{ startMs: 1500 }, { startMs: 2850 }];
@@ -291,4 +291,15 @@ test("the listen wave rests in silence and dances while a word is spoken", () =>
   const levels = Array.from({ length: 100 }, (_, k) => waveLevel(1060 + k * 9, words, 3));
   assert.ok(Math.max(...levels) > 0.7 && Math.min(...levels) > WAVE_REST, `${Math.min(...levels)}..${Math.max(...levels)}`);
   assert.ok(levels.every((v) => v <= 1));
+});
+
+test("imagePose", () => {
+  const all = ["neutral", "talk", "happy", "surprised"];
+  assert.equal(imagePose("happy", true, all), "talk");
+  assert.equal(imagePose("happy", false, all), "happy");
+  assert.equal(imagePose("surprised", false, all), "surprised");
+  assert.equal(imagePose("happy", true, ["neutral"]), "neutral");
+  assert.equal(imagePose("happy", false, ["neutral", "talk"]), "neutral");
+  assert.equal(imagePose("sad", false, all), "neutral");
+  assert.equal(imagePose("thinking", false, all), "neutral");
 });

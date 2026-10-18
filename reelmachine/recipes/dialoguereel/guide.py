@@ -70,6 +70,35 @@ GUIDE: dict[str, Any] = {
         "8. start_job again in `full` mode for reel.mp4, captions.srt and reel.json.",
     ],
     "builtins": builtin_names(),
+    "images": {
+        "when": "Use an image character when the star is a real thing or a mascot an SVG cannot draw well (a brand "
+                "mascot, a food, a pet). Use an SVG or a built-in for plain cute blobs: they are free and animate "
+                "(blink, mouth flap); an image character swaps between four still poses.",
+        "forms": {
+            "generated": {"kind": "image", "provider": "openai", "description": "a cheerful onigiri with a nori scarf",
+                          "variant": 0},
+            "supplied": {"kind": "image", "poses": {
+                "neutral": "https://example.com/rice-neutral.png", "talk": "https://example.com/rice-talk.png"}},
+        },
+        "poses": "neutral, talk, happy, surprised. A supplied character must give `neutral` (others missing fall back to it); the generator draws "
+                 "all four.",
+        "cost": "A generated character draws 4 poses: 4 OpenAI image calls, counted against the caller's `openai` "
+                "quota, once per cast (they are kept, so later reels reuse them). The server needs "
+                "REEL_OPENAI_API_KEY (probe's images check fails without it). probe's `castImages` says how "
+                "many calls are still needed and spends nothing; supplied poses cost none.",
+        "variant": "Generated characters only, 0 to 99. Poses are drawn once and then kept and reused; the model has "
+                   "no seed, so raise `variant` (1, 2, ...) to draw a new take.",
+        "paths": "Supplied poses may be https URLs or PNG files; a local path works only on local (stdio/CLI) runs, "
+                 "not on a hosted (HTTP) server.",
+    },
+    "looks": {
+        "pop": "The default: saturated electric blue like the reference reels. Bold and loud; suits most lessons.",
+        "pastel": "Cream background with dark text. Soft and calm; suits polite, cozy or daily-life scenes.",
+        "night": "Deep navy with neon accents. Suits evening, travel, nightlife and anything moody.",
+        "set": "Set `look` on the inputs; it changes colours only, never the cast.",
+    },
+    "post": "Every reel also writes post.md: a hook, the dialogue with readings and meanings, the words, a call to "
+            "action and 5 to 10 hashtags. get_artifact(jobId, \"post.md\") and paste it as the caption.",
     "characters": {
         "contract": [
             f"One <svg> root with viewBox=\"{VIEW_BOX}\"; the character stands in it facing the viewer, "

@@ -1,0 +1,36 @@
+{
+  "mode": "storyboard",
+  "title": "How to order coffee in Korean",
+  "language": "ko",
+  "meaning_language": "en",
+  "level": "TOPIK 1",
+  "scene": "☕",
+  "look": "night",
+  "quiz": true,
+  "cast": {"characters": [
+    {"id": "guest", "name": "Boba", "voice": "fake:default", "side": "left",
+     "source": {"kind": "builtin", "name": "boba"}},
+    {"id": "barista", "name": "Bunny", "voice": "fake:default", "side": "right",
+     "source": {"kind": "builtin", "name": "bunny"}}
+  ]},
+  "lines": [
+    {"speaker": "barista", "text": "어서 오세요!", "reading": "Eoseo oseyo!", "meaning": "Welcome!",
+     "emotion": "happy"},
+    {"speaker": "guest", "text": "아이스 아메리카노 하나 주세요.", "reading": "Aiseu amerikano hana juseyo.",
+     "meaning": "One iced americano, please.", "slow": true,
+     "keys": [{"text": "하나", "reading": "hana", "meaning": "one"},
+              {"text": "주세요", "reading": "juseyo", "meaning": "please give me"}]},
+    {"speaker": "barista", "text": "여기서 드시고 가세요?", "reading": "Yeogiseo deusigo gaseyo?",
+     "meaning": "Is that for here?", "emotion": "thinking"},
+    {"speaker": "guest", "text": "아니요, 가져갈게요.", "reading": "Aniyo, gajyeogalgeyo.",
+     "meaning": "No, I'll take it to go.",
+     "keys": [{"text": "가져갈게요", "reading": "gajyeogalgeyo", "meaning": "I'll take it (to go)"}]},
+    {"speaker": "barista", "text": "사천오백 원이에요.", "reading": "Sacheon-obaek wonieyo.",
+     "meaning": "That's 4,500 won."},
+    {"speaker": "guest", "text": "카드로 할게요.", "reading": "Kadeuro halgeyo.",
+     "meaning": "I'll pay by card.",
+     "keys": [{"text": "카드로", "reading": "kadeuro", "meaning": "by card"}]},
+    {"speaker": "barista", "text": "네, 감사합니다!", "reading": "Ne, gamsahamnida!",
+     "meaning": "Okay, thank you!", "emotion": "happy"}
+  ]
+}

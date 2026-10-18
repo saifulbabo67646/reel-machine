@@ -1,4 +1,5 @@
 import json
+import re
 from html.parser import HTMLParser
 
 from reelmachine.core.timeline import WordSpan
@@ -35,6 +36,27 @@ def test_the_constants():
     assert LOOKS["pop"]["bg"] == "#4b2bff"
 
 
+LOOK_KEYS = {"bg", "text", "reading", "meaning", "accent", "bubble", "ink", "shade", "lit"}
+
+
+def test_every_look_has_every_token():
+    assert set(LOOKS) == {"pop", "pastel", "night"}
+    for look in LOOKS.values():
+        assert set(look) == LOOK_KEYS
+        assert re.fullmatch(r"\d{1,3},\d{1,3},\d{1,3}", look["shade"])
+
+
+def test_reel_document_carries_the_look():
+    doc = reel_document(INPUTS.model_copy(update={"look": "night"}), CAST, PLAN, WORDS)
+    assert doc["look"] == LOOKS["night"]
+
+
+def test_css_has_no_look_literals():
+    css = (compose.RUNTIME_DIR / "reel.css").read_text()
+    body = css.split("#root {", 1)[1].split("}", 1)[1]   # the defaults block on #root may name pop's values
+    assert "rgba(20,0,90" not in body and "rgba(10,0,80" not in body and "rgba(16,0,80" not in body and "#241466" not in body
+
+
 def test_the_document_carries_reel_times_and_ruby_runs():
     doc = reel_document(INPUTS, CAST, PLAN, WORDS)
     assert doc["mode"] == "reel" and doc["duration"] == PLAN.duration_ms / 1000 and doc["look"] == LOOKS["pop"]
@@ -44,8 +66,8 @@ def test_the_document_carries_reel_times_and_ruby_runs():
     assert doc["lines"][1]["words"][1] == {"text": "しますか？", "startMs": 2850 + 550, "endMs": 2850 + 1200}
     assert doc["lines"][1]["meaningMs"] == PLAN.lines[1].meaning_ms and doc["lines"][2]["reading"] == ""
     assert doc["hookMs"] == 1500 and doc["characters"] == [
-        {"id": "kid", "side": "left", "parts": CAST.characters[0].parts},
-        {"id": "mom", "side": "right", "parts": CAST.characters[1].parts},
+        {"id": "kid", "side": "left", "kind": "svg", "parts": CAST.characters[0].parts},
+        {"id": "mom", "side": "right", "kind": "svg", "parts": CAST.characters[1].parts},
     ]
     assert (doc["title"], doc["level"], doc["scene"], doc["language"]) == ("Helping Mom at home", "N5", "🧺", "ja")
 
@@ -359,3 +381,31 @@ def test_a_key_with_ruby_keeps_its_runs_in_the_chip_and_the_recap():
     assert doc["lines"][0]["keys"] == [{"text": "手伝う", "runs": runs, "reading": None, "meaning": "to help",
                                         "level": level, "start": 0, "end": 2}]
     assert doc["recap"] == [{"text": "手伝う", "runs": runs, "reading": None, "meaning": "to help", "level": level}]
+
+
+def _image_cast(tmp_path):
+    """The cast with mom drawn as PNG poses, as the cast stage leaves it."""
+    from reelmachine.recipes.dialoguereel import images
+    folder = tmp_path / "poses"
+    folder.mkdir()
+    poses = {}
+    for pose in ("neutral", "talk"):
+        (folder / f"{pose}.png").write_bytes(images.FakeImages().edit(b"", pose))
+        poses[pose] = str(folder / f"{pose}.png")
+    mom = CAST.characters[1].model_copy(update={"kind": "image", "svg": "", "parts": list(poses), "poses": poses})
+    return CAST.model_copy(update={"characters": [CAST.characters[0], mom]}), folder
+
+
+def test_image_character_html_and_key(tmp_path):
+    cast, folder = _image_cast(tmp_path)
+    doc = reel_document(INPUTS, cast, PLAN, WORDS)
+    assert doc["characters"][1] == {"id": "mom", "side": "right", "kind": "image", "parts": ["neutral", "talk"]}
+    html = (compose.write_project(doc, cast, tmp_path / "p") / "index.html").read_text(encoding="utf-8")
+    assert '<div class="char right image" id="char-mom">' in html
+    assert '<img class="pose" data-pose="talk" src="./cast/mom/talk.png" alt="">' in html
+    assert 'id="c_kid.mouth-open"' in html and "c_mom." not in html
+    assert (tmp_path / "p/cast/mom/talk.png").read_bytes() == (folder / "talk.png").read_bytes()
+    key = compose.project_key(doc, cast)
+    assert key == compose.project_key(doc, cast)
+    (folder / "talk.png").write_bytes(b"other bytes")
+    assert compose.project_key(doc, cast) != key

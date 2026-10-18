@@ -1,4 +1,4 @@
-"""dialoguereel stages: script → narration → compose → preview → render.
+"""dialoguereel stages: script → cast → narration → compose → preview → render.
 
 `cast` mode stops at the preview with a still of the two characters, `storyboard` with a
 sheet of stills (the hook, the listen pass, each line once its meaning shows, the recap and
@@ -19,7 +19,7 @@ from typing import Any
 from ... import ffmpeg
 from ...config import Settings
 from ...core.assets import AssetKind, Provenance
-from ...core.errors import InvalidInput, RendererUnavailable, VoiceUnavailable
+from ...core.errors import InvalidInput, ReelError, RendererUnavailable, VoiceUnavailable
 from ...core.stage import StageContext
 from ...core.timeline import Caption, WordSpan
 from ...render.captions import write_srt
@@ -28,7 +28,7 @@ from ..explainer3d.audio import mix, pad_speech, silence, synth_sfx
 from ..explainer3d.stages import speak_line
 from ..explainer3d.video import mux
 from . import cast as casts
-from . import compose, lint
+from . import compose, images, lint, post
 from .keys import match_keys
 from .models import (CastSpec, ComposeOutput, DialogueReelInputs, LineWindowModel, NarrationOutput, PreviewOutput,
                      RenderOutput, ScriptOutput)
@@ -140,6 +140,48 @@ class ScriptStage:
                                        details={"path": finding["path"], "rule": finding["rule"]})
         warnings = [f"{f['rule']}: {f['message']}" for f in found]
         return ScriptOutput(inputs=inputs, cast=resolved, lint=found, warnings=warnings)
+
+
+class CastStage:
+    """Image characters get their poses (drawn, fetched, or reused from disk); SVG characters pass through."""
+
+    id = "cast"
+    revision = 1
+    cacheable = False
+    output_model = ScriptOutput
+
+    def run(self, ctx: StageContext, payload: ScriptOutput) -> ScriptOutput:
+        cast = payload.cast
+        if all(c.kind != "image" for c in cast.characters):
+            return payload
+        root = casts.caller_root(ctx)
+        spec = casts.load(root, payload.inputs.cast) if isinstance(payload.inputs.cast, str) else payload.inputs.cast
+        allow_local = ctx.config.local_files
+        characters, warnings = [], list(payload.warnings)
+        for index, (char, source) in enumerate(zip(cast.characters, (c.source for c in spec.characters),
+                                                   strict=True)):
+            if char.kind != "image":
+                characters.append(char)
+                continue
+            ctx.cancel.raise_if_cancelled()
+            ledger = images.quota_ledger(root, "openai") if source.provider == "openai" else None
+            try:
+                made, problems = images.make_poses(source, casts.cast_folder(root, cast.id, char.id),
+                                                   settings=ctx.config, allow_local=allow_local, ledger=ledger,
+                                                   path=f"cast.characters[{index}].source")
+            except ReelError as exc:
+                exc.stage = self.id
+                raise
+            warnings += problems
+            characters.append(char.model_copy(update={
+                "poses": {pose: str(file.resolve()) for pose, file in made.items()},
+                "parts": [pose for pose in images.POSES if pose in made]}))
+        if payload.inputs.mode == "cast":
+            for char in characters:
+                for pose, file in char.poses.items():
+                    shutil.copy2(file, _artifacts(ctx) / f"cast-{char.id}-{pose}.png")
+        resolved = cast.model_copy(update={"characters": characters})
+        return payload.model_copy(update={"cast": resolved, "warnings": warnings})
 
 
 class NarrationStage:
@@ -287,6 +329,8 @@ class ComposeStage:
         }
         (_artifacts(ctx) / "script.resolved.json").write_text(
             json.dumps(resolved, indent=2, ensure_ascii=False), encoding="utf-8")
+        if inputs.mode != "cast":
+            (_artifacts(ctx) / "post.md").write_text(post.post_markdown(inputs, cast), encoding="utf-8")
         return ComposeOutput(narration=payload, project=str(project), key=compose.project_key(doc, cast))
 
 
@@ -373,7 +417,7 @@ class RenderStage:
         outdir.mkdir(parents=True, exist_ok=True)
         name = inputs.name or ctx.job.id
 
-        cached = _caller_cache(ctx) / "reels" / composed.key[:2] / f"{composed.key}.mp4"
+        cached = _caller_cache(ctx) / "reels" / renderer.name / composed.key[:2] / f"{composed.key}.mp4"
         if not cached.is_file():
             partial = cached.with_name(f"{composed.key}.partial.mp4")
             partial.parent.mkdir(parents=True, exist_ok=True)

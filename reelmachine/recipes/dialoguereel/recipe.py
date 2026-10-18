@@ -14,8 +14,9 @@ from .guide import GUIDE
 from .models import DialogueReelInputs
 from .ruby import parse_ruby, plain_text
 from .schedule import estimate
-from .stages import (ComposeStage, NarrationStage, PreviewStage, RenderStage, ScriptStage, check_voices,
+from .stages import (CastStage, ComposeStage, NarrationStage, PreviewStage, RenderStage, ScriptStage, check_voices,
                      lint_blocks, lint_findings)
+from .verify import verify_dialoguereel
 
 # the reference dialogue (spec §8): the kid offers to help, Mom hands out three chores, the kid agrees
 EXAMPLE: dict[str, Any] = {
@@ -64,7 +65,8 @@ class DialogueReelRecipe:
         version=1,
         stages=(
             StageSpec(stage=ScriptStage()),
-            StageSpec(stage=NarrationStage(), feeds="script", uses=("narration",)),
+            StageSpec(stage=CastStage(), feeds="script"),
+            StageSpec(stage=NarrationStage(), feeds="cast", uses=("narration",)),
             StageSpec(stage=ComposeStage(), feeds="narration"),
             StageSpec(stage=PreviewStage(), feeds="compose", uses=("renderer",)),
             StageSpec(stage=RenderStage(), feeds="preview", uses=("renderer",)),
@@ -76,9 +78,11 @@ class DialogueReelRecipe:
                                     description="Renders the reel (Node >= 22, HyperFrames, Chrome, ffprobe)"),
         },
         cost=CostNote(unit="tts_characters", estimate="the dialogue's length",
-                      notes="the fake and macOS voices are free; cloud voices bill per character",
-                      providers=("elevenlabs", "cartesia", "macos", "fake")),
-        artifacts=("reel.mp4", "captions.srt", "reel.json", "storyboard.jpg", "cast.png", "script.resolved.json"),
+                      notes="the fake and macOS voices are free; cloud voices bill per character. "
+                      "Each generated image character draws 4 poses: 4 OpenAI image calls, once per cast",
+                      providers=("elevenlabs", "cartesia", "macos", "openai", "fake")),
+        artifacts=("reel.mp4", "captions.srt", "reel.json", "storyboard.jpg", "cast.png", "script.resolved.json", "post.md",
+                   "cast-<id>-<pose>.png"),
         render_modes=("hyperframes",),
         example=EXAMPLE,
         guide=GUIDE,
@@ -89,9 +93,11 @@ class DialogueReelRecipe:
         checks: list[CheckResult] = []
         details: dict[str, Any] = {}
         spec = None
+        config = ctx.config or get_settings()
+        details["lint"] = []
+        root = ctx.caller_root or config.cache_dir
         try:
             if isinstance(inputs.cast, str):
-                root = ctx.caller_root or (ctx.config or get_settings()).cache_dir
                 spec = casts.load(root, inputs.cast)
             else:
                 spec = inputs.cast
@@ -99,6 +105,17 @@ class DialogueReelRecipe:
             resolved = casts.resolve(spec)
             checks.append(CheckResult(name="script", ok=True,
                                       detail=f"{len(inputs.lines)} lines, cast {resolved.id}"))
+            images = [c for c in resolved.characters if c.kind == "image"]
+            if images:  # counts what is missing on disk; fetches and generates nothing
+                calls = casts.poses_on_disk(root, resolved)
+                generators = {c.provider for c in images if c.provider}
+                provider = "openai" if "openai" in generators else next(iter(generators), "supplied")
+                details["castImages"] = {"provider": provider, "calls": calls, "cached": calls == 0}
+                missing_key = provider == "openai" and calls > 0 and not config.openai_api_key
+                checks.append(CheckResult(
+                    name="images", ok=not missing_key,
+                    detail="REEL_OPENAI_API_KEY is not set, so the OpenAI poses cannot be drawn" if missing_key
+                    else f"{calls} image calls needed ({provider})" if calls else "every pose is on disk or supplied"))
             found = lint_findings(inputs, {c.id for c in resolved.characters})
             details["lint"] = found
             errors = [f"{f['path']}: {f['message']}" for f in found if f["severity"] == "error"]
@@ -126,5 +143,5 @@ class DialogueReelRecipe:
                                       else f"every voice is served by {bound!r}"))
         return ProbeReport(ok=all(c.ok for c in checks), checks=checks, details=details)
 
-    def verify(self, ctx: StageContext, result: dict[str, Any]) -> VerificationReport | None:
-        return None
+    def verify(self, ctx: StageContext, result: dict[str, Any]) -> VerificationReport:
+        return verify_dialoguereel(ctx, result)

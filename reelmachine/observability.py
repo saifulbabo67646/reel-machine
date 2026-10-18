@@ -27,7 +27,7 @@ def secret_values(settings: Any = None) -> list[str]:
         if any(hint in key.upper() for hint in SECRET_HINTS) and value and len(value) >= 6:
             values.add(value)
     if settings is not None:
-        for attribute in ("api_key", "tmdb_api_key"):
+        for attribute in ("api_key", "tmdb_api_key", "openai_api_key"):
             value = getattr(settings, attribute, "")
             if value:
                 values.add(str(value))

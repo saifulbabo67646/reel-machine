@@ -122,3 +122,12 @@ def test_storyboard_has_the_section_frames(tmp_path):
     assert job.state == JobState.SUCCEEDED, job.error
     stills = list(tmp_path.glob("work/**/stills/*.png"))
     assert len(stills) == 1 + 1 + len(EXAMPLE_P2["lines"]) + 3   # hook, listen pass, lines, recap, quiz, answer
+
+
+def test_compose_writes_post_md_in_storyboard_not_cast(tmp_path):
+    job = run(tmp_path, EXAMPLE)
+    assert job.state == JobState.SUCCEEDED, job.error
+    assert artifact(job, "post.md").read_text(encoding="utf-8").startswith("Helping Mom at home 🧺")
+    cast_job = run(tmp_path / "c", EXAMPLE | {"mode": "cast"})
+    assert cast_job.state == JobState.SUCCEEDED, cast_job.error
+    assert "post.md" not in names(cast_job)

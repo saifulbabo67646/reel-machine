@@ -136,6 +136,7 @@ reelmachine = [
     "recipes/explainer3d/runtime/vendor/jsm/*/*.js",
     "recipes/dialoguereel/characters/*.svg",
     "recipes/dialoguereel/characters/index.json",
+    "recipes/dialoguereel/examples/*.json",
     "recipes/dialoguereel/runtime/*.mjs",
     "recipes/dialoguereel/runtime/*.css",
     "recipes/mapreel/runtime/*.mjs",
