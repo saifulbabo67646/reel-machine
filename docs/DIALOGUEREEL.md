@@ -125,16 +125,18 @@ are not part of the `castId`; calling `make_cast` again with new voices keeps th
 - **SVG**: `{"kind": "svg", "svg": "<svg ...>"}`. One root with `viewBox="0 0 400 400"`,
   at most 60 kB, with the required groups (`body`, `eyes-open`, `eyes-closed`,
   `mouth-closed`, `mouth-open`) and optional ones (`arm-left`, `arm-right`, `mouth-smile`,
-  `eyes-happy`, `eyes-surprised`, `blush`, `sweat`, `sparkle`). No scripts, no `<style>` element, no animation, no external links.
-  `guide.characters` has the full contract, the house style and an example.
+  `eyes-happy`, `eyes-surprised`, `blush`, `sweat`, `sparkle`). No scripts, no `<style>`
+  element, no animation, no external links. `guide.characters` has the full contract, the
+  house style and an example.
 - **Image, generated**: `{"kind": "image", "provider": "openai", "description": "a cheerful
   onigiri with a nori scarf", "variant": 0}`. The cast stage draws four transparent PNG
-  poses (`neutral`, `talk`, `happy`, `surprised`). The same description gives the same
-  cast; raise `variant` (up to 99) for another take. `provider: "fake"` draws local
-  stand-ins for tests.
+  poses (`neutral`, `talk`, `happy`, `surprised`) once and keeps them; later reels reuse
+  them. The model has no seed, so raise `variant` (up to 99) to draw a new take.
+  `provider: "fake"` draws local stand-ins for tests.
 - **Image, supplied**: `{"kind": "image", "poses": {"neutral": "https://.../n.png", ...}}`.
   `neutral` is required; a missing pose falls back to it. URLs must resolve to public
-  hosts; local PNG paths work only on local runs, not on a hosted server.
+  hosts; local PNG paths work only on local (stdio/CLI) runs, not on a hosted (HTTP)
+  server.
 
 **Cost and quota.** A generated character costs 4 OpenAI image calls, once per cast: the
 poses are kept, so later reels reuse them. The calls count against the caller's `openai`
@@ -196,6 +198,7 @@ not verified.
 | `REEL_HYPERFRAMES_WORKERS` | auto | `1` streams frames straight to the encoder: slower, light on memory |
 | `REEL_OPENAI_API_KEY` | none | needed only for generated image characters |
 | `REEL_OPENAI_IMAGE_MODEL` | `gpt-image-1` | the image model |
+| `REEL_LOCAL_FILES` | `true` | read local pose paths; the MCP server turns it off over HTTP |
 | `REEL_OUTDIR` | `out/` | where `full` mode writes `reel.mp4` (or the script's `outdir`) |
 
 Cloud voices need `CARTESIA_API_KEY` or `ELEVENLABS_API_KEY` and bill per character;

@@ -227,6 +227,10 @@ def test_make_cast_hint_names_the_openai_calls(tmp_path):
     with _tools(tmp_path) as tools:
         out = tools.make_cast(None, chars)
     assert "4 OpenAI image calls" in out["hint"]
+    chars[1]["source"]["provider"] = "fake"
+    with _tools(tmp_path) as tools:
+        out = tools.make_cast(None, chars)
+    assert "4 image calls" in out["hint"] and "OpenAI" not in out["hint"]
 
 
 def test_guide_has_images_looks_post():
@@ -234,3 +238,6 @@ def test_guide_has_images_looks_post():
 
     assert {"images", "looks", "post"} <= set(GUIDE)
     assert "variant" in json.dumps(GUIDE["images"]) and "post.md" in json.dumps(GUIDE["post"])
+    images = json.dumps(GUIDE["images"])
+    assert "REEL_OPENAI_API_KEY" in images and "0 to 99" in images and "stdio" in images
+    assert "same description gives the same cast" not in images

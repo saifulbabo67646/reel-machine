@@ -165,12 +165,12 @@ card, and the reel ends on a "How do you say:" quiz and a follow call to action.
 **Inputs at a glance.** `title` (the hook), `language`, `meaning_language`, `level` (`N5`,
 `TOPIK 1`, `A1`), `scene` (one emoji), `cast` (a `castId` or the cast itself), and 3 to 12
 `lines` of `{speaker, text, reading, meaning}`, each optionally with `keys` (up to 4
-`{text, reading, meaning}`), an `emotion` (`happy`, `surprised`, `sad`, `thinking`) and
-`slow` (a 0.75x replay). `look` is `pop` (the default), `pastel` or `night`. `flow: "listen_first"` plays the dialogue once without subtitles
-first; `quiz` is `true` (the line with the most keys), a line index, or `false`. `mode` is
-`cast`, `storyboard` (the default) or `full`. The shipped example is
-`describe_recipe("dialoguereel").example`; two full examples (Japanese N5, Korean TOPIK 1) are in
-`reelmachine/recipes/dialoguereel/examples/`.
+`{text, reading, meaning}`), an `emotion` (`happy`, `surprised`, `sad`, `thinking`) and `slow`
+(a 0.75x replay). `look` is `pop` (the default), `pastel` or `night`. `flow: "listen_first"`
+plays the dialogue once without subtitles first; `quiz` is `true` (the line with the most
+keys), a line index, or `false`. `mode` is `cast`, `storyboard` (the default) or `full`. The
+shipped example is `describe_recipe("dialoguereel").example`; two full examples (Japanese N5,
+Korean TOPIK 1) are in `reelmachine/recipes/dialoguereel/examples/`.
 
 **Image characters.** A character's source may be `{"kind": "image", "provider": "openai",
 "description": …, "variant": 0}` (four PNG poses drawn once by OpenAI: 4 image calls, counted on
@@ -178,15 +178,15 @@ the caller's `openai` quota, needing `REEL_OPENAI_API_KEY`) or `{"kind": "image"
 {"neutral": url, …}}` (the caller's own PNGs, free). `probe` reports `details.castImages`
 (`{provider, calls, cached}`) and spends nothing.
 
-**MCP flow.** `make_cast` (free; its preview job's `cast.png` shows both characters) →
-`probe` (the script, the lint — including the JLPT level check on Japanese keys — the voices
-and the renderer, spending nothing) → `start_job` in `storyboard` mode → `start_job` in
-`full` mode for `reel.mp4`, `captions.srt` and `reel.json`. Storyboard and full jobs also write
-`post.md` (a ready caption: hook, dialogue, words, call to action, hashtags) and
-`script.resolved.json`. After a full build `verify` checks the format (1080x1920 with audio),
-the duration against the schedule (±100 ms), an audible voice, no silence over 1.5 s inside the
-dialogue, each line's text on screen when its meaning shows, and the renderer named.
-`describe_recipe("dialoguereel")` carries the `guide` an agent writes from: the workflow, about 30 N5-N3 situations, how to
-write natural lines, hook titles, endings, the emotion table, the level ladders (JLPT, TOPIK,
-CEFR) and the character SVG contract. See [DIALOGUEREEL.md](DIALOGUEREEL.md) and
-[MCP.md](MCP.md#make_cast).
+**MCP flow.** `make_cast` (free; its preview job's `cast.png` shows both characters) → `probe`
+(the script, the lint — including the JLPT level check on Japanese keys — the voices and the
+renderer, spending nothing) → `start_job` in `storyboard` mode → `start_job` in `full` mode
+for `reel.mp4`, `captions.srt` and `reel.json`. Storyboard and full jobs also write `post.md`
+(a ready caption: hook, dialogue, words, call to action, hashtags) and `script.resolved.json`.
+After a full build `verify` checks the format (1080x1920 with audio), the duration against the
+schedule (±100 ms), an audible voice, no silence over 1.5 s inside the dialogue, each line's
+text on screen when its meaning shows, and the renderer named.
+`describe_recipe("dialoguereel")` carries the `guide` an agent writes from: the workflow,
+about 30 N5-N3 situations, how to write natural lines, hook titles, endings, the emotion
+table, the level ladders (JLPT, TOPIK, CEFR) and the character SVG contract. See
+[DIALOGUEREEL.md](DIALOGUEREEL.md) and [MCP.md](MCP.md#make_cast).

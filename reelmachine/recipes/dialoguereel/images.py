@@ -80,7 +80,8 @@ class OpenAIImages:
         except httpx.HTTPError as exc:
             raise ProviderUnavailable(f"openai could not be reached ({type(exc).__name__})") from None
         if response.status_code != 200:
-            hint = {401: "check REEL_OPENAI_API_KEY", 403: "check REEL_OPENAI_API_KEY and the model's access",
+            hint = {400: "the provider's safety system may have refused the description; rephrase it",
+                    401: "check REEL_OPENAI_API_KEY", 403: "check REEL_OPENAI_API_KEY and the model's access",
                     429: "openai's rate limit or quota; try again later"}.get(response.status_code, "")
             raise ProviderUnavailable(f"openai refused the image request (HTTP {response.status_code})", hint=hint)
         try:

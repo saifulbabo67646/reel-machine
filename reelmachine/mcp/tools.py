@@ -528,7 +528,9 @@ class McpTools:
         if job_id:
             hint = f'{use}; get_job(previewJobId) then get_artifact(…, "cast.png") to see the characters'
             if calls:
-                hint += f"; the preview job draws the poses and spends {calls} OpenAI image calls"
+                openai = any(getattr(c.source, "provider", "") == "openai" for c in spec.characters)
+                kind = "OpenAI image" if openai else "image"
+                hint += f"; the preview job draws the poses and spends {calls} {kind} calls"
         elif why is not None:
             hint = (f"{use}. The cast is saved, but its preview did not start ({why.message}); "
                     "call make_cast again later with preview=true to see it")

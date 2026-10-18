@@ -23,12 +23,12 @@ OTHER_TAGS = ("#languagelearning", "#learnlanguages", "#vocabulary", "#language"
 
 
 def _level_tags(primary: str, level: str) -> list[str]:
-    flat = "".join(level.split())
+    flat = "".join(level.split()).upper()
     if primary == "ja":
         n = n_level(flat)
         return [f"#JLPTN{n}", "#jlpt"] if n else []
     if primary == "ko":
-        return [f"#{flat}"] if flat.upper().startswith("TOPIK") else []
+        return [f"#{flat}"] if flat.startswith("TOPIK") else []
     if primary == "es":
         return [f"#{flat}"] if re.fullmatch(r"[ABC][12]", flat) else []
     if primary == "zh":

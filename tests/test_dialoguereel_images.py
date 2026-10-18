@@ -71,13 +71,20 @@ def test_openai_request_shape():
     assert b'name="prompt"' in seen[1].content and seen[1].headers["authorization"] == "Bearer sk-test"
 
 
-@pytest.mark.parametrize("status", [401, 403, 429, 500])
+@pytest.mark.parametrize("status", [400, 401, 403, 429, 500])
 def test_openai_refusal_names_provider_not_key(status):
     gen = images.OpenAIImages("sk-test", client=httpx.Client(transport=_transport([], status)))
     with pytest.raises(ProviderUnavailable) as exc:
         gen.generate("p")
     assert "openai" in exc.value.message and str(status) in exc.value.message
     assert "sk-test" not in exc.value.message + exc.value.hint + json.dumps(exc.value.details)
+
+
+def test_a_bad_request_suggests_rephrasing():
+    gen = images.OpenAIImages("sk-test", client=httpx.Client(transport=_transport([], 400)))
+    with pytest.raises(ProviderUnavailable) as exc:
+        gen.generate("p")
+    assert "safety" in exc.value.hint and "rephrase" in exc.value.hint
 
 
 def test_missing_key_names_the_setting():

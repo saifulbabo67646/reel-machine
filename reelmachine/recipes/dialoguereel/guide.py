@@ -83,11 +83,13 @@ GUIDE: dict[str, Any] = {
         "poses": "neutral, talk, happy, surprised. A supplied character must give `neutral` (others missing fall back to it); the generator draws "
                  "all four.",
         "cost": "A generated character draws 4 poses: 4 OpenAI image calls, counted against the caller's `openai` "
-                "quota, once per cast (they are kept, so later reels reuse them). probe's `castImages` says how "
+                "quota, once per cast (they are kept, so later reels reuse them). The server needs "
+                "REEL_OPENAI_API_KEY (probe's images check fails without it). probe's `castImages` says how "
                 "many calls are still needed and spends nothing; supplied poses cost none.",
-        "variant": "The same description gives the same cast. Raise `variant` (1, 2, ...) for another take.",
-        "paths": "Supplied poses may be https URLs or PNG files; a local path works only on local runs, "
-                 "not on a hosted server.",
+        "variant": "Generated characters only, 0 to 99. Poses are drawn once and then kept and reused; the model has "
+                   "no seed, so raise `variant` (1, 2, ...) to draw a new take.",
+        "paths": "Supplied poses may be https URLs or PNG files; a local path works only on local (stdio/CLI) runs, "
+                 "not on a hosted (HTTP) server.",
     },
     "looks": {
         "pop": "The default: saturated electric blue like the reference reels. Bold and loud; suits most lessons.",

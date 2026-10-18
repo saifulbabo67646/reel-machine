@@ -32,6 +32,7 @@ def test_hashtags_count(lang, level):
 def test_hashtag_level_tags():
     assert "#TOPIK1" in post.hashtags("ko", "TOPIK 1")
     assert "#A2" in post.hashtags("es", "A2")
+    assert "#A2" in post.hashtags("es", "a2") and "#HSK2" in post.hashtags("zh", "hsk 2")
     assert "#HSK2" in post.hashtags("zh", "HSK2")
     assert "#JLPTN5" not in post.hashtags("ja", "beginner")
 
