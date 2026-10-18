@@ -36,7 +36,7 @@ def test_the_constants():
     assert LOOKS["pop"]["bg"] == "#4b2bff"
 
 
-LOOK_KEYS = {"bg", "text", "reading", "meaning", "accent", "bubble", "ink", "shade"}
+LOOK_KEYS = {"bg", "text", "reading", "meaning", "accent", "bubble", "ink", "shade", "lit"}
 
 
 def test_every_look_has_every_token():

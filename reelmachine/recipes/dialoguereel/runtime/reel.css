@@ -10,7 +10,7 @@
 html, body { margin: 0; background: #000; }
 #root {
   --bg: #4b2bff; --text: #fff; --reading: #7fd3ff; --meaning: #9fe0ff; --accent: #ffe066; --bubble: rgba(255,255,255,0.10);
-  --ink: #241466; --shade: 20,0,90;
+  --ink: #241466; --shade: 20,0,90; --lit: #ffe066;
   position: relative; width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); color: var(--text);
   font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", "Noto Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -88,13 +88,13 @@ html, body { margin: 0; background: #000; }
   line-break: strict; overflow-wrap: anywhere;
 }
 .rtext .ch { color: var(--text); text-shadow: 0 5px 0 rgba(var(--shade),0.28); }
-.rtext .ch.lit { color: var(--accent); }
+.rtext .ch.lit { color: var(--lit); }
 .rtext ruby { ruby-position: over; }
 .rtext rt {
   font-size: 0.38em; font-weight: 700; letter-spacing: 0.04em; color: color-mix(in srgb, var(--text) 78%, transparent);
   text-shadow: none; transform: translateY(-2px);
 }
-.rtext rt.lit { color: var(--accent); }
+.rtext rt.lit { color: var(--lit); }
 .bubble .reading {
   margin-top: 8px; color: var(--reading); font-size: 50px; font-weight: 700; line-height: 1.25; letter-spacing: 0.01em;
 }
@@ -122,7 +122,7 @@ html, body { margin: 0; background: #000; }
 
 /* key words: underlined in the bubble, and a chip each in the band under it */
 .rtext .ch.key {
-  text-decoration: underline 6px var(--accent); text-underline-offset: 14px; text-decoration-skip-ink: none;
+  text-decoration: underline 6px var(--lit); text-underline-offset: 14px; text-decoration-skip-ink: none;
 }
 .chips {
   position: absolute; left: 60px; top: 1000px; width: 960px; opacity: 0; transform-origin: 50% 0;
@@ -136,7 +136,7 @@ html, body { margin: 0; background: #000; }
 .chip-word { font-weight: 900; color: var(--text); letter-spacing: 0.02em; }
 .chip ruby { ruby-position: over; }
 .chip rt { font-size: 0.42em; font-weight: 700; letter-spacing: 0.04em; color: var(--reading); }
-.chip-dot { font-weight: 900; color: var(--accent); }
+.chip-dot { font-weight: 900; color: var(--lit); }
 .chip-meaning { font-weight: 800; color: var(--meaning); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .chip-level {
   align-self: center; padding: 4px 14px; border-radius: 999px; background: var(--accent); color: var(--ink);
@@ -226,7 +226,7 @@ html, body { margin: 0; background: #000; }
 
 /* the quiz: the question, its meaning, the 3-2-1 ring that becomes the answer, then the calls to act */
 .quiz-label {
-  padding: 12px 38px 14px; border-radius: 999px; background: rgba(var(--shade),0.36); color: var(--accent);
+  padding: 12px 38px 14px; border-radius: 999px; background: var(--accent); color: var(--ink);
   font-size: 54px; font-weight: 900; line-height: 1.15; opacity: 0;
 }
 .quiz-meaning {

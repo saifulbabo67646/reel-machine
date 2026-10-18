@@ -39,11 +39,11 @@ PROMPTS: dict[str, str] = {
 }
 LOOKS: dict[str, dict[str, str]] = {
     "pop": {"bg": "#4b2bff", "text": "#ffffff", "reading": "#7fd3ff", "meaning": "#9fe0ff", "accent": "#ffe066",
-            "bubble": "rgba(255,255,255,0.10)", "ink": "#241466", "shade": "20,0,90"},
+            "bubble": "rgba(255,255,255,0.10)", "ink": "#241466", "shade": "20,0,90", "lit": "#ffe066"},
     "pastel": {"bg": "#fff1e0", "text": "#3b2a4d", "reading": "#c2577f", "meaning": "#5b55c8", "accent": "#ffb0c8",
-               "bubble": "rgba(255,255,255,0.78)", "ink": "#3b2a4d", "shade": "150,105,80"},
+               "bubble": "rgba(255,255,255,0.78)", "ink": "#3b2a4d", "shade": "150,105,80", "lit": "#d23f73"},
     "night": {"bg": "#0c1230", "text": "#f4f6ff", "reading": "#5ef2ff", "meaning": "#b9a9ff", "accent": "#ff4fd8",
-              "bubble": "rgba(255,255,255,0.08)", "ink": "#0c1230", "shade": "0,0,0"},
+              "bubble": "rgba(255,255,255,0.08)", "ink": "#0c1230", "shade": "0,0,0", "lit": "#ff4fd8"},
 }
 
 

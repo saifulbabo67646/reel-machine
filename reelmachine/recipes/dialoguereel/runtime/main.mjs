@@ -215,6 +215,7 @@ function build(doc, root) {
   root.style.setProperty("--bubble", doc.look.bubble);
   root.style.setProperty("--ink", doc.look.ink);
   root.style.setProperty("--shade", doc.look.shade);
+  root.style.setProperty("--lit", doc.look.lit);
   root.prepend(el("div", "floor"));
   root.prepend(el("div", "glow"));
   const ui = { root, mode: doc.mode };
