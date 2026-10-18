@@ -80,7 +80,7 @@ GUIDE: dict[str, Any] = {
             "supplied": {"kind": "image", "poses": {
                 "neutral": "https://example.com/rice-neutral.png", "talk": "https://example.com/rice-talk.png"}},
         },
-        "poses": "neutral, talk, happy, surprised. A supplied character must give `neutral`; the generator draws "
+        "poses": "neutral, talk, happy, surprised. A supplied character must give `neutral` (others missing fall back to it); the generator draws "
                  "all four.",
         "cost": "A generated character draws 4 poses: 4 OpenAI image calls, counted against the caller's `openai` "
                 "quota, once per cast (they are kept, so later reels reuse them). probe's `castImages` says how "
