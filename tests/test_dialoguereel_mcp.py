@@ -142,3 +142,53 @@ def test_the_preview_job_makes_a_cast_sheet(tmp_path):
         assert job.state.value == "succeeded", job.error
         art = tools.get_artifact(None, out["previewJobId"], "cast.png")
     assert art["bytes"] > 0
+
+
+def _casts(tools, caller="local"):
+    folder = tools.engine.store.caller_dir(caller) / "casts"
+    return sorted(folder.glob("*.json")) if folder.is_dir() else []
+
+
+def test_make_cast_refuses_a_caller_without_the_recipe_and_saves_nothing(tmp_path):
+    from reelmachine.core.job import CallerPolicy
+    with _tools(tmp_path) as tools:
+        tools.engine._policy_for = lambda caller: CallerPolicy(allowed_recipes=["doodle"])
+        with pytest.raises(ToolError) as err:
+            tools.make_cast(None, CHARACTERS, preview=False)
+        assert _casts(tools) == [] and not tools.submitted
+    payload = json.loads(str(err.value))
+    assert payload["code"] == "INVALID_INPUT" and "not enabled" in payload["message"]
+
+
+def test_make_cast_refuses_a_caller_over_its_disk_budget_and_saves_nothing(tmp_path):
+    from reelmachine.core.job import CallerPolicy
+    with _tools(tmp_path) as tools:
+        tools.engine._policy_for = lambda caller: CallerPolicy(max_disk_mb=1)
+        root = tools.engine.store.caller_dir("local")
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "ballast.bin").write_bytes(b"\0" * (1024 * 1024 + 1))
+        with pytest.raises(ToolError) as err:
+            tools.make_cast(None, CHARACTERS, preview=False)
+        assert _casts(tools) == []
+    assert json.loads(str(err.value))["code"] == "DISK_LIMIT"
+
+
+@pytest.mark.parametrize("limit", ["ConcurrencyLimit", "DiskLimit", "QuotaExceededError"])
+def test_make_cast_keeps_the_cast_id_when_the_preview_cannot_start(tmp_path, limit):
+    from reelmachine.core import errors
+    with _tools(tmp_path) as tools:
+        def refuse(request, *, caller="local"):
+            raise getattr(errors, limit)("caller 'local' already has 1 job(s) running", hint="wait")
+
+        tools.engine.submit = refuse
+        out = tools.make_cast(None, CHARACTERS)
+        assert [p.stem for p in _casts(tools)] == [out["castId"]]
+    assert out["previewJobId"] is None and out["castId"].startswith("cast_")
+    assert "already has 1 job(s) running" in out["hint"] and "preview=true" in out["hint"]
+    assert "get_job(previewJobId)" not in out["hint"]
+
+
+def test_make_cast_without_a_preview_does_not_mention_one(tmp_path):
+    with _tools(tmp_path) as tools:
+        out = tools.make_cast(None, CHARACTERS, preview=False)
+    assert out["previewJobId"] is None and "previewJobId" not in out["hint"] and "castId" in out["hint"]

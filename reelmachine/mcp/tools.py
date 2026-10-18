@@ -491,7 +491,7 @@ class McpTools:
         """Check and save a dialoguereel cast for this caller; optionally start a job that draws it (cast.png)."""
         from pydantic import ValidationError
 
-        from ..core.errors import InvalidInput
+        from ..core.errors import ConcurrencyLimit, DiskLimit, InvalidInput, QuotaExceededError
         from ..recipes.dialoguereel import cast as casts
         from ..recipes.dialoguereel.models import CastSpec
 
@@ -509,14 +509,26 @@ class McpTools:
                          "errors": errors[:8]},
             ) from exc
         resolved = casts.resolve(spec, path="")
+        self.engine.check_can_store("dialoguereel", caller=caller)  # the recipe is enabled, the disk not full
         ident = casts.save(self.engine.store.caller_dir(caller), spec)
-        job_id = None
+        job_id, why = None, None
         if preview:
-            job = self.engine.submit(
-                JobRequest(recipe="dialoguereel", inputs={"mode": "cast", "cast": ident, "lines": []}),
-                caller=caller,
-            )
-            job_id = job.id
+            try:
+                job = self.engine.submit(
+                    JobRequest(recipe="dialoguereel", inputs={"mode": "cast", "cast": ident, "lines": []}),
+                    caller=caller,
+                )
+                job_id = job.id
+            except (ConcurrencyLimit, DiskLimit, QuotaExceededError) as exc:
+                why = exc  # the cast is saved; only its preview could not start
+        use = 'pass castId as the reel\'s "cast"'
+        if job_id:
+            hint = f'{use}; get_job(previewJobId) then get_artifact(…, "cast.png") to see the characters'
+        elif why is not None:
+            hint = (f"{use}. The cast is saved, but its preview did not start ({why.message}); "
+                    "call make_cast again later with preview=true to see it")
+        else:
+            hint = f"{use} (no preview was asked for)"
         return {
             "schemaVersion": SCHEMA_VERSION,
             "castId": ident,
@@ -525,8 +537,7 @@ class McpTools:
                 for c in resolved.characters
             ],
             "previewJobId": job_id,
-            "hint": 'pass castId as the reel\'s "cast"; get_job(previewJobId) then '
-            'get_artifact(…, "cast.png") to see the characters',
+            "hint": hint,
         }
 
     @_guard

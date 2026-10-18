@@ -195,12 +195,7 @@ class Engine:
         recipe = self.get_recipe(request.recipe)
         inputs = self._inputs_for(recipe, request.inputs)
         policy = self._policy_for(caller)
-        if policy.allowed_recipes is not None and recipe.spec.id not in policy.allowed_recipes:
-            raise InvalidInput(
-                f"recipe {recipe.spec.id!r} is not enabled for this caller",
-                hint="ask the deployment to allow it",
-                details={"recipe": recipe.spec.id, "caller": caller},
-            )
+        self._check_recipe_allowed(policy, recipe.spec.id, caller)
         if request.idempotency_key:
             existing_id = self.store.find_by_idempotency(request.idempotency_key, caller=caller)
             if existing_id:
@@ -221,6 +216,22 @@ class Engine:
         self._runner.submit(job, recipe, inputs)
         return job
 
+    def check_can_store(self, recipe_id: str, *, caller: str = "local") -> None:
+        """What a tool that writes to the caller's directory without a job (dialoguereel's make_cast)
+        must pass first: the recipe is enabled for the caller and the caller is within its disk budget."""
+        policy = self._policy_for(caller)
+        self._check_recipe_allowed(policy, recipe_id, caller)
+        self._check_disk(policy, caller)
+
+    @staticmethod
+    def _check_recipe_allowed(policy: CallerPolicy, recipe_id: str, caller: str) -> None:
+        if policy.allowed_recipes is not None and recipe_id not in policy.allowed_recipes:
+            raise InvalidInput(
+                f"recipe {recipe_id!r} is not enabled for this caller",
+                hint="ask the deployment to allow it",
+                details={"recipe": recipe_id, "caller": caller},
+            )
+
     def _enforce_limits(self, policy: CallerPolicy, caller: str) -> None:
         if self._runner.running_count(caller) >= policy.max_concurrent_jobs:
             raise ConcurrencyLimit(
@@ -228,6 +239,17 @@ class Engine:
                 hint="wait for one to finish, or raise the caller's limit",
                 details={"caller": caller, "limit": policy.max_concurrent_jobs},
             )
+        self._check_disk(policy, caller)
+        for provider, limit in policy.quotas.items():
+            path = self.store.root() / caller / "quota" / f"{provider}.json"
+            if ledger_total(path) >= limit:
+                raise QuotaExceededError(
+                    f"the {provider} quota for caller {caller!r} is exhausted",
+                    hint="wait for the quota to reset or raise the caller's limit",
+                    details={"caller": caller, "provider": provider, "limit": limit},
+                )
+
+    def _check_disk(self, policy: CallerPolicy, caller: str) -> None:
         if policy.max_disk_mb:
             used = self._disk_usage(caller)
             limit = policy.max_disk_mb * 1024 * 1024
@@ -236,14 +258,6 @@ class Engine:
                     f"caller {caller!r} is using {used / 1e6:.0f} MB of its {policy.max_disk_mb} MB budget",
                     hint="delete old jobs or raise the caller's disk limit",
                     details={"caller": caller, "usedBytes": used, "limitBytes": limit},
-                )
-        for provider, limit in policy.quotas.items():
-            path = self.store.root() / caller / "quota" / f"{provider}.json"
-            if ledger_total(path) >= limit:
-                raise QuotaExceededError(
-                    f"the {provider} quota for caller {caller!r} is exhausted",
-                    hint="wait for the quota to reset or raise the caller's limit",
-                    details={"caller": caller, "provider": provider, "limit": limit},
                 )
 
     def _disk_usage(self, caller: str) -> int:
