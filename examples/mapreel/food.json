@@ -194,12 +194,14 @@
           "emoji": "🐛"
         },
         {
-          "name": "Sardinia",
-          "emoji": "🏝️"
+          "name": "Casu martzu",
+          "say": "Sardinia's casu",
+          "emoji": "🧀"
         },
         {
-          "name": "Casu martzu",
-          "emoji": "🧀"
+          "name": "Rotten cheese",
+          "say": "martzu",
+          "emoji": "🤢"
         },
         {
           "name": "Dangerous",
