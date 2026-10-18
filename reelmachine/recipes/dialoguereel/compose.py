@@ -16,7 +16,9 @@ from typing import Any
 from reelmachine.core.timeline import WordSpan
 
 from .cast import ResolvedCast
-from .models import DialogueReelInputs
+from .keys import match_keys
+from .levels import jlpt_level
+from .models import DialogueReelInputs, Line
 from .ruby import parse_ruby
 from .schedule import Schedule
 from .svg import inline_svg
@@ -40,7 +42,26 @@ LOOKS: dict[str, dict[str, str]] = {
 
 
 def prompt_for(meaning_language: str) -> str | None:
-    return PROMPTS.get(meaning_language.strip().lower().replace("_", "-").split("-")[0])
+    return PROMPTS.get(_primary(meaning_language))
+
+
+def _primary(language: str) -> str:
+    return language.strip().lower().replace("_", "-").split("-")[0]
+
+
+def _keys(line: Line, language: str) -> list[dict[str, Any]]:
+    """The line's key words that were found in it, with their place in its plain text (for the underline);
+    a JLPT level only for Japanese."""
+    japanese = _primary(language) == "ja"
+    out = []
+    for span in match_keys(line.text, line.keys):
+        if span is None:
+            continue
+        key = line.keys[span.index]
+        out.append({"text": key.text, "reading": key.reading, "meaning": key.meaning,
+                    "level": jlpt_level(key.text, key.reading) if japanese else None,
+                    "start": span.start, "end": span.end})
+    return out
 
 
 def _characters(cast: ResolvedCast) -> list[dict[str, Any]]:
@@ -62,6 +83,9 @@ def reel_document(inputs: DialogueReelInputs, cast: ResolvedCast, plan: Schedule
             "startMs": window.start_ms, "endMs": window.end_ms, "meaningMs": window.meaning_ms,
             "words": [{"text": w.text, "startMs": window.start_ms + w.start_ms, "endMs": window.start_ms + w.end_ms}
                       for w in spans],
+            "keys": _keys(line, inputs.language), "emotion": line.emotion,
+            "slowStartMs": window.slow_start_ms,
+            "slowEndMs": window.slow_start_ms + window.slow_ms if window.slow_start_ms is not None else None,
         })
     return {
         "mode": "reel", "width": WIDTH, "height": HEIGHT, "duration": plan.duration_ms / 1000,

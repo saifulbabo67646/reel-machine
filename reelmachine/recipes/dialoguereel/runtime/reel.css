@@ -115,3 +115,44 @@ html, body { margin: 0; background: #000; }
 }
 .shadow.left { left: 140px; }
 .shadow.right { left: 640px; }
+
+/* key words: underlined in the bubble, and a chip each in the band under it */
+.bubble .text .ch.key {
+  text-decoration: underline 6px var(--accent); text-underline-offset: 14px; text-decoration-skip-ink: none;
+}
+.chips {
+  position: absolute; left: 60px; top: 1000px; width: 960px; opacity: 0; transform-origin: 50% 0;
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 16px 18px;
+}
+.chip {
+  display: flex; align-items: baseline; gap: 16px; max-width: 960px; padding: 10px 30px 14px; border-radius: 999px;
+  border: 4px solid var(--accent); background: rgba(20,0,90,0.32); box-shadow: 0 7px 0 rgba(20,0,90,0.28);
+  font-size: 52px; line-height: 1.2; white-space: nowrap; opacity: 0; transform-origin: 50% 100%;
+}
+.chip-word { font-weight: 900; color: var(--text); letter-spacing: 0.02em; }
+.chip ruby { ruby-position: over; }
+.chip rt { font-size: 0.42em; font-weight: 700; letter-spacing: 0.04em; color: var(--reading); }
+.chip-dot { font-weight: 900; color: var(--accent); }
+.chip-meaning { font-weight: 800; color: var(--meaning); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.chip-level {
+  align-self: center; padding: 4px 14px; border-radius: 999px; background: var(--accent); color: #241466;
+  font-size: 30px; font-weight: 900; letter-spacing: 0.04em; line-height: 1.1;
+}
+
+/* the slow replay's tag, on the bubble's lower corner (away from the tail and the history rows) */
+.slow-tag {
+  position: absolute; bottom: -30px; padding: 8px 24px; border-radius: 999px; z-index: 1;
+  background: var(--accent); color: #241466; font-size: 40px; font-weight: 900; line-height: 1.15;
+  box-shadow: 0 6px 0 rgba(20,0,90,0.28); opacity: 0;
+}
+.bubble.left .slow-tag { right: 44px; }
+.bubble.right .slow-tag { left: 44px; }
+
+/* an emotion's emoji, rising from above the speaker's head */
+.emoji {
+  position: absolute; top: 1150px; width: 160px; height: 160px; margin-left: -80px; z-index: 3;
+  display: flex; align-items: center; justify-content: center; font-size: 110px; line-height: 1;
+  opacity: 0; transform-origin: 50% 100%; filter: drop-shadow(0 8px 0 rgba(20,0,90,0.25));
+}
+.emoji.left { left: 170px; }
+.emoji.right { left: 910px; }

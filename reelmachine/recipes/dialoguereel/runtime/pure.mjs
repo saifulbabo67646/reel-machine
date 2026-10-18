@@ -55,10 +55,10 @@ export function hop(ms, startMs) {
 
 export const FLAP_MS = 90;
 
-/** Whether the mouth is open: inside a spoken span, open on even 90 ms ticks from the span's start. */
-export function mouthOpen(ms, words) {
+/** Whether the mouth is open: inside a spoken span, open on even 90 ms ticks (`flapMs`) from the span's start. */
+export function mouthOpen(ms, words, flapMs = FLAP_MS) {
   for (const w of words) {
-    if (ms >= w.startMs && ms < w.endMs) return Math.floor((ms - w.startMs) / FLAP_MS) % 2 === 0;
+    if (ms >= w.startMs && ms < w.endMs) return Math.floor((ms - w.startMs) / flapMs) % 2 === 0;
   }
   return false;
 }
@@ -149,3 +149,81 @@ export function fitFont(text, width = 800) {
 const FLAGS = { ja: "🇯🇵", ko: "🇰🇷", zh: "🇨🇳", es: "🇪🇸", fr: "🇫🇷", de: "🇩🇪", it: "🇮🇹", pt: "🇧🇷", en: "🇬🇧", vi: "🇻🇳", th: "🇹🇭", id: "🇮🇩" };
 
 export const flag = (language) => FLAGS[String(language || "").toLowerCase().split(/[-_]/)[0]] || "";
+
+// ------------------------------------------------------------ key words, emotions and slow replays
+
+/** A line's spoken spans, or one span over the whole line when TTS gave none. */
+const spokenOf = (line) => (line.words && line.words.length ? line.words : [{ text: "", startMs: line.startMs, endMs: line.endMs }]);
+
+export const KEY_POP_MS = 220;
+
+/** A key chip's entry progress, 0..1: from the moment the karaoke lights the key's first character, over
+    220 ms (the caller eases it with backOut). It stays at 1; the chip leaves with its bubble. */
+export function keyVisible(ms, line, key, total) {
+  const words = spokenOf(line);
+  let lo = Math.min(...words.map((w) => w.startMs)), hi = Math.max(...words.map((w) => w.endMs));
+  if (ms < lo || litChars(hi, total, words) <= key.start) return 0;
+  // litChars only grows with time: the first whole ms at which it passes key.start
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (litChars(mid, total, words) > key.start) hi = mid;
+    else lo = mid + 1;
+  }
+  return clamp01((ms - lo) / KEY_POP_MS);
+}
+
+const EMOTIONS = {
+  neutral: { eyes: "open", smile: false, extras: [], emoji: "", tiltDeg: 0 },
+  happy: { eyes: "happy", smile: true, extras: [], emoji: "❤️", tiltDeg: 0 },
+  surprised: { eyes: "surprised", smile: false, extras: [], emoji: "❗", tiltDeg: 0 },
+  sad: { eyes: "open", smile: false, extras: ["sweat"], emoji: "💦", tiltDeg: 0 },
+  thinking: { eyes: "open", smile: false, extras: [], emoji: "❓", tiltDeg: 8 },
+};
+
+/** What a speaker's face shows for an emotion. `eyes` is open|happy|surprised and `mouth` open|closed|smile
+    (a talking mouth is always open); `extras` are optional parts shown as well. */
+export function emotionParts(emotion, talking) {
+  const e = EMOTIONS[emotion] || EMOTIONS.neutral;
+  return { eyes: e.eyes, mouth: talking ? "open" : e.smile ? "smile" : "closed", extras: [...e.extras], emoji: e.emoji, tiltDeg: e.tiltDeg };
+}
+
+export const EMOJI_MS = 600;
+export const EMOJI_RISE_PX = 130;
+
+/** An emotion emoji over the speaker's head: it pops up from nothing, rises 130 px and fades, in 600 ms. */
+export function emojiPop(ms, startMs) {
+  const p = (ms - startMs) / EMOJI_MS;
+  if (!(p >= 0 && p < 1)) return { y: 0, scale: 0, alpha: 0 };
+  const grow = clamp01(p / 0.4);
+  return {
+    y: -EMOJI_RISE_PX * (1 - Math.pow(1 - p, 2)),
+    scale: lerp(0.3, 1, backOut(grow)),
+    alpha: p < 0.12 ? p / 0.12 : p > 0.6 ? 1 - smooth((p - 0.6) / 0.4) : 1,
+  };
+}
+
+export const SLOW_RATE = 0.75;
+export const SLOW_FLAP_MS = Math.round(FLAP_MS / SLOW_RATE);
+
+/** Whether `line`'s slow replay is playing. */
+export const slowActive = (ms, line) =>
+  line.slowStartMs != null && line.slowEndMs != null && ms >= line.slowStartMs && ms < line.slowEndMs;
+
+/** The line's spoken spans moved into its slow replay, stretched by 1 / 0.75. */
+export function slowWords(line) {
+  if (line.slowStartMs == null) return [];
+  if (!line.words || !line.words.length) return [{ text: "", startMs: line.slowStartMs, endMs: line.slowEndMs }];
+  const at = (t) => line.slowStartMs + Math.round((t - line.startMs) / SLOW_RATE);
+  return line.words.map((w) => ({ text: w.text, startMs: at(w.startMs), endMs: at(w.endMs) }));
+}
+
+export const ROW_MIN = 0.5;
+
+/** A history row's two font sizes. `textLen` and `meaningLen` are the texts' widths in em; both shrink by the
+    same factor until the row fits `widthPx`, but never below half their `base` size (past that, CSS ellipsis). */
+export function rowFit(textLen, meaningLen, widthPx, base = { textPx: 70, meaningPx: 39 }) {
+  const need = textLen * base.textPx + meaningLen * base.meaningPx;
+  const k = need > 0 ? Math.max(ROW_MIN, Math.min(1, widthPx / need)) : 1;
+  const size = (px) => (k >= 1 ? px : Math.max(Math.round(px * ROW_MIN), Math.floor(px * k)));
+  return { textPx: size(base.textPx), meaningPx: size(base.meaningPx) };
+}

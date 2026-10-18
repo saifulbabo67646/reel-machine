@@ -3,7 +3,8 @@
 // HyperFrames seeks to (pure.mjs decides; this file only applies). HyperFrames waits on
 // window.__hf.buildReady (set inline in index.html) before capturing. Opened directly in a browser,
 // index.html?t=3.2 shows the frame at 3.2 s.
-import { activeLine, dropIn, hop, mouthOpen, blinking, litChars, fade, history, progress, bob, seedOf, fitFont, flag, clamp01, DROP_MS, partId } from "./pure.mjs";
+import { activeLine, dropIn, hop, mouthOpen, blinking, litChars, fade, history, progress, bob, seedOf, fitFont, flag, clamp01, DROP_MS, partId,
+  backOut, keyVisible, emotionParts, emojiPop, slowActive, slowWords, rowFit, SLOW_FLAP_MS } from "./pure.mjs";
 
 const done = () => window.__reelResolve && window.__reelResolve();
 const DROP_DELAY = { left: 150, right: 300 };
@@ -13,7 +14,12 @@ const ENTER_DELAY_MS = 70, ENTER_MS = 220; // ... and the new one pops in just a
 const SLIDE_MS = 300; // history rows move up one slot
 // history rows are their line at 70 % size: the bubble's fitted text size and its meaning size, times 0.7
 const ROW_SCALE = 0.7, MEANING_PX = 56, ROW_LEADING = 1.3, ROW_GAP = 10, ROW_AIR = 14;
+// what a row's two texts have to share: its 936 px less 2 × 28 px padding, the 18 px gap and a little slack
+const ROW_ROOM = 936 - 56 - 18 - 6;
 const BUBBLE_TOP = 372; // two rows at the largest size fit between the badge (bottom 148) and the bubble
+// the key chips sit in the band between the bubble's tail and the characters' heads
+const TAIL_PX = 62, CHIP_AIR = 22, CHIP_TOP = 1000, CHIP_BOTTOM = 1250;
+const SLOW_TAG_MS = 240;
 
 /** Each history row's top when line `a` is active: the newest sits just above the bubble, older ones above it. */
 function rowTops(rows, a) {
@@ -55,9 +61,27 @@ function buildCharacter(root, char, index) {
   return {
     ...char, index, box, shadow, seed: seedOf(char.id),
     eyesOpen: part("eyes-open"), eyesClosed: part("eyes-closed"), eyesHappy: part("eyes-happy"),
+    eyesSurprised: part("eyes-surprised"), sweat: part("sweat"),
     mouthClosed: part("mouth-closed"), mouthOpen: part("mouth-open"), mouthSmile: part("mouth-smile"),
     arm: arm(inner), armSign: inner === "arm-left" ? 1 : -1,
+    emoji: el("div", `emoji ${char.side}`, root), emojiText: "",
   };
+}
+
+/** A key word's chip: the word (its reading above it, as in the bubble), a dot, the meaning and its JLPT level. */
+function buildChip(parent, key) {
+  const chip = el("div", "chip", parent);
+  const word = el("span", "chip-word", chip);
+  if (key.reading && key.reading !== key.text) {
+    const ruby = el("ruby", null, word, key.text);
+    el("rt", null, ruby, key.reading);
+  } else {
+    word.textContent = key.text;
+  }
+  el("span", "chip-dot", chip, "·");
+  el("span", "chip-meaning", chip, key.meaning);
+  if (Number.isInteger(key.level)) el("span", "chip-level", chip, `N${key.level}`);
+  return chip;
 }
 
 function buildBubble(stage, line, side) {
@@ -75,10 +99,16 @@ function buildBubble(stage, line, side) {
     for (const ch of run.t) chars.push(el("span", "ch", host, ch));
     if (run.r) rts.push({ node: el("rt", null, host, run.r), first });
   }
+  const keys = line.keys || [];
+  for (const key of keys) for (let i = key.start; i < key.end && i < chars.length; i++) chars[i].classList.add("key");
   const reading = line.reading ? el("div", "reading", body, line.reading) : null;
   const meaning = el("div", "meaning", body, line.meaning);
   const spoken = line.words.length ? line.words : [{ text: plain, startMs: line.startMs, endMs: line.endMs }];
-  return { bubble, chars, rts, reading, meaning, spoken, lit: -1 };
+  const slow = line.slowStartMs != null ? { words: slowWords(line), tag: el("div", "slow-tag", bubble, "🐢 0.75×") } : null;
+  const chipBox = el("div", "chips", stage);
+  // in the order the karaoke reaches them
+  const chips = [...keys].sort((x, y) => x.start - y.start).map((key) => ({ key, node: buildChip(chipBox, key) }));
+  return { bubble, body, chars, rts, reading, meaning, spoken, slow, chipBox, chips, lit: -1 };
 }
 
 function build(doc, root) {
@@ -109,15 +139,39 @@ function build(doc, root) {
   ui.rows = doc.lines.map((line) => {
     const node = el("div", `row ${ui.bySide[line.speaker] || "left"}`, stage);
     const plain = line.runs.map((r) => r.t).join("");
-    const size = Math.round(ROW_SCALE * fitFont(plain));
-    const height = Math.round(size * ROW_LEADING);
-    Object.assign(node.style, { height: `${height}px`, lineHeight: `${height}px`, borderRadius: `${height / 2}px` });
-    el("span", "row-text", node, plain).style.fontSize = `${size}px`;
-    el("span", "row-meaning", node, line.meaning).style.fontSize = `${Math.round(ROW_SCALE * MEANING_PX)}px`;
-    return { node, height };
+    const base = { textPx: Math.round(ROW_SCALE * fitFont(plain)), meaningPx: Math.round(ROW_SCALE * MEANING_PX) };
+    return { node, base, text: el("span", "row-text", node, plain), meaning: el("span", "row-meaning", node, line.meaning), height: 0 };
   });
   ui.bubbles = doc.lines.map((line) => buildBubble(stage, line, ui.bySide[line.speaker] || "left"));
   return ui;
+}
+
+/** Sizes that need the fonts: each history row shrinks to fit on one line, and each line's chips sit just
+    under its bubble's tail (smaller, when there are too many for the band). Runs once, after fonts load. */
+function fit(ui) {
+  if (ui.mode !== "reel") return;
+  // a text's natural width in em (flex: none, so the row's own width cannot squeeze it first)
+  const em = (node) => {
+    Object.assign(node.style, { fontSize: "100px", flex: "none" });
+    const width = node.getBoundingClientRect().width / 100;
+    node.style.flex = "";
+    return width;
+  };
+  for (const row of ui.rows) {
+    const size = rowFit(em(row.text), em(row.meaning), ROW_ROOM, row.base);
+    row.height = Math.round(size.textPx * ROW_LEADING);
+    row.text.style.fontSize = `${size.textPx}px`;
+    row.meaning.style.fontSize = `${size.meaningPx}px`;
+    Object.assign(row.node.style, { height: `${row.height}px`, lineHeight: `${row.height}px`, borderRadius: `${row.height / 2}px` });
+  }
+  for (const b of ui.bubbles) {
+    if (!b.chips.length) continue;
+    // from y 1000 down; a stack too tall for that rises towards the tail, and only then shrinks
+    const highest = BUBBLE_TOP + b.body.offsetHeight + TAIL_PX + CHIP_AIR, height = b.chipBox.offsetHeight;
+    const top = Math.max(highest, Math.min(CHIP_TOP, CHIP_BOTTOM - height));
+    b.chipBox.style.top = `${top}px`;
+    b.chipScale = Math.max(0.4, Math.min(1, (CHIP_BOTTOM - top) / height));
+  }
 }
 
 function applyCharacter(c, ms, doc, line, prevLine) {
@@ -126,8 +180,11 @@ function applyCharacter(c, ms, doc, line, prevLine) {
   const landed = delay + DROP_MS;
   const idle = bob(ms, c.index) * fade(ms, landed, 300);
   const speaking = line && line.speaker === c.id;
-  const h = speaking ? hop(ms, line.startMs) : { y: 0, sx: 1, sy: 1 };
-  const towards = (l) => (l && l.speaker !== c.id ? (c.side === "left" ? TILT_DEG : -TILT_DEG) : 0);
+  const replay = speaking && line.slowStartMs != null && ms >= line.slowStartMs;
+  const h = speaking ? hop(ms, replay ? line.slowStartMs : line.startMs) : { y: 0, sx: 1, sy: 1 };
+  // a listener leans towards the speaker; a thinking speaker tilts its head away
+  const inward = c.side === "left" ? 1 : -1;
+  const towards = (l) => (!l ? 0 : l.speaker !== c.id ? inward * TILT_DEG : -inward * emotionParts(l.emotion, false).tiltDeg);
   const tilt = line ? lerp(towards(prevLine), towards(line), fade(ms, line.startMs, 300)) : 0;
   const y = drop.y + idle + h.y;
   c.box.style.visibility = ms < delay ? "hidden" : "visible";
@@ -140,15 +197,27 @@ function applyCharacter(c, ms, doc, line, prevLine) {
   c.shadow.style.transform = `scale(${(1 - 0.25 * air).toFixed(3)})`;
 
   const blink = blinking(ms, c.seed);
-  const happy = doc.mode === "reel" && ms >= landed && ms < (doc.hookMs || 0) && c.eyesHappy;
-  show(c.eyesOpen, !blink && !happy);
+  const talking = speaking && (replay
+    ? mouthOpen(ms, slowWords(line), SLOW_FLAP_MS)
+    : mouthOpen(ms, line.words.length ? line.words : [{ startMs: line.startMs, endMs: line.endMs }]));
+  const face = emotionParts(speaking ? line.emotion : "neutral", talking);
+  // the hook's greeting (and the cast sheet) is happy too
+  if ((doc.mode === "reel" && ms >= landed && ms < (doc.hookMs || 0)) || (!line && doc.mode === "cast" && ms >= landed)) {
+    if (doc.mode === "reel") face.eyes = "happy";
+    if (!talking) face.mouth = "smile";
+  }
+  // a part the character does not have falls back to the neutral one
+  const eyes = { happy: c.eyesHappy, surprised: c.eyesSurprised }[face.eyes] || c.eyesOpen;
+  for (const node of [c.eyesOpen, c.eyesHappy, c.eyesSurprised]) show(node, !blink && node === eyes);
   show(c.eyesClosed, blink);
-  show(c.eyesHappy, !blink && happy);
-  const talking = speaking && mouthOpen(ms, line.words.length ? line.words : [{ startMs: line.startMs, endMs: line.endMs }]);
-  const smile = (happy || (!line && doc.mode === "cast" && ms >= landed)) && c.mouthSmile;
-  show(c.mouthOpen, talking);
-  show(c.mouthSmile, !talking && smile);
-  show(c.mouthClosed, !talking && !smile);
+  const mouth = { open: c.mouthOpen, smile: c.mouthSmile }[face.mouth] || c.mouthClosed;
+  for (const node of [c.mouthOpen, c.mouthSmile, c.mouthClosed]) show(node, node === mouth);
+  show(c.sweat, face.extras.includes("sweat"));
+
+  const pop = speaking && face.emoji ? emojiPop(ms, line.startMs) : { y: 0, scale: 0, alpha: 0 };
+  if (pop.alpha > 0 && c.emojiText !== face.emoji) c.emoji.textContent = c.emojiText = face.emoji;
+  c.emoji.style.opacity = pop.alpha.toFixed(3);
+  c.emoji.style.transform = `translateY(${(pop.y + y).toFixed(1)}px) scale(${pop.scale.toFixed(4)})`;
   if (c.arm) {
     const wave = speaking ? Math.sin(Math.PI * clamp01((ms - line.startMs) / 600)) : 0;
     c.arm.style.transform = `rotate(${(c.armSign * 24 * wave).toFixed(2)}deg)`;
@@ -164,7 +233,9 @@ function applyBubble(b, line, ms, state) {
   bubble.style.opacity = state.opacity.toFixed(3);
   bubble.style.transformOrigin = state.origin || "";
   bubble.style.transform = `translateY(${state.y.toFixed(1)}px) scale(${state.scale.toFixed(4)})`;
-  const lit = litChars(ms, b.chars.length, b.spoken);
+  // the slow replay runs the karaoke again from the start, at its own pace
+  const replay = b.slow && ms >= line.slowStartMs;
+  const lit = litChars(ms, b.chars.length, replay ? b.slow.words : b.spoken);
   if (lit !== b.lit) {
     b.chars.forEach((node, i) => node.classList.toggle("lit", i < lit));
     for (const rt of b.rts) rt.node.classList.toggle("lit", rt.first < lit);
@@ -173,6 +244,27 @@ function applyBubble(b, line, ms, state) {
   const m = fade(ms, line.meaningMs, 250);
   b.meaning.style.opacity = m.toFixed(3);
   b.meaning.style.transform = `translateY(${((1 - m) * 14).toFixed(1)}px)`;
+  if (b.slow) {
+    // it pops in as the replay starts and fades in the 200 ms after it ends
+    const on = backOut(clamp01((ms - line.slowStartMs) / SLOW_TAG_MS));
+    const alpha = slowActive(ms, line) ? clamp01(on * 1.5) : ms >= line.slowEndMs ? 1 - fade(ms, line.slowEndMs, 200) : 0;
+    b.slow.tag.style.opacity = alpha.toFixed(3);
+    b.slow.tag.style.transform = `scale(${lerp(0.4, 1, on).toFixed(4)}) rotate(-4deg)`;
+  }
+}
+
+/** The line's key chips pop in as the karaoke reaches each word, and leave with the bubble. */
+function applyChips(b, line, ms, state) {
+  if (!b.chips.length) return;
+  b.chipBox.style.opacity = state === null ? "0" : state.opacity.toFixed(3);
+  if (state === null) return;
+  b.chipBox.style.transform = `translateY(${(state.y < 0 ? state.y * 0.5 : 0).toFixed(1)}px) scale(${(b.chipScale || 1).toFixed(4)})`;
+  for (const { key, node } of b.chips) {
+    const p = keyVisible(ms, line, key, b.chars.length);
+    const e = backOut(p);
+    node.style.opacity = clamp01(p * 2.5).toFixed(3);
+    node.style.transform = `translateY(${((1 - e) * 26).toFixed(1)}px) scale(${lerp(0.55, 1, e).toFixed(4)})`;
+  }
 }
 
 function renderFrame(ui, doc, t) {
@@ -200,6 +292,7 @@ function renderFrame(ui, doc, t) {
     if (k === a) state = { opacity: enter, y: 28 * (1 - enter), scale: lerp(0.9, 1, enter) };
     else if (k === a - 1 && exit < 1) state = { opacity: (1 - exit) ** 2, y: -60 * exit, scale: lerp(1, 0.7, exit), origin: "50% 0" };
     applyBubble(b, lines[k], ms, state);
+    applyChips(b, lines[k], ms, state && k === a ? { opacity: 1, y: 0 } : state);
   });
 
   const slide = line ? fade(ms, line.startMs, SLIDE_MS) : 0;
@@ -225,6 +318,7 @@ try {
   const root = document.getElementById("root");
   const ui = build(doc, root);
   if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  fit(ui);
   const renderAt = (t) => renderFrame(ui, doc, t);
   window.addEventListener("hf-seek", (event) => {
     try {

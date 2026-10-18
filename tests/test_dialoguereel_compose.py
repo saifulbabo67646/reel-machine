@@ -240,3 +240,44 @@ def test_newlines_in_a_line_cannot_forge_srt_cues(tmp_path):
     assert text == "手伝い ます\nok 2 00:00:00,000 --> 00:00:09,000 FORGED"
     srt = write_srt([Caption(start_ms=0, end_ms=1000, text=text, lang="ja")], tmp_path / "c.srt").read_text()
     assert srt.count("-->") == 2 and "\n\n2\n" not in srt  # one cue: its timing line and the text's arrow
+
+
+# ------------------------------------------------- key words, emotions and slow replays in the document
+
+def _learning(language="ja"):
+    data = INPUTS.model_dump()
+    data["language"] = language
+    data["lines"][0].update(emotion="happy", slow=True, keys=[
+        {"text": "手伝う", "reading": "てつだう", "meaning": "to help"},
+        {"text": "ねこ", "meaning": "cat"},                          # not in the line: left out
+        {"text": "ましょう", "meaning": "let's"},
+    ])
+    data["lines"][1]["emotion"] = "thinking"
+    return DialogueReelInputs.model_validate(data)
+
+
+def test_the_document_carries_the_matched_keys_with_their_offsets_and_levels():
+    plan = schedule([1000, 1200, 900], slow=[True, False, False])
+    lines = reel_document(_learning(), CAST, plan, WORDS)["lines"]
+    # 手伝いましょうか。: 手伝 (its stem) at 0..2, ましょう at 3..7
+    assert lines[0]["keys"] == [
+        {"text": "手伝う", "reading": "てつだう", "meaning": "to help", "level": 4, "start": 0, "end": 2},
+        {"text": "ましょう", "reading": None, "meaning": "let's", "level": None, "start": 3, "end": 7},
+    ]
+    assert lines[1]["keys"] == [] and lines[2]["keys"] == []
+    assert [line["emotion"] for line in lines] == ["happy", "thinking", "neutral"]
+
+
+def test_levels_are_only_looked_up_for_japanese():
+    plan = schedule([1000, 1200, 900])
+    keys = reel_document(_learning("ko"), CAST, plan, WORDS)["lines"][0]["keys"]
+    assert [k["level"] for k in keys] == [None, None] and keys[0]["start"] == 0
+
+
+def test_the_slow_replay_times_pass_through():
+    plan = schedule([1000, 1200, 900], slow=[True, False, False])
+    lines = reel_document(_learning(), CAST, plan, WORDS)["lines"]
+    w = plan.lines[0]
+    assert (lines[0]["slowStartMs"], lines[0]["slowEndMs"]) == (w.slow_start_ms, w.slow_start_ms + w.slow_ms)
+    assert lines[0]["slowStartMs"] == lines[0]["endMs"] + 350 and lines[0]["slowEndMs"] - lines[0]["slowStartMs"] == 1333
+    assert (lines[1]["slowStartMs"], lines[1]["slowEndMs"]) == (None, None)

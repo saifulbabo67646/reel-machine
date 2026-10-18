@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { activeLine, dropIn, hop, mouthOpen, blinking, litChars, fade, history, progress, bob, seedOf, fitFont, flag, partId } from "../pure.mjs";
+import { activeLine, dropIn, hop, mouthOpen, blinking, litChars, fade, history, progress, bob, seedOf, fitFont, flag, partId,
+  keyVisible, emotionParts, emojiPop, slowActive, slowWords, rowFit, SLOW_FLAP_MS } from "../pure.mjs";
 
 test("a line is active from its start until the next starts", () => {
   const lines = [{ startMs: 1500 }, { startMs: 2850 }];
@@ -109,4 +110,74 @@ test("part ids are the scoped ids compose writes, and never a page id", () => {
   assert.equal(partId("kid", "mouth-open"), "c_kid.mouth-open");
   assert.equal(partId("a-b", "x"), "c_a-b.x");
   for (const id of ["root", "reel-data", "char-kid"]) assert.ok(!partId("kid", "x").startsWith(id));
+});
+
+const LINE = { startMs: 1000, endMs: 2000, words: [{ text: "abcdefghij", startMs: 1000, endMs: 2000 }] };
+
+test("a key chip is hidden until its first character is lit, then pops in over 220 ms", () => {
+  const key = { start: 4, end: 6 };
+  // character 4 lights once 5 of 10 are lit: at 1500 ms
+  assert.equal(keyVisible(500, LINE, key, 10), 0);
+  assert.equal(keyVisible(1499, LINE, key, 10), 0);
+  assert.equal(keyVisible(1500, LINE, key, 10), 0);
+  const mid = keyVisible(1610, LINE, key, 10);
+  assert.ok(mid > 0 && mid < 1, `mid-pop ${mid}`);
+  assert.equal(keyVisible(1720, LINE, key, 10), 1);
+  assert.equal(keyVisible(9000, LINE, key, 10), 1, "it stays (the bubble's exit hides it)");
+  assert.equal(keyVisible(1000, LINE, { start: 0, end: 2 }, 10) >= 0, true);
+  assert.equal(keyVisible(1320, LINE, { start: 0, end: 2 }, 10), 1);
+});
+
+test("a line without word timings lights its keys across the whole line", () => {
+  const line = { startMs: 0, endMs: 1000, words: [] };
+  assert.equal(keyVisible(400, line, { start: 5, end: 6 }, 10), 0);
+  assert.equal(keyVisible(600 + 220, line, { start: 5, end: 6 }, 10), 1);
+});
+
+test("emotions pick their parts, and talking always wins the mouth", () => {
+  assert.deepEqual(emotionParts("neutral", false), { eyes: "open", mouth: "closed", extras: [], emoji: "", tiltDeg: 0 });
+  assert.deepEqual(emotionParts("happy", false), { eyes: "happy", mouth: "smile", extras: [], emoji: "❤️", tiltDeg: 0 });
+  assert.equal(emotionParts("happy", true).mouth, "open");
+  assert.equal(emotionParts("neutral", true).mouth, "open");
+  assert.deepEqual(emotionParts("surprised", false), { eyes: "surprised", mouth: "closed", extras: [], emoji: "❗", tiltDeg: 0 });
+  assert.deepEqual(emotionParts("sad", false), { eyes: "open", mouth: "closed", extras: ["sweat"], emoji: "💦", tiltDeg: 0 });
+  assert.equal(emotionParts("thinking", false).tiltDeg, 8);
+  assert.equal(emotionParts("thinking", false).emoji, "❓");
+  assert.deepEqual(emotionParts("bogus", false), emotionParts("neutral", false));
+});
+
+test("an emotion emoji rises and fades over 600 ms from the line start", () => {
+  assert.equal(emojiPop(999, 1000).alpha, 0);
+  assert.equal(emojiPop(1600, 1000).alpha, 0);
+  const a = emojiPop(1150, 1000), b = emojiPop(1450, 1000);
+  assert.ok(a.alpha > 0 && b.alpha > 0);
+  assert.ok(b.y < a.y && a.y < 0, "it rises");
+  assert.ok(emojiPop(1580, 1000).alpha < b.alpha, "it fades at the end");
+  assert.deepEqual(emojiPop(1000, 1000), emojiPop(1000, 1000));
+});
+
+test("a slow replay is active only inside its window", () => {
+  const line = { startMs: 1000, endMs: 2000, slowStartMs: 2350, slowEndMs: 3683 };
+  assert.deepEqual([2349, 2350, 3000, 3682, 3683].map((ms) => slowActive(ms, line)), [false, true, true, true, false]);
+  assert.equal(slowActive(3000, { startMs: 0, endMs: 1, slowStartMs: null, slowEndMs: null }), false);
+});
+
+test("the slow replay's words keep their order at 1 / 0.75 the pace", () => {
+  const line = { startMs: 1000, endMs: 1600, slowStartMs: 2000, slowEndMs: 2800,
+    words: [{ text: "ab", startMs: 1000, endMs: 1300 }, { text: "cd", startMs: 1300, endMs: 1600 }] };
+  assert.deepEqual(slowWords(line), [{ text: "ab", startMs: 2000, endMs: 2400 }, { text: "cd", startMs: 2400, endMs: 2800 }]);
+  assert.deepEqual(slowWords({ ...line, words: [] }), [{ text: "", startMs: 2000, endMs: 2800 }]);
+  assert.equal(SLOW_FLAP_MS, 120);
+  assert.equal(mouthOpen(2000 + 100, slowWords(line), SLOW_FLAP_MS), true);
+  assert.equal(mouthOpen(2000 + 130, slowWords(line), SLOW_FLAP_MS), false);
+});
+
+test("a history row shrinks both texts to fit, but never below half size", () => {
+  assert.deepEqual(rowFit(3, 4, 862, { textPx: 70, meaningPx: 39 }), { textPx: 70, meaningPx: 39 });
+  const fit = rowFit(10, 12, 862, { textPx: 70, meaningPx: 39 });
+  assert.ok(fit.textPx < 70 && fit.textPx >= 35);
+  assert.ok(10 * fit.textPx + 12 * fit.meaningPx <= 862, `${JSON.stringify(fit)} overflows`);
+  assert.ok(Math.abs(fit.textPx / 70 - fit.meaningPx / 39) < 0.03, "both shrink together");
+  assert.deepEqual(rowFit(100, 100, 862, { textPx: 70, meaningPx: 39 }), { textPx: 35, meaningPx: 20 });
+  assert.deepEqual(rowFit(3, 4, 862), { textPx: 70, meaningPx: 39 });
 });
