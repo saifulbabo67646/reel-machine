@@ -8,6 +8,7 @@ schemas only grow.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import logging
 import os
 import sys
@@ -172,7 +173,10 @@ def build_server(
     from mcp.server import MCPServer
     from mcp.server.mcpserver import Context
 
-    engine = engine if engine is not None else Engine(get_settings(), policy_for=(tenants or TenantRegistry()).policy)
+    if engine is None:
+        engine = Engine(dataclasses.replace(get_settings()), policy_for=(tenants or TenantRegistry()).policy)
+    if transport == "streamable-http":
+        engine.settings.local_files = False  # a remote caller never reads this machine's files
     tenants = tenants if tenants is not None else TenantRegistry.from_env()
     signer = signer if signer is not None else ArtifactSigner.from_env()
     tools = McpTools(
@@ -300,7 +304,7 @@ def serve(
         os.environ["REEL_MCP_TENANTS"] = str(tenants_path)
     configure_logging()
     tenants = TenantRegistry.from_env()
-    engine = Engine(get_settings(), policy_for=tenants.policy)
+    engine = Engine(dataclasses.replace(get_settings()), policy_for=tenants.policy)
     server = build_server(engine=engine, tenants=tenants, transport=transport)
     log.info("serving %s over %s", "reel-machine", transport)
     try:

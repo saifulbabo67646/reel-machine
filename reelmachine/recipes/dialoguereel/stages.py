@@ -156,7 +156,7 @@ class CastStage:
             return payload
         root = casts.caller_root(ctx)
         spec = casts.load(root, payload.inputs.cast) if isinstance(payload.inputs.cast, str) else payload.inputs.cast
-        allow_local = ctx.job.caller in ("", "local")
+        allow_local = ctx.config.local_files
         characters, warnings = [], list(payload.warnings)
         for index, (char, source) in enumerate(zip(cast.characters, (c.source for c in spec.characters),
                                                    strict=True)):

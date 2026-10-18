@@ -112,13 +112,13 @@ def _with_image(source):
 FAKE_IMAGE = _with_image({"provider": "fake", "description": "a round dumpling"})
 
 
-def _stage_ctx(tmp_path, caller="local"):
+def _stage_ctx(tmp_path, caller="local", local_files=True):
     import dataclasses
     from types import SimpleNamespace
 
     from reelmachine.config import Settings
     from reelmachine.core.stage import NeverCancel
-    settings = dataclasses.replace(Settings(), workdir=tmp_path / "alice" / "j1")
+    settings = dataclasses.replace(Settings(), workdir=tmp_path / "alice" / "j1", local_files=local_files)
     return SimpleNamespace(job=SimpleNamespace(id="j1", caller=caller), workdir=tmp_path / "alice" / "j1",
                            config=settings, cancel=NeverCancel())
 
@@ -209,12 +209,17 @@ def test_cast_stage_reuses_poses_and_retries_only_missing(tmp_path, monkeypatch)
     assert any("happy pose failed" in w and "cast.characters[1].source" in w for w in out.warnings)
 
 
-def test_a_remote_caller_cannot_read_local_poses(tmp_path):
+def test_local_poses_follow_the_deployment_not_the_caller_name(tmp_path):
+    from reelmachine.recipes.dialoguereel import images
     from reelmachine.recipes.dialoguereel.stages import CastStage
-    spec = _with_image({"poses": {"neutral": str(tmp_path / "n.png")}})
-    with pytest.raises(InvalidInput) as err:
-        CastStage().run(_stage_ctx(tmp_path, caller="alice"), _script_out(spec))
+    pose = tmp_path / "n.png"
+    pose.write_bytes(images.FakeImages().generate("a dumpling"))
+    spec = _with_image({"poses": {"neutral": str(pose)}})
+    with pytest.raises(InvalidInput) as err:   # a hosted server: refused even as "local"
+        CastStage().run(_stage_ctx(tmp_path, caller="local", local_files=False), _script_out(spec))
     assert err.value.details["path"] == "cast.characters[1].source.poses.neutral" and err.value.stage == "cast"
+    out = CastStage().run(_stage_ctx(tmp_path, caller="alice"), _script_out(spec))   # stdio, any caller name
+    assert out.cast.characters[1].parts == ["neutral"]
 
 
 def test_cast_mode_publishes_pose_artifacts(tmp_path):

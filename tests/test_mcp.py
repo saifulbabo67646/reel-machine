@@ -434,6 +434,34 @@ def test_http_transport_isolates_callers_and_signs_artifacts(env) -> None:
     assert unauthenticated.is_error and "UNAUTHORIZED" in unauthenticated.content[0].text
 
 
+def test_only_local_transports_read_local_files(tmp_path) -> None:
+    def engine():
+        settings = dataclasses.replace(get_settings(), workdir=tmp_path / "work", outdir=tmp_path / "out")
+        return Engine(settings, registry=_registry())
+
+    hosted, local = engine(), engine()
+    try:
+        build_server(engine=hosted, tenants=TenantRegistry(single_token="t" * 16), transport="streamable-http")
+        build_server(engine=local, tenants=TenantRegistry(default_caller="alice"), transport="stdio")
+        assert hosted.settings.local_files is False   # every request runs as "local", yet stays remote
+        assert local.settings.local_files is True
+        assert get_settings().local_files is True
+        from reelmachine.recipes.dialoguereel import images
+        from reelmachine.recipes.dialoguereel.recipe import EXAMPLE
+        pose = tmp_path / "n.png"
+        pose.write_bytes(images.FakeImages().generate("a dumpling"))
+        cast = json.loads(json.dumps(EXAMPLE["cast"]))
+        cast["characters"][1]["source"] = {"kind": "image", "poses": {"neutral": str(pose)}}
+        request = JobRequest(recipe="dialoguereel", inputs={"mode": "cast", "cast": cast, "lines": []})
+        job = hosted.wait(hosted.submit(request, caller="local").id, caller="local", timeout_s=60)
+        error = job.error.model_dump() if hasattr(job.error, "model_dump") else job.error
+        assert job.state == JobState.FAILED and error["stage"] == "cast"
+        assert error["details"]["path"] == "cast.characters[1].source.poses.neutral"
+    finally:
+        hosted.close()
+        local.close()
+
+
 # -------------------------------------------------------------- stdio transport
 
 

@@ -237,6 +237,10 @@ class Settings:
     #: Chrome's sandbox) on this machine; turn on only for agents you trust.
     explainer3d_custom_code: bool = False
 
+    #: Recipes may read files named in a request (dialoguereel pose paths). On for the CLI
+    #: and stdio; the MCP server turns it off when it serves over HTTP.
+    local_files: bool = True
+
     # --- derived helpers -------------------------------------------------
     @property
     def cache_dir(self) -> Path:
@@ -375,6 +379,7 @@ def get_settings() -> Settings:
         wordreel_library=_csv("REEL_WORDREEL_LIBRARY", ""),
         wordreel_embedded=_env("REEL_WORDREEL_EMBEDDED", "true").lower() in {"1", "true", "yes"},
         explainer3d_custom_code=_env("REEL_EXPLAINER3D_CUSTOM_CODE", "").lower() in {"1", "true", "yes"},
+        local_files=_env("REEL_LOCAL_FILES", "true").lower() in {"1", "true", "yes"},
         wordreel_max_media=_env_int("REEL_WORDREEL_MAX_MEDIA", 400),
         wordreel_media_suffixes=_csv("REEL_WORDREEL_MEDIA_SUFFIXES", ""),
         openai_api_key=_env("REEL_OPENAI_API_KEY"),
