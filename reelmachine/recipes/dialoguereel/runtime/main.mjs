@@ -4,7 +4,7 @@
 // window.__hf.buildReady (set inline in index.html) before capturing. Opened directly in a browser,
 // index.html?t=3.2 shows the frame at 3.2 s.
 import { activeLine, dropIn, hop, mouthOpen, blinking, litChars, fade, history, progress, bob, seedOf, fitFont, flag, clamp01, DROP_MS, partId,
-  backOut, keyVisible, emotionParts, emojiPop, slowActive, slowWords, rowFit, SLOW_FLAP_MS,
+  backOut, keyVisible, emotionParts, imagePose, emojiPop, slowActive, slowWords, rowFit, SLOW_FLAP_MS,
   section, shiftLine, spokenOf, bridgeSlide, countdown, RING_IN_MS, recapCard, nod, loopBack, waveLevel, WAVE_BARS, BRIDGE_MS, RECAP_MS, LOOP_MS, DROP_PX } from "./pure.mjs";
 
 const done = () => window.__reelResolve && window.__reelResolve();
@@ -67,6 +67,11 @@ function buildCharacter(root, char, index) {
   };
   const shadow = el("div", `shadow ${char.side}`);
   root.insertBefore(shadow, box);
+  const emoji = el("div", `emoji ${char.side}`, root);
+  if (char.kind === "image") {
+    const poses = Object.fromEntries([...box.querySelectorAll("img.pose")].map((img) => [img.dataset.pose, img]));
+    return { ...char, index, box, shadow, seed: seedOf(char.id), poses, emoji, emojiText: "" };
+  }
   const inner = char.side === "left" ? "arm-right" : "arm-left";
   return {
     ...char, index, box, shadow, seed: seedOf(char.id),
@@ -74,7 +79,7 @@ function buildCharacter(root, char, index) {
     eyesSurprised: part("eyes-surprised"), sweat: part("sweat"),
     mouthClosed: part("mouth-closed"), mouthOpen: part("mouth-open"), mouthSmile: part("mouth-smile"),
     arm: arm(inner), armSign: inner === "arm-left" ? 1 : -1,
-    emoji: el("div", `emoji ${char.side}`, root), emojiText: "",
+    emoji, emojiText: "",
   };
 }
 
@@ -317,9 +322,17 @@ function applyCharacter(c, ms, doc, line, prevLine, pose = {}) {
     : mouthOpen(ms, line.words.length ? line.words : [{ startMs: line.startMs, endMs: line.endMs }]));
   const face = emotionParts(speaking ? line.emotion : "neutral", talking);
   // the hook's greeting (and the cast sheet) is happy too
-  if ((doc.mode === "reel" && ms >= landed && (ms < (doc.hookMs || 0) || pose.happy)) || (!line && doc.mode === "cast" && ms >= landed)) {
+  const greeting = (doc.mode === "reel" && ms >= landed && (ms < (doc.hookMs || 0) || pose.happy)) ||
+    (!line && doc.mode === "cast" && ms >= landed);
+  if (greeting) {
     if (doc.mode === "reel") face.eyes = "happy";
     if (!talking) face.mouth = "smile";
+  }
+  if (c.kind === "image") {
+    const shown = imagePose(greeting ? "happy" : speaking ? line.emotion : "neutral", talking, c.parts);
+    for (const [name, img] of Object.entries(c.poses)) img.style.display = name === shown ? "block" : "none";
+    applyEmoji(c, ms, line, speaking, face, y);
+    return;
   }
   // a part the character does not have falls back to the neutral one
   const eyes = { happy: c.eyesHappy, surprised: c.eyesSurprised }[face.eyes] || c.eyesOpen;
@@ -329,14 +342,18 @@ function applyCharacter(c, ms, doc, line, prevLine, pose = {}) {
   for (const node of [c.mouthOpen, c.mouthSmile, c.mouthClosed]) show(node, node === mouth);
   show(c.sweat, face.extras.includes("sweat"));
 
-  const pop = speaking && face.emoji ? emojiPop(ms, line.startMs) : { y: 0, scale: 0, alpha: 0 };
-  if (pop.alpha > 0 && c.emojiText !== face.emoji) c.emoji.textContent = c.emojiText = face.emoji;
-  c.emoji.style.opacity = pop.alpha.toFixed(3);
-  c.emoji.style.transform = `translateY(${(pop.y + y).toFixed(1)}px) scale(${pop.scale.toFixed(4)})`;
+  applyEmoji(c, ms, line, speaking, face, y);
   if (c.arm) {
     const wave = speaking ? Math.sin(Math.PI * clamp01((ms - line.startMs) / 600)) : 0;
     c.arm.style.transform = `rotate(${(c.armSign * 24 * wave).toFixed(2)}deg)`;
   }
+}
+
+function applyEmoji(c, ms, line, speaking, face, y) {
+  const pop = speaking && face.emoji ? emojiPop(ms, line.startMs) : { y: 0, scale: 0, alpha: 0 };
+  if (pop.alpha > 0 && c.emojiText !== face.emoji) c.emoji.textContent = c.emojiText = face.emoji;
+  c.emoji.style.opacity = pop.alpha.toFixed(3);
+  c.emoji.style.transform = `translateY(${(pop.y + y).toFixed(1)}px) scale(${pop.scale.toFixed(4)})`;
 }
 
 /** `line` carries the times of the pass being played: the dialogue, or the listen pass (`listening`: the text

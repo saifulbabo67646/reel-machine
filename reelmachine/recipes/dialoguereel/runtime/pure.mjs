@@ -187,6 +187,14 @@ export function emotionParts(emotion, talking) {
   return { eyes: e.eyes, mouth: talking ? "open" : e.smile ? "smile" : "closed", extras: [...e.extras], emoji: e.emoji, tiltDeg: e.tiltDeg };
 }
 
+/** Which pose an image character shows: talking when it has a talk pose, else happy or surprised when it has
+    that pose, else neutral. `poses` are the pose names it has. */
+export function imagePose(emotion, talking, poses) {
+  if (talking && poses.includes("talk")) return "talk";
+  if ((emotion === "happy" || emotion === "surprised") && poses.includes(emotion)) return emotion;
+  return "neutral";
+}
+
 export const EMOJI_MS = 600;
 export const EMOJI_RISE_PX = 130;
 

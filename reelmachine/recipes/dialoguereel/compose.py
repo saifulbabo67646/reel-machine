@@ -90,7 +90,7 @@ def _quiz(quiz: QuizWindow | None) -> dict[str, int] | None:
 
 
 def _characters(cast: ResolvedCast) -> list[dict[str, Any]]:
-    return [{"id": c.id, "side": c.side, "parts": list(c.parts)} for c in cast.characters]
+    return [{"id": c.id, "side": c.side, "kind": c.kind, "parts": list(c.parts)} for c in cast.characters]
 
 
 def reel_document(inputs: DialogueReelInputs, cast: ResolvedCast, plan: Schedule,
@@ -153,12 +153,23 @@ def _runtime_paths() -> list[Path]:
 
 
 def _character_html(cast: ResolvedCast) -> str:
-    """Each character re-checked and serialized from its parsed tree: the page never gets the source text."""
-    return "\n".join(
-        f'<div class="char {escape(c.side)}" id="char-{escape(c.id)}">'
-        f'{inline_svg(c.svg, c.id, path=f"cast.characters[{i}].source.svg")}</div>'
-        for i, c in enumerate(cast.characters)
-    )
+    """Each SVG character re-checked and serialized from its parsed tree (the page never gets the source text);
+    an image character is one <img> per pose, copied beside the page."""
+    out = []
+    for i, c in enumerate(cast.characters):
+        if c.kind == "image":
+            imgs = "".join(f'<img class="pose" data-pose="{escape(pose)}" '
+                           f'src="./cast/{escape(c.id)}/{escape(pose)}.png" alt="">' for pose in c.parts)
+            out.append(f'<div class="char {escape(c.side)} image" id="char-{escape(c.id)}">{imgs}</div>')
+        else:
+            out.append(f'<div class="char {escape(c.side)}" id="char-{escape(c.id)}">'
+                       f'{inline_svg(c.svg, c.id, path=f"cast.characters[{i}].source.svg")}</div>')
+    return "\n".join(out)
+
+
+def _pose_files(cast: ResolvedCast) -> list[tuple[str, str, Path]]:
+    """(character id, pose, PNG) for every image character's pose on the page."""
+    return [(c.id, pose, Path(c.poses[pose])) for c in cast.characters if c.kind == "image" for pose in c.parts]
 
 
 def write_project(doc: dict[str, Any], cast: ResolvedCast, dest: Path) -> Path:
@@ -168,6 +179,9 @@ def write_project(doc: dict[str, Any], cast: ResolvedCast, dest: Path) -> Path:
     (dest / "runtime").mkdir(parents=True)
     for path in _runtime_paths():
         shutil.copy2(path, dest / "runtime" / path.name)
+    for char_id, pose, png in _pose_files(cast):
+        (dest / "cast" / char_id).mkdir(parents=True, exist_ok=True)
+        shutil.copy2(png, dest / "cast" / char_id / f"{pose}.png")
     # every "<" escaped, not only "</": text like "<!--<script>" would otherwise put the HTML parser into its
     # "script data double escaped" state, the real </script> would not close the data script, and the
     # runtime's module script would be swallowed (buildReady never settles and the render hangs)
@@ -179,11 +193,16 @@ def write_project(doc: dict[str, Any], cast: ResolvedCast, dest: Path) -> Path:
 
 
 def project_key(doc: dict[str, Any], cast: ResolvedCast) -> str:
-    """What the rendered video depends on: the document, the characters' SVGs, the runtime and the template."""
+    """What the rendered video depends on: the document, the characters' SVGs or pose PNGs, the runtime and the
+    template."""
     digest = hashlib.sha256(json.dumps(doc, sort_keys=True, ensure_ascii=False, allow_nan=False).encode("utf-8"))
     for char in cast.characters:
-        digest.update(f"\0{char.id}\0{char.side}\0".encode())
-        digest.update(inline_svg(char.svg, char.id).encode("utf-8"))
+        digest.update(f"\0{char.id}\0{char.side}\0{char.kind}\0".encode())
+        if char.kind == "svg":
+            digest.update(inline_svg(char.svg, char.id).encode("utf-8"))
+    for char_id, pose, png in _pose_files(cast):
+        digest.update(f"\0{char_id}\0{pose}\0".encode())
+        digest.update(png.read_bytes())
     for path in _runtime_paths():
         digest.update(f"\0{path.name}\0".encode())
         digest.update(path.read_bytes())

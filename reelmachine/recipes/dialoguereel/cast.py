@@ -12,11 +12,13 @@ from pathlib import Path
 from reelmachine.config import Settings
 from reelmachine.core.errors import InvalidInput
 from reelmachine.core.stage import StageContext
+from reelmachine.recipes.dialoguereel.images import POSES
 from reelmachine.recipes.dialoguereel.library import load_builtin
 from reelmachine.recipes.dialoguereel.models import CastSpec, ResolvedCast, ResolvedCharacter
 from reelmachine.recipes.dialoguereel.svg import check_svg
 
-__all__ = ["CAST_ID", "ResolvedCast", "ResolvedCharacter", "caller_root", "cast_id", "load", "resolve", "save"]
+__all__ = ["CAST_ID", "ResolvedCast", "ResolvedCharacter", "caller_root", "cast_folder", "cast_id", "load",
+           "poses_on_disk", "resolve", "save"]
 
 CAST_ID = re.compile(r"^cast_[0-9a-f]{12}$")
 
@@ -36,6 +38,11 @@ def resolve(spec: CastSpec, *, path: str = "cast") -> ResolvedCast:
     for index, char in enumerate(spec.characters):
         where = f"{prefix}characters[{index}].source"
         source = char.source
+        if source.kind == "image":   # its poses are drawn (or fetched) by the cast stage, not here
+            parts = list(POSES) if source.provider else [p for p in POSES if p in source.poses]
+            out.append(ResolvedCharacter(id=char.id, name=char.name, voice=char.voice, side=char.side, kind="image",
+                                         parts=parts, provider=source.provider or ""))
+            continue
         try:
             if source.kind == "builtin":
                 where += ".name"
@@ -50,6 +57,17 @@ def resolve(spec: CastSpec, *, path: str = "cast") -> ResolvedCast:
         out.append(ResolvedCharacter(id=char.id, name=char.name, voice=char.voice, side=char.side,
                                      svg=svg, parts=parts))
     return ResolvedCast(id=cast_id(spec), characters=out)
+
+
+def cast_folder(root: Path, cast_id: str, char_id: str) -> Path:
+    """Where an image character's poses live."""
+    return Path(root) / "casts" / cast_id / char_id
+
+
+def poses_on_disk(root: Path, resolved: ResolvedCast) -> int:
+    """The image calls still needed: generated poses missing from disk (supplied poses cost none)."""
+    return sum(not (cast_folder(root, resolved.id, c.id) / f"{pose}.png").exists()
+               for c in resolved.characters if c.kind == "image" and c.provider for pose in POSES)
 
 
 def _write_atomic(path: Path, data: bytes) -> None:

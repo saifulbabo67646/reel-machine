@@ -66,8 +66,8 @@ def test_the_document_carries_reel_times_and_ruby_runs():
     assert doc["lines"][1]["words"][1] == {"text": "しますか？", "startMs": 2850 + 550, "endMs": 2850 + 1200}
     assert doc["lines"][1]["meaningMs"] == PLAN.lines[1].meaning_ms and doc["lines"][2]["reading"] == ""
     assert doc["hookMs"] == 1500 and doc["characters"] == [
-        {"id": "kid", "side": "left", "parts": CAST.characters[0].parts},
-        {"id": "mom", "side": "right", "parts": CAST.characters[1].parts},
+        {"id": "kid", "side": "left", "kind": "svg", "parts": CAST.characters[0].parts},
+        {"id": "mom", "side": "right", "kind": "svg", "parts": CAST.characters[1].parts},
     ]
     assert (doc["title"], doc["level"], doc["scene"], doc["language"]) == ("Helping Mom at home", "N5", "🧺", "ja")
 
@@ -381,3 +381,31 @@ def test_a_key_with_ruby_keeps_its_runs_in_the_chip_and_the_recap():
     assert doc["lines"][0]["keys"] == [{"text": "手伝う", "runs": runs, "reading": None, "meaning": "to help",
                                         "level": level, "start": 0, "end": 2}]
     assert doc["recap"] == [{"text": "手伝う", "runs": runs, "reading": None, "meaning": "to help", "level": level}]
+
+
+def _image_cast(tmp_path):
+    """The cast with mom drawn as PNG poses, as the cast stage leaves it."""
+    from reelmachine.recipes.dialoguereel import images
+    folder = tmp_path / "poses"
+    folder.mkdir()
+    poses = {}
+    for pose in ("neutral", "talk"):
+        (folder / f"{pose}.png").write_bytes(images.FakeImages().edit(b"", pose))
+        poses[pose] = str(folder / f"{pose}.png")
+    mom = CAST.characters[1].model_copy(update={"kind": "image", "svg": "", "parts": list(poses), "poses": poses})
+    return CAST.model_copy(update={"characters": [CAST.characters[0], mom]}), folder
+
+
+def test_image_character_html_and_key(tmp_path):
+    cast, folder = _image_cast(tmp_path)
+    doc = reel_document(INPUTS, cast, PLAN, WORDS)
+    assert doc["characters"][1] == {"id": "mom", "side": "right", "kind": "image", "parts": ["neutral", "talk"]}
+    html = (compose.write_project(doc, cast, tmp_path / "p") / "index.html").read_text(encoding="utf-8")
+    assert '<div class="char right image" id="char-mom">' in html
+    assert '<img class="pose" data-pose="talk" src="./cast/mom/talk.png" alt="">' in html
+    assert 'id="c_kid.mouth-open"' in html and "c_mom." not in html
+    assert (tmp_path / "p/cast/mom/talk.png").read_bytes() == (folder / "talk.png").read_bytes()
+    key = compose.project_key(doc, cast)
+    assert key == compose.project_key(doc, cast)
+    (folder / "talk.png").write_bytes(b"other bytes")
+    assert compose.project_key(doc, cast) != key

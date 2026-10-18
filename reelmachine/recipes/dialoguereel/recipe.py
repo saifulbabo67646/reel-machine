@@ -14,7 +14,7 @@ from .guide import GUIDE
 from .models import DialogueReelInputs
 from .ruby import parse_ruby, plain_text
 from .schedule import estimate
-from .stages import (ComposeStage, NarrationStage, PreviewStage, RenderStage, ScriptStage, check_voices,
+from .stages import (CastStage, ComposeStage, NarrationStage, PreviewStage, RenderStage, ScriptStage, check_voices,
                      lint_blocks, lint_findings)
 from .verify import verify_dialoguereel
 
@@ -65,7 +65,8 @@ class DialogueReelRecipe:
         version=1,
         stages=(
             StageSpec(stage=ScriptStage()),
-            StageSpec(stage=NarrationStage(), feeds="script", uses=("narration",)),
+            StageSpec(stage=CastStage(), feeds="script"),
+            StageSpec(stage=NarrationStage(), feeds="cast", uses=("narration",)),
             StageSpec(stage=ComposeStage(), feeds="narration"),
             StageSpec(stage=PreviewStage(), feeds="compose", uses=("renderer",)),
             StageSpec(stage=RenderStage(), feeds="preview", uses=("renderer",)),

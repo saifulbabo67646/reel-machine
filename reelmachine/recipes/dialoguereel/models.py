@@ -149,8 +149,11 @@ class ResolvedCharacter(BaseModel):
     name: str
     voice: str
     side: str
-    svg: str                      # recoloured source, checked; compose re-checks, scopes and serializes it
-    parts: list[str]
+    kind: Literal["svg", "image"] = "svg"
+    svg: str = ""                 # recoloured source, checked; compose re-checks, scopes and serializes it
+    parts: list[str]              # an image character's poses
+    provider: str = ""            # the image provider of a generated character; empty when its poses are supplied
+    poses: dict[str, str] = Field(default_factory=dict)   # pose -> absolute PNG path, once the cast stage drew them
 
 
 class ResolvedCast(BaseModel):

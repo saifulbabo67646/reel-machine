@@ -99,3 +99,136 @@ def test_the_script_stage_saves_an_inline_cast_only_once_it_resolves(tmp_path):
                            bad["characters"][1]]}
     out = ScriptStage().run(ctx, {"cast": good, "lines": [], "mode": "cast"})
     assert (tmp_path / "alice" / "casts" / f"{out.cast.id}.json").is_file()
+
+
+# ---------------------------------------------------------------- image characters
+
+def _with_image(source):
+    data = SPEC.model_dump()
+    data["characters"][1]["source"] = {"kind": "image", **source}
+    return CastSpec.model_validate(data)
+
+
+FAKE_IMAGE = _with_image({"provider": "fake", "description": "a round dumpling"})
+
+
+def _stage_ctx(tmp_path, caller="local"):
+    import dataclasses
+    from types import SimpleNamespace
+
+    from reelmachine.config import Settings
+    from reelmachine.core.stage import NeverCancel
+    settings = dataclasses.replace(Settings(), workdir=tmp_path / "alice" / "j1")
+    return SimpleNamespace(job=SimpleNamespace(id="j1", caller=caller), workdir=tmp_path / "alice" / "j1",
+                           config=settings, cancel=NeverCancel())
+
+
+def _script_out(spec, mode="storyboard"):
+    from reelmachine.recipes.dialoguereel.models import DialogueReelInputs, ScriptOutput
+    inputs = DialogueReelInputs.model_validate({"cast": spec.model_dump(), "lines": [], "mode": mode})
+    return ScriptOutput(inputs=inputs, cast=resolve(spec))
+
+
+def test_resolve_image_fetches_nothing():
+    from reelmachine.recipes.dialoguereel import images
+    r = resolve(FAKE_IMAGE)
+    char = r.characters[1]
+    assert char.kind == "image" and char.poses == {} and char.parts == list(images.POSES) and char.svg == ""
+    assert r.characters[0].kind == "svg"
+    supplied = resolve(_with_image({"poses": {"talk": "/nowhere/t.png", "neutral": "https://x.invalid/n.png"}}))
+    assert supplied.characters[1].parts == ["neutral", "talk"]
+
+
+def test_cast_folder_and_poses_on_disk(tmp_path):
+    from reelmachine.recipes.dialoguereel.cast import cast_folder, poses_on_disk
+    r = resolve(FAKE_IMAGE)
+    folder = cast_folder(tmp_path, r.id, "mom")
+    assert folder == tmp_path / "casts" / r.id / "mom"
+    assert poses_on_disk(tmp_path, r) == 4
+    folder.mkdir(parents=True)
+    (folder / "neutral.png").write_bytes(b"x")
+    assert poses_on_disk(tmp_path, r) == 3
+    assert poses_on_disk(tmp_path, resolve(_with_image({"poses": {"neutral": "/n.png"}}))) == 0
+    assert poses_on_disk(tmp_path, resolve(SPEC)) == 0
+
+
+def test_cast_stage_makes_fake_poses(tmp_path):
+    from pathlib import Path
+
+    from reelmachine.recipes.dialoguereel import images
+    from reelmachine.recipes.dialoguereel.cast import cast_folder
+    from reelmachine.recipes.dialoguereel.stages import CastStage
+    ctx = _stage_ctx(tmp_path)
+    script = _script_out(FAKE_IMAGE)
+    out = CastStage().run(ctx, script)
+    char = out.cast.characters[1]
+    assert set(char.poses) == set(images.POSES) and all(Path(p).is_file() for p in char.poses.values())
+    assert Path(char.poses["talk"]).parent == cast_folder(tmp_path / "alice", out.cast.id, "mom")
+    assert char.parts == list(images.POSES)
+    assert out.cast.characters[0] == script.cast.characters[0]
+    assert not (ctx.workdir / "artifacts").exists()   # pose artifacts are for cast mode
+
+
+def test_cast_stage_reuses_poses_and_retries_only_missing(tmp_path, monkeypatch):
+    from reelmachine.engine.executor import ledger_total
+    from reelmachine.recipes.dialoguereel import images
+    from reelmachine.recipes.dialoguereel.cast import cast_folder
+    from reelmachine.recipes.dialoguereel.stages import CastStage
+
+    class Counting(images.FakeImages):
+        name = "openai"
+        calls = 0
+
+        def generate(self, prompt):
+            Counting.calls += 1
+            return super().generate(prompt)
+
+        def edit(self, image, prompt):
+            Counting.calls += 1
+            if "smiling" in prompt and Counting.fail:
+                raise images.ProviderUnavailable("openai refused the image (HTTP 400)")
+            return super().edit(image, prompt)
+
+    Counting.fail = False
+    monkeypatch.setattr(images, "generator_for", lambda provider, settings: Counting())
+    spec = _with_image({"provider": "openai", "description": "a round dumpling"})
+    ctx = _stage_ctx(tmp_path)
+    CastStage().run(ctx, _script_out(spec))
+    ledger = tmp_path / "alice" / "quota" / "openai.json"
+    assert Counting.calls == 4 and ledger_total(ledger) == 4
+    happy = cast_folder(tmp_path / "alice", resolve(spec).id, "mom") / "happy.png"
+    happy.unlink()
+    out = CastStage().run(ctx, _script_out(spec))
+    assert Counting.calls == 5 and ledger_total(ledger) == 5 and out.cast.characters[1].parts == list(images.POSES)
+    happy.unlink()
+    Counting.fail = True   # a refused call is not billed, and the pose falls back to neutral
+    out = CastStage().run(ctx, _script_out(spec))
+    assert Counting.calls == 6 and ledger_total(ledger) == 5
+    char = out.cast.characters[1]
+    assert char.parts == ["neutral", "talk", "surprised"] and "happy" not in char.poses
+    assert any("happy pose failed" in w and "cast.characters[1].source" in w for w in out.warnings)
+
+
+def test_a_remote_caller_cannot_read_local_poses(tmp_path):
+    from reelmachine.recipes.dialoguereel.stages import CastStage
+    spec = _with_image({"poses": {"neutral": str(tmp_path / "n.png")}})
+    with pytest.raises(InvalidInput) as err:
+        CastStage().run(_stage_ctx(tmp_path, caller="alice"), _script_out(spec))
+    assert err.value.details["path"] == "cast.characters[1].source.poses.neutral" and err.value.stage == "cast"
+
+
+def test_cast_mode_publishes_pose_artifacts(tmp_path):
+    from reelmachine.recipes.dialoguereel.stages import CastStage
+    ctx = _stage_ctx(tmp_path)
+    CastStage().run(ctx, _script_out(FAKE_IMAGE, mode="cast"))
+    arts = ctx.workdir / "artifacts"
+    assert (arts / "cast-mom-talk.png").is_file()
+    assert sorted(p.name for p in arts.iterdir()) == [f"cast-mom-{p}.png" for p in
+                                                      ("happy", "neutral", "surprised", "talk")]
+
+
+def test_the_recipe_runs_the_cast_stage_before_narration():
+    from reelmachine.recipes.dialoguereel.recipe import DialogueReelRecipe
+    stages = DialogueReelRecipe.spec.stages
+    assert [s.stage.id for s in stages[:3]] == ["script", "cast", "narration"]
+    assert stages[1].feeds == "script" and stages[2].feeds == "cast"

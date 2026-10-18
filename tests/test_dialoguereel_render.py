@@ -50,3 +50,19 @@ def test_the_example_renders_as_a_real_reel(tmp_path):
     report = json.loads(Path(job.result.manifest).read_text(encoding="utf-8"))["verification"]
     assert {c["name"] for c in report["checks"]} == {"format", "duration", "audio", "silence", "text", "renderer"}
     assert report["ok"], report["checks"]
+
+
+def test_render_with_an_image_character(tmp_path):
+    settings = dataclasses.replace(SETTINGS, workdir=tmp_path / "work", outdir=tmp_path / "out", tts="fake")
+    chars = EXAMPLE["cast"]["characters"]
+    cast = {"characters": [chars[0], {**chars[1], "source": {"kind": "image", "provider": "fake",
+                                                              "description": "a round dumpling"}}]}
+    engine = Engine(settings)
+    try:
+        job = engine.submit(JobRequest(recipe="dialoguereel", inputs=EXAMPLE | {"cast": cast}), caller="local")
+        job = engine.wait(job.id, caller="local", timeout_s=1800)
+    finally:
+        engine.close()
+    assert job.state == JobState.SUCCEEDED, job.error
+    arts = {a.name: Path(a.path) for a in job.result.artifacts}
+    assert arts["storyboard.jpg"].is_file() and arts["storyboard.jpg"].stat().st_size > 0

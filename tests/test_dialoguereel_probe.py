@@ -117,7 +117,7 @@ def test_the_engine_probes_with_the_callers_root(tmp_path):
 
 def test_the_spec_declares_its_providers_and_artifacts():
     spec = DialogueReelRecipe.spec
-    assert [s.stage.id for s in spec.stages] == ["script", "narration", "compose", "preview", "render"]
+    assert [s.stage.id for s in spec.stages] == ["script", "cast", "narration", "compose", "preview", "render"]
     assert spec.providers["narration"].default == "fake" and spec.providers["renderer"].default == "hyperframes"
     assert set(spec.artifacts) == {"reel.mp4", "captions.srt", "reel.json", "storyboard.jpg", "cast.png",
                                    "script.resolved.json", "post.md"}
