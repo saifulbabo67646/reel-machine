@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import re
 import socket
@@ -65,7 +66,7 @@ def _http_json(params: dict[str, Any]) -> dict[str, Any]:
             last = exc
             if exc.code < 500:
                 break
-        except (TimeoutError, socket.timeout, urllib.error.URLError, json.JSONDecodeError) as exc:
+        except (OSError, http.client.HTTPException, json.JSONDecodeError) as exc:  # a reply cut off mid-read too
             last = exc
     raise ProviderUnavailable(
         "Wikimedia Commons did not answer",

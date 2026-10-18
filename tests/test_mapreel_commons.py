@@ -1,3 +1,4 @@
+import http.client
 import os
 
 import pytest
@@ -112,6 +113,28 @@ def test_commons_failure_is_a_clear_provider_error(monkeypatch):
         commons.search("x")
     assert "Wikimedia Commons did not answer" in err.value.message and err.value.hint
     assert len(calls) == 2  # one retry
+
+
+@pytest.mark.parametrize("failure", [
+    lambda: http.client.IncompleteRead(b"{", 10),
+    lambda: http.client.RemoteDisconnected("closed"),
+    lambda: ConnectionResetError("reset"),
+])
+def test_a_reply_cut_off_while_reading_is_a_provider_error(monkeypatch, failure):
+    class Reply:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            raise failure()
+
+    monkeypatch.setattr(commons.urllib.request, "urlopen", lambda *a, **k: Reply())
+    with pytest.raises(ProviderUnavailable) as err:
+        commons.search("x")
+    assert "Wikimedia Commons did not answer" in err.value.message
 
 
 def test_user_agent_names_the_project(monkeypatch):
