@@ -64,6 +64,15 @@ def test_hostile_svg_is_refused_naming_the_element(bad, element):
     ('<audio/>', "audio"), ('<video/>', "video"), ('<set attributeName="href" to="x"/>', "set"),
     ('<animateTransform/>', "animateTransform"), ('<animateMotion/>', "animateMotion"),
     ('<image href="data:image/svg+xml;base64,PHN2Zy8+"/>', "image"),
+    ('<style>.a{fill:#fff}</style>', "style"), ('<STYLE>.a{}</STYLE>', "STYLE"),
+    ('<image HREF="file:///etc/x.png"/>', "image"), ('<use HREF="https://e.com/a.svg#x"/>', "HREF"),
+    ('<use XLINK:HREF="https://e.com/a.svg#x" xmlns:XLINK="http://www.w3.org/1999/xlink"/>', "xlink:href"),
+    ('<use xl:href="https://e.com/a.svg#x" xmlns:xl="http://www.w3.org/1999/xlink"/>', "xlink:href"),
+    ('<g Style="fill:\\75rl(https://e.com/x)"/>', "Style"), ('<g STYLE="fill:url(https://e.com/x)"/>', "STYLE"),
+    ('<g OnLoad="x()"/>', "OnLoad"),
+    ('<g fill="\\75rl(https://e.com/x)"/>', "fill"), ('<g filter="url(https://e.com/f.svg#f)"/>', "filter"),
+    ('<g mask="URL(//e.com/m.svg#m)"/>', "mask"), ('<g cursor="url(https://e.com/c.png), auto"/>', "cursor"),
+    ('<g clip-path="u\\rl(https://e.com/c)"/>', "clip-path"),
     ('<x:script xmlns:x="http://www.w3.org/2000/svg"/>', "script"),
 ])
 def test_more_hostile_svg_is_refused(bad, element):
@@ -106,6 +115,9 @@ def test_duplicate_ids_are_refused():
     with pytest.raises(InvalidInput) as err:
         check_svg(minimal_svg(extra='<g id="body"/>'), path=PATH)
     assert "body" in err.value.message
+    with pytest.raises(InvalidInput) as err:
+        check_svg(minimal_svg(extra='<g ID="body"/>'), path=PATH)
+    assert "body" in err.value.message
 
 
 def test_a_data_png_image_is_allowed():
@@ -116,7 +128,7 @@ def test_a_data_png_image_is_allowed():
 
 def test_fragment_refs_and_gradient_urls_are_allowed():
     extra = ('<defs><linearGradient id="g"><stop offset="0"/></linearGradient></defs>'
-             '<style>.a{fill:url(#g)}</style><use href="#body" style="fill:url( #g )"/>')
+             '<use href="#body" style="fill:url( #g )" fill="URL(#g)" filter="url(\'#g\')"/>')
     assert check_svg(minimal_svg(extra=extra), path=PATH) == []
 
 
@@ -130,6 +142,30 @@ def test_scope_ids_keeps_two_characters_apart():
 def test_scope_ids_rewrites_hrefs():
     svg = '<svg><g id="a"/><use href="#a"/><use xlink:href="#a"/></svg>'
     assert scope_ids(svg, "p") == '<svg><g id="p-a"/><use href="#p-a"/><use xlink:href="#p-a"/></svg>'
+
+
+def test_scope_ids_handles_an_agent_svg_with_spaced_and_uppercase_attributes():
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">'
+           '<defs><linearGradient id = "g"><stop offset="0"/></linearGradient></defs>'
+           "<g id ='body' fill = 'URL( #g )'/><g ID=\"eyes-open\"/><g id=\"eyes-closed\"/>"
+           '<g id="mouth-closed"/><g id="mouth-open"/>'
+           '<use href = "#body"/><use xlink:href= \'#body\' xmlns:xlink="http://www.w3.org/1999/xlink"/>'
+           '<g data-id="keep"/></svg>')
+    check_svg(svg, path=PATH)
+    a, b = scope_ids(svg, "kid"), scope_ids(svg, "mom")
+    assert 'id = "kid-g"' in a and "id ='kid-body'" in a and 'ID="kid-eyes-open"' in a
+    assert "URL( #kid-g )" in a and 'href = "#kid-body"' in a and "xlink:href= '#kid-body'" in a
+    assert 'data-id="keep"' in a
+    ids = re.findall(r"""(?<![\w-])id\s*=\s*["']([^"']+)""", a + b, flags=re.IGNORECASE)
+    assert len(ids) == 12 and len(set(ids)) == 12
+
+
+def test_recolour_extends_a_spaced_or_uppercase_root_style():
+    for attr in ('style = "opacity:1"', "STYLE='opacity:1'"):
+        svg = minimal_svg().replace("<svg ", f"<svg {attr} ", 1)
+        out = recolour(svg, {"primary": "#123456"})
+        assert out.lower().count("style") == 1 and "opacity:1;--primary:#123456" in out
+        check_svg(out, path=PATH)
 
 
 def test_recolour_sets_the_css_variables():
