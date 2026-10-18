@@ -5,7 +5,6 @@ from __future__ import annotations
 import http.client
 import json
 import re
-import socket
 import urllib.error
 import urllib.parse
 import urllib.request
