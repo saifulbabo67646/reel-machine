@@ -8,6 +8,7 @@ group so a cancelled job takes Chrome down with it.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -22,6 +23,27 @@ from ..core.errors import ShotRenderFailed
 
 HYPERFRAMES_VERSION = "0.8.146"
 _ERRORS = re.compile(r"(\d+)\s+errors?")
+_SUMMARY = re.compile(r"\[Render\] Failure summary (\{.*\})")
+_FAILED = re.compile(r"\u2717\s*(?:Snapshot failed:\s*(\S.*)|Render failed\s*\n\s*(\S.*))")
+
+
+def _page_error(log: str) -> str:
+    """Why HyperFrames gave up, as it says it: a page that sets window.__hfStartupError (mapreel's runtime
+    does when a layer fails to load) fails the render with that text."""
+    for line in _SUMMARY.findall(log):
+        try:
+            error = json.loads(line).get("error")
+        except ValueError:
+            continue
+        if isinstance(error, str) and error.strip():
+            return error.strip()[:500]
+    match = _FAILED.search(log)
+    return (match.group(1) or match.group(2)).strip()[:500] if match else ""
+
+
+def _failed(message: str, log: str) -> str:
+    reason = _page_error(log)
+    return f"{message}: {reason}" if reason else message
 
 
 def _node_major(node: str) -> int:
@@ -126,7 +148,7 @@ class HyperframesRenderer:
             frames = sorted(Path(tmp).glob("frame-*.png"))
             if code != 0 or not frames:
                 raise ShotRenderFailed(
-                    "HyperFrames could not capture a still",
+                    _failed("HyperFrames could not capture a still", out),
                     details={"project": str(project), "log": out[-2000:]},
                 )
             dest = Path(dest).resolve()
@@ -156,7 +178,7 @@ class HyperframesRenderer:
         (project / "render.log").write_text(out, encoding="utf-8")
         if code != 0 or not dest.is_file() or dest.stat().st_size == 0:
             raise ShotRenderFailed(
-                "HyperFrames did not produce the shot",
+                _failed("HyperFrames did not produce the shot", out),
                 details={"project": str(project), "log": out[-2000:]},
             )
         return dest

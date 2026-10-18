@@ -36,5 +36,8 @@ try {
   window.__mapError = String((error && error.stack) || error);
   console.error("mapreel: the segment could not be built", error);
 } finally {
+  // HyperFrames polls window.__hfStartupError before every capture and fails the render with its text,
+  // so a map that could not be drawn fails the job instead of shipping a blank segment
+  if (window.__mapError) window.__hfStartupError = window.__mapError;
   done();
 }

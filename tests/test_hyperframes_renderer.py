@@ -20,8 +20,10 @@ echo "$@" >> "$HF_LOG"
 cmd="$3"; shift 3
 case "$cmd" in
   lint) if [ -n "$HF_LINT_FAIL" ]; then echo "x missing_timeline_registry"; echo "1 error(s), 0 warning(s)"; exit 1; fi; echo "0 errors, 0 warnings";;
-  render) while [ "$1" != "--output" ]; do shift; done; [ -n "$HF_SLEEP" ] && sleep "$HF_SLEEP"; printf 'mp4' > "$2";;
-  snapshot) while [ "$1" != "--output" ]; do shift; done; mkdir -p "$2"; printf 'png' > "$2/frame-00-at-1s.png";;
+  render) if [ -n "$HF_PAGE_ERROR" ]; then echo '[INFO] [Render] Failure summary {"failedStage":"capture","error":"'"$HF_PAGE_ERROR"'"}'; printf '✗  Render failed\n\n   %s\n' "$HF_PAGE_ERROR"; exit 1; fi
+    while [ "$1" != "--output" ]; do shift; done; [ -n "$HF_SLEEP" ] && sleep "$HF_SLEEP"; printf 'mp4' > "$2";;
+  snapshot) if [ -n "$HF_PAGE_ERROR" ]; then printf '✗ Snapshot failed: %s\n' "$HF_PAGE_ERROR"; exit 1; fi
+    while [ "$1" != "--output" ]; do shift; done; mkdir -p "$2"; printf 'png' > "$2/frame-00-at-1s.png";;
 esac
 """
 
@@ -115,3 +117,15 @@ def test_workers_can_be_pinned_for_a_low_disk_machine(tmp_path, fake_npx, monkey
     monkeypatch.delenv("REEL_HYPERFRAMES_WORKERS")
     _renderer(tmp_path).render(project, tmp_path / "out2.mp4")
     assert "--workers" not in fake_npx.read_text().splitlines()[3]
+
+
+def test_a_page_error_is_named_in_the_render_failure(tmp_path, fake_npx, monkeypatch):
+    monkeypatch.setenv("HF_PAGE_ERROR", "mapreel: layer layers/world.jpg failed to load")
+    project = tmp_path / "shot"
+    project.mkdir()
+    with pytest.raises(ShotRenderFailed) as info:
+        _renderer(tmp_path).render(project, tmp_path / "out.mp4")
+    assert "mapreel: layer layers/world.jpg failed to load" in info.value.message
+    with pytest.raises(ShotRenderFailed) as info:
+        _renderer(tmp_path).snapshot(project, 1.0, tmp_path / "still.png")
+    assert "mapreel: layer layers/world.jpg failed to load" in info.value.message

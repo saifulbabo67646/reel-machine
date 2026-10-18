@@ -7,7 +7,7 @@ from typing import Any
 
 from ...config import get_settings
 from ...core.errors import InvalidInput, ProviderUnavailable
-from ...core.manifest import CheckResult
+from ...core.manifest import CheckResult, VerificationReport
 from ...core.recipe import CostNote, ProbeContext, ProbeReport, ProviderReq, RecipeSpec, StageSpec
 from ...core.stage import StageContext
 from ..doodle.narration import provider_for
@@ -17,6 +17,7 @@ from .places import atlas_for
 from .regions import region_atlas_for
 from .guide import GUIDE
 from . import lint
+from .verify import verify_mapreel
 from .stages import (ComposeStage, GeoStage, ImagesStage, NarrationStage, PrepStage, RenderStage,
                      ScriptStage, SegmentsStage, check_music, estimated_windows, heard_names, resolve_segments)
 
@@ -135,5 +136,5 @@ class MapReelRecipe:
                                   detail=f"requested {provider_for(inputs.voice)!r}, deployment serves {bound!r}"))
         return ProbeReport(ok=all(c.ok for c in checks), checks=checks, details=details)
 
-    def verify(self, ctx: StageContext, result: dict[str, Any]) -> None:
-        return None
+    def verify(self, ctx: StageContext, result: dict[str, Any]) -> VerificationReport:
+        return verify_mapreel(ctx, result)
