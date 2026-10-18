@@ -32,7 +32,7 @@ from ..explainer3d.music import synth_music
 from ..explainer3d.stages import speak_line
 from ..explainer3d.timing import ShotWindow, estimate_speech_ms, fit_windows, shot_windows
 from ..explainer3d.video import join_shots, mux
-from . import basemap, commons, compose, geodata, kinds, lint, palette
+from . import basemap, commons, compose, geodata, kinds, lint, palette, sources
 from .geometry import SAFE, Frame, frame_for, shape_of, visible_bbox
 from .models import (
     ComposeOutput, GeoOutput, ImagesOutput, MapReelInputs, NarrationOutput, PrepOutput, RenderOutput,
@@ -589,6 +589,19 @@ def _caller_cache(ctx: StageContext) -> Path:
     return settings.cache_dir / "mapreel"
 
 
+def _write_sources(ctx: StageContext, narration: NarrationOutput) -> Path:
+    """sources.md for the description, written beside the other artifacts in both modes."""
+    inputs = narration.inputs
+    licence = narration.licence
+    text = sources.render(
+        inputs, inputs.segment_ids(), narration.image_credits,
+        voice_licence=(licence and (licence.name or licence.attribution or licence.url)) or "licence not stated",
+        data=geodata.LICENCES, look=inputs.look, resolved=narration.segments)
+    path = _artifacts(ctx) / "sources.md"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
 class PrepStage:
     """Render every segment (cached by content) or, in storyboard mode, one still each."""
 
@@ -644,6 +657,7 @@ class PrepStage:
         ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-y", "-framerate", "1", "-start_number", "1",
                     "-i", str(sheet_in / "%03d.png"), "-vf", f"scale=360:640,tile={cols}x{rows}:padding=8:color=white",
                     "-frames:v", "1", "-q:v", "3", str(sheet)], cancel=ctx.cancel)
+        _write_sources(ctx, payload.narration)
         return PrepOutput(segments=payload, storyboard=str(sheet), renderer=renderer.name, halt_pipeline=True)
 
 
@@ -709,6 +723,7 @@ class RenderStage:
         video = mux(joined, audio, outdir / f"{name}.mp4", total_ms=timeline.duration_ms, settings=settings,
                     cancel=ctx.cancel)
         srt = write_srt(timeline.captions, work / f"{name}.srt")
+        _write_sources(ctx, narration)
         manifest = {"reel": str(video), "recipe": "mapreel", "mode": "hyperframes",
                     "created": datetime.now(timezone.utc).isoformat(), "durationMs": timeline.duration_ms,
                     "segments": len(prep.tracks), "look": inputs.look, "renderer": prep.renderer,

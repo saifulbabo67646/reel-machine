@@ -246,3 +246,14 @@ def test_a_commons_image_reaches_the_segment_and_its_credit(tmp_path, monkeypatc
     project = next((tmp_path / "work").rglob(f"projects/{seg['id']}"))
     with Image.open(project / image) as img:
         assert img.format == "PNG" and img.size == (300, 120)
+
+
+def test_a_build_writes_sources_md(tmp_path):
+    script = {"mode": "storyboard", "title": "Brands", "segments": [
+        {"kind": "country", "country": "Italy", "narration": "Italy has Gucci.", "source": "https://x.test/it",
+         "items": [{"name": "Gucci"}]}]}
+    job = _run(tmp_path, script)
+    assert job.state == JobState.SUCCEEDED, job.error
+    text = _artifacts(job)["sources.md"].read_text(encoding="utf-8")
+    assert text.startswith("# Sources — Brands\n") and "- Italy: Italy has Gucci. — https://x.test/it" in text
+    assert "- Narration — fake:default — " in text and "Natural Earth" in text

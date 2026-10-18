@@ -90,7 +90,7 @@ class MapReelRecipe:
                       notes="the fake and macOS voices are free; cloud voices bill per character",
                       providers=("elevenlabs", "cartesia", "macos", "fake")),
         artifacts=("reel.mp4", "captions.srt", "reel.json", "timeline.json", "storyboard.jpg",
-                   "script.resolved.json"),
+                   "script.resolved.json", "sources.md"),
         render_modes=("hyperframes",),
         guide=GUIDE,
         example=EXAMPLE,
