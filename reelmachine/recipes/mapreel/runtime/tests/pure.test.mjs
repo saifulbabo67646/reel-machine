@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_Y, LEGEND_H, LEGEND_AIR, badgeLayout, panelNameY } from "../pure.mjs";
+import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, luminance, textOn, readableOnWhite, contrast, slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_Y, LEGEND_H, LEGEND_AIR, badgeLayout, panelNameY } from "../pure.mjs";
 
 const A = { x: 0.2, y: 0.4, s: 1080 };
 const B = { x: 0.55, y: 0.35, s: 20000 };
@@ -216,4 +216,33 @@ test("a finished count shows the value exactly as written", () => {
   assert.equal(countText(trailing, 1, "$1,200,"), "$1,200,");
   assert.equal(countText(trailing, 2, "$1,200,"), "$1,200,");
   assert.equal(countText(trailing, 0.5, "$1,200,"), "$1,050");
+});
+
+const PALETTE = ["#8a2be2", "#e0201b", "#3333ff", "#f28c0f", "#e01ec8", "#35b52a",
+                 "#00b3c7", "#ffcc00", "#ff5a7a", "#1e90ff", "#7cdf00", "#b8005c"];
+
+test("relative luminance follows WCAG", () => {
+  assert.equal(luminance("#000000"), 0);
+  assert.equal(luminance("#ffffff"), 1);
+  assert.ok(Math.abs(luminance("#808080") - 0.2159) < 1e-3);
+  assert.equal(luminance("#fff"), 1);
+  assert.ok(Math.abs(contrast("#ffffff", "#000000") - 21) < 1e-9);
+});
+
+test("a light plate gets dark text and a dark plate white", () => {
+  for (const light of ["#ffcc00", "#7cdf00", "#00b3c7"]) assert.equal(textOn(light), "#111111", light);
+  for (const dark of ["#8a2be2", "#e0201b", "#3333ff", "#b8005c", "#222222"]) assert.equal(textOn(dark), "#ffffff", dark);
+  // whichever it picks, the text reads: at least 3:1 on every palette colour
+  for (const c of PALETTE) assert.ok(contrast(textOn(c), c) >= 3, c);
+});
+
+test("a stat value on the white card is darkened until it reads", () => {
+  for (const c of PALETTE) assert.ok(contrast(readableOnWhite(c), "#ffffff") >= 3, c);
+  assert.equal(readableOnWhite("#8a2be2"), "#8a2be2"); // dark enough already: kept
+  const gold = readableOnWhite("#ffcc00");
+  assert.notEqual(gold, "#ffcc00");
+  // the same hue, only darker
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(gold.slice(i, i + 2), 16));
+  assert.ok(r > g && g > b && Math.abs(r / g - 255 / 204) < 0.05);
+  assert.equal(readableOnWhite(null), "#111111");
 });

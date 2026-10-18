@@ -202,3 +202,42 @@ export function panelNameY(rect, size, minY, band, cardTop, gap = 14, air = NAME
   if (!band || y - size / 2 >= band.y1 + air || y + size / 2 <= band.y0 - air) return y;
   return cardTop - gap - size / 2;
 }
+
+// WCAG relative luminance of "#rrggbb" (or "#rgb"): 0 black .. 1 white.
+export function luminance(hex) {
+  let h = String(hex).replace("#", "");
+  if (h.length === 3) h = [...h].map((c) => c + c).join("");
+  const [r, g, b] = [0, 2, 4].map((i) => {
+    const c = parseInt(h.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+// WCAG contrast ratio between two colours: 1 (none) .. 21 (black on white).
+export function contrast(a, b) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+// The text colour for a name on a plate of `hex`: white while white reads on it at least 3:1 (the palette's
+// purple, red, blue, magenta), else near-black like the gold rank badge's (yellow, lime, cyan, orange, green).
+export const DARK_TEXT = "#111111", MIN_CONTRAST = 3;
+export function textOn(hex) {
+  return contrast("#ffffff", hex) >= MIN_CONTRAST ? "#ffffff" : DARK_TEXT;
+}
+
+// A place colour for a stat value on the white card: as it is when it reads at least 3:1 on white, else the
+// same hue darkened just enough that it does. No colour: near-black.
+export function readableOnWhite(hex) {
+  if (!hex) return DARK_TEXT;
+  if (contrast(hex, "#ffffff") >= MIN_CONTRAST) return hex;
+  const h = String(hex).replace("#", "");
+  const full = h.length === 3 ? [...h].map((c) => c + c).join("") : h;
+  const rgb = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+  for (let k = 0.98; k > 0; k -= 0.02) {
+    const out = "#" + rgb.map((c) => Math.round(c * k).toString(16).padStart(2, "0")).join("");
+    if (contrast(out, "#ffffff") >= MIN_CONTRAST) return out;
+  }
+  return DARK_TEXT;
+}

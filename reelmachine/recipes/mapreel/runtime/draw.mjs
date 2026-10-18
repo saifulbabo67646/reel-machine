@@ -2,7 +2,7 @@
 // Draws one frame of a map segment on a 2D canvas.
 import {
   cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, clamp01, POP_MS, cardLayout,
-  slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_H, badgeLayout, panelNameY,
+  slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_H, badgeLayout, panelNameY, textOn, readableOnWhite,
 } from "./pure.mjs";
 
 const W = 1080, H = 1920;
@@ -226,18 +226,20 @@ function drawItem(ctx, item, ms, images) {
     }
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    // every name sits on a pill in its place's colour, white-edged: readable over sea, dark land or its own fill
+    // every name sits on a pill in its place's colour, white-edged: readable over sea, dark land or its own fill;
+    // a light pill (yellow, lime, cyan) takes dark text
     const at = badgeLayout(item.size, size, lines.length, Boolean(item.emoji));
     const pw = widest() + size * 0.9;
+    const plate = item.plate || "#222222";
     ctx.beginPath();
     ctx.roundRect(-pw / 2, at.plateY, pw, at.plateH, at.plateH / 2);
-    ctx.fillStyle = item.plate || "#222222";
+    ctx.fillStyle = plate;
     ctx.fill();
     ctx.shadowColor = "transparent";
     ctx.lineWidth = 4;
     ctx.strokeStyle = "#ffffff";
     ctx.stroke();
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = textOn(plate);
     lines.forEach((line, k) => ctx.fillText(line, 0, at.lineYs[k]));
     if (item.emoji) { // drawn last: it sits over the pill's top edge
       ctx.font = `${Math.round(item.size * 0.34)}px sans-serif`;
@@ -319,14 +321,15 @@ function rankBadge(ctx, rank, ms) {
   ctx.font = `900 ${size}px ${FONT}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = rank.gold ? "#111111" : "#ffffff";
+  ctx.fillStyle = textOn(rank.gold ? GOLD : rank.colour); // gold, or a light place colour: dark digits
   ctx.fillText(text, 0, 6);
   ctx.restore();
 }
 
 const STAT_TOP = 150, STAT_PAD = 28, COUNT_MS = 700;
 
-// A white card, top right of the rank badge: the stat's value in the place colour counting up, its label below.
+// A white card, top right of the rank badge: the stat's value in the place colour (darkened when too light to
+// read on white) counting up, its label below.
 // `at` ({x0, x1, cy, scale, maxY}) places it elsewhere: centred in x0..x1 at height cy, scaled, its bottom
 // never below maxY (a versus panel).
 // Where a stat card lands, measured at its final text so it never jitters: {cx, cy, width, height (unscaled),
@@ -366,7 +369,7 @@ function statCard(ctx, stat, ms, colour, at = null) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `900 ${valuePx}px ${FONT}`;
-  ctx.fillStyle = colour || "#111111";
+  ctx.fillStyle = readableOnWhite(colour);
   ctx.fillText(countText(stat.count, clamp01((ms - stat.atMs) / COUNT_MS), stat.value), 0,
                -height / 2 + STAT_PAD + valuePx / 2);
   if (stat.label) {
