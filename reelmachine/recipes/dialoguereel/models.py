@@ -12,6 +12,7 @@ from reelmachine.core.timeline import WordSpan
 
 Look = Literal["pop"]
 Mode = Literal["cast", "storyboard", "full"]
+Emotion = Literal["neutral", "happy", "surprised", "sad", "thinking"]
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
@@ -72,6 +73,16 @@ class CastSpec(BaseModel):
         return self
 
 
+class KeyWord(BaseModel):
+    """A word worth learning from a line, shown in the recap."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=30)
+    reading: str | None = Field(None, max_length=60)
+    meaning: str = Field(min_length=1, max_length=60)
+
+
 class Line(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -79,6 +90,9 @@ class Line(BaseModel):
     text: str = Field(min_length=1, max_length=80)
     reading: str | None = Field(None, max_length=120)
     meaning: str = Field(min_length=1, max_length=120)
+    keys: list[KeyWord] = Field(default_factory=list, max_length=4)
+    emotion: Emotion = "neutral"
+    slow: bool = False                                # replay the line slowly after it is first spoken
 
 
 class DialogueReelInputs(BaseModel):
@@ -93,6 +107,8 @@ class DialogueReelInputs(BaseModel):
     look: Look = "pop"
     mode: Mode = "storyboard"
     lint: Literal["strict", "warn"] = "strict"
+    flow: Literal["standard", "listen_first"] = "standard"
+    quiz: bool | int = True                           # an int is the 0-based line to ask about
     music: str | None = None
     name: str | None = Field(None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")  # the output file's stem
     outdir: str | None = None

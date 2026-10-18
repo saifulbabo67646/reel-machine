@@ -53,3 +53,14 @@ def test_a_safe_output_name_is_accepted(name):
 def test_an_output_name_that_is_not_a_plain_file_stem_is_refused(name):
     with pytest.raises(ValidationError):
         DialogueReelInputs.model_validate({**SCRIPT, "name": name})
+
+
+def test_learning_fields_default_and_validate():
+    inp = DialogueReelInputs.model_validate(SCRIPT)
+    assert inp.flow == "standard" and inp.quiz is True
+    assert inp.lines[0].keys == [] and inp.lines[0].emotion == "neutral" and inp.lines[0].slow is False
+    line = {**SCRIPT["lines"][0], "keys": [{"text": "手伝う", "meaning": "to help"}] * 4, "emotion": "happy"}
+    assert DialogueReelInputs.model_validate({**SCRIPT, "lines": [line], "quiz": 0}).quiz == 0
+    for bad in ({"keys": [{"text": "a", "meaning": "b"}] * 5}, {"emotion": "angry"}, {"keys": [{"text": "", "meaning": "b"}]}):
+        with pytest.raises(ValidationError):
+            DialogueReelInputs.model_validate({**SCRIPT, "lines": [{**SCRIPT["lines"][0], **bad}]})
