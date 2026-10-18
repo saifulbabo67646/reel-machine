@@ -94,6 +94,7 @@ def test_a_build_makes_a_reel_with_captions(tmp_path):
     info = ffmpeg.probe(arts["reel.mp4"])
     assert (info.width, info.height) == (1080, 1920) and info.has_audio and info.duration_s > 3
     assert "Gucci" in arts["captions.srt"].read_text()
+    assert arts["sources.md"].read_text(encoding="utf-8").startswith("# Sources — Brands\n")
 
 
 def test_auto_music_builds_a_reel_with_a_synthesised_bed(tmp_path):
@@ -255,5 +256,5 @@ def test_a_build_writes_sources_md(tmp_path):
     job = _run(tmp_path, script)
     assert job.state == JobState.SUCCEEDED, job.error
     text = _artifacts(job)["sources.md"].read_text(encoding="utf-8")
-    assert text.startswith("# Sources — Brands\n") and "- Italy: Italy has Gucci. — https://x.test/it" in text
+    assert text.startswith("# Sources — Brands\n") and "- Italy: Italy has Gucci — https://x.test/it" in text
     assert "- Narration — fake:default — " in text and "Natural Earth" in text
