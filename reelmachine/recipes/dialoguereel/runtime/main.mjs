@@ -4,7 +4,8 @@
 // window.__hf.buildReady (set inline in index.html) before capturing. Opened directly in a browser,
 // index.html?t=3.2 shows the frame at 3.2 s.
 import { activeLine, dropIn, hop, mouthOpen, blinking, litChars, fade, history, progress, bob, seedOf, fitFont, flag, clamp01, DROP_MS, partId,
-  backOut, keyVisible, emotionParts, emojiPop, slowActive, slowWords, rowFit, SLOW_FLAP_MS } from "./pure.mjs";
+  backOut, keyVisible, emotionParts, emojiPop, slowActive, slowWords, rowFit, SLOW_FLAP_MS,
+  section, shiftLine, spokenOf, bridgeSlide, countdown, recapCard, nod, loopBack, waveLevel, WAVE_BARS, BRIDGE_MS, RECAP_MS, LOOP_MS, DROP_PX } from "./pure.mjs";
 
 const done = () => window.__reelResolve && window.__reelResolve();
 const DROP_DELAY = { left: 150, right: 300 };
@@ -20,6 +21,15 @@ const BUBBLE_TOP = 372; // two rows at the largest size fit between the badge (b
 // the key chips sit in the band between the bubble's tail and the characters' heads
 const TAIL_PX = 62, CHIP_AIR = 22, CHIP_TOP = 1000, CHIP_BOTTOM = 1250;
 const SLOW_TAG_MS = 240;
+const STAGE_OUT_MS = 250; // the dialogue leaves in the gap before the recap (or the quiz) ...
+const STAGE_LEAD_MS = 300; // ... starting this long before it (the gap is 350 ms)
+const POP_MS = 300; // a section's title pops in
+const CTA_AT_MS = 500, FOLLOW_AT_MS = 850; // after the quiz reveal
+const RING_BURST_MS = 260;
+const CARD_ROOM = 467 - 2 * 28 - 10; // a recap card's text width: less its padding and its accent edge
+const LEVEL_ROOM = 96; // and less the level tag
+const QUIZ_MEANING_MAX = 300;
+const easeIn = (p) => p * p;
 
 /** Each history row's top when line `a` is active: the newest sits just above the bubble, older ones above it. */
 function rowTops(rows, a) {
@@ -84,13 +94,11 @@ function buildChip(parent, key) {
   return chip;
 }
 
-function buildBubble(stage, line, side) {
-  const bubble = el("div", `bubble ${side}`, stage);
-  el("div", "tail", bubble);
-  const body = el("div", "body", bubble);
-  const text = el("div", "text", body);
+/** A line's text as one span per character (for the karaoke), ruby above its kanji runs, its keys underlined. */
+function buildRubyText(parent, line, width) {
+  const text = el("div", "text rtext", parent);
   const plain = line.runs.map((r) => r.t).join("");
-  text.style.fontSize = `${fitFont(plain)}px`;
+  text.style.fontSize = `${fitFont(plain, width)}px`;
   const chars = [];
   const rts = [];
   for (const run of line.runs) {
@@ -99,16 +107,88 @@ function buildBubble(stage, line, side) {
     for (const ch of run.t) chars.push(el("span", "ch", host, ch));
     if (run.r) rts.push({ node: el("rt", null, host, run.r), first });
   }
+  for (const key of line.keys || []) for (let i = key.start; i < key.end && i < chars.length; i++) chars[i].classList.add("key");
+  return { text, plain, chars, rts };
+}
+
+/** Lights the first `lit` characters (and the ruby over them); `state.lit` remembers what is lit. */
+function lightChars(state, lit) {
+  if (lit === state.lit) return;
+  state.chars.forEach((node, i) => node.classList.toggle("lit", i < lit));
+  for (const rt of state.rts) rt.node.classList.toggle("lit", rt.first < lit);
+  state.lit = lit;
+}
+
+function buildBubble(stage, line, side) {
+  const bubble = el("div", `bubble ${side}`, stage);
+  el("div", "tail", bubble);
+  const body = el("div", "body", bubble);
+  const { chars, rts } = buildRubyText(body, line);
   const keys = line.keys || [];
-  for (const key of keys) for (let i = key.start; i < key.end && i < chars.length; i++) chars[i].classList.add("key");
   const reading = line.reading ? el("div", "reading", body, line.reading) : null;
   const meaning = el("div", "meaning", body, line.meaning);
-  const spoken = line.words.length ? line.words : [{ text: plain, startMs: line.startMs, endMs: line.endMs }];
   const slow = line.slowStartMs != null ? { words: slowWords(line), tag: el("div", "slow-tag", bubble, "🐢 0.75×") } : null;
   const chipBox = el("div", "chips", stage);
   // in the order the karaoke reaches them
   const chips = [...keys].sort((x, y) => x.start - y.start).map((key) => ({ key, node: buildChip(chipBox, key) }));
-  return { bubble, body, chars, rts, reading, meaning, spoken, slow, chipBox, chips, lit: -1 };
+  return { bubble, body, chars, rts, reading, meaning, slow, chipBox, chips, lit: -1, listening: false };
+}
+
+/** A recap card: the word (with its ruby), its reading, its meaning and, for Japanese, its JLPT level. */
+function buildCard(parent, entry) {
+  const card = el("div", "card", parent);
+  const word = el("div", "card-word", card);
+  for (const run of entry.runs) {
+    if (run.r) el("rt", null, el("ruby", null, word, run.t), run.r);
+    else el("span", null, word, run.t);
+  }
+  if (entry.reading && entry.reading !== entry.text) el("div", "card-reading", card, entry.reading);
+  el("div", "card-meaning", card, entry.meaning);
+  const level = Number.isInteger(entry.level) ? el("div", "card-level", card, `N${entry.level}`) : null;
+  return { node: card, word, level };
+}
+
+/** The screens around the dialogue: the listen-first banner, the bridge card, the recap and the quiz. */
+function buildSections(ui, doc, root) {
+  const strings = doc.strings || {};
+  const lines = doc.lines || [];
+  // the listen pass replays each line at its listen window; the quiz answer at the reveal
+  ui.listenLines = (doc.listen || []).slice(0, lines.length).map((w, i) => shiftLine(lines[i], w.startMs));
+  if (ui.listenLines.length) {
+    ui.banner = el("div", "listen-banner", root, strings.listen || "");
+    ui.wave = el("div", "wave", root);
+    ui.bars = Array.from({ length: WAVE_BARS }, () => el("div", "wave-bar", ui.wave));
+  }
+  if (doc.bridgeMs != null) {
+    ui.bridge = el("div", "bridge", root);
+    ui.bridgeText = el("div", "bridge-text", ui.bridge, strings.bridge || "");
+  }
+  if (doc.recapMs != null) {
+    ui.recap = el("div", "recap", root);
+    ui.recapTitle = el("div", "recap-title", ui.recap, strings.recap || "");
+    const grid = el("div", "cards", ui.recap);
+    ui.cards = (doc.recap || []).map((entry) => buildCard(grid, entry));
+  }
+  const quiz = doc.quiz && lines[doc.quiz.line] ? doc.quiz : null;
+  if (quiz) {
+    const line = lines[quiz.line];
+    const q = { window: quiz, line: shiftLine(line, quiz.revealMs) };
+    q.box = el("div", "quiz", root);
+    q.label = el("div", "quiz-label", q.box, strings.quiz || "");
+    q.meaning = el("div", "quiz-meaning", q.box, line.meaning);
+    const slot = el("div", "quiz-slot", q.box);
+    q.count = el("div", "quiz-count", slot);
+    q.ring = el("div", "quiz-ring", q.count);
+    q.num = el("div", "quiz-num", q.count, "3");
+    q.n = null;
+    q.answer = el("div", "quiz-answer", slot);
+    q.card = el("div", "answer-card", q.answer);
+    Object.assign(q, buildRubyText(q.card, line, 820), { lit: -1 });
+    if (line.reading) el("div", "reading", q.card, line.reading);
+    q.cta = el("div", "cta", q.box, strings.cta || "");
+    q.follow = el("div", "follow", q.box, strings.follow || "");
+    ui.quiz = q;
+  }
 }
 
 function build(doc, root) {
@@ -123,6 +203,7 @@ function build(doc, root) {
   const ui = { root, mode: doc.mode };
   ui.chars = doc.characters.map((c, i) => buildCharacter(root, c, i));
   ui.bySide = Object.fromEntries(ui.chars.map((c) => [c.id, c.side]));
+  ui.listenLines = [];
   if (doc.mode !== "reel") return ui;
 
   const bar = el("div", "progress", root);
@@ -135,7 +216,7 @@ function build(doc, root) {
   el("div", "title", ui.hook, doc.title);
   if (doc.prompt) el("div", "sub", ui.hook, doc.prompt);
 
-  const stage = el("div", "stage", root);
+  const stage = ui.stage = el("div", "stage", root);
   ui.rows = doc.lines.map((line) => {
     const node = el("div", `row ${ui.bySide[line.speaker] || "left"}`, stage);
     const plain = line.runs.map((r) => r.t).join("");
@@ -143,6 +224,7 @@ function build(doc, root) {
     return { node, base, text: el("span", "row-text", node, plain), meaning: el("span", "row-meaning", node, line.meaning), height: 0 };
   });
   ui.bubbles = doc.lines.map((line) => buildBubble(stage, line, ui.bySide[line.speaker] || "left"));
+  buildSections(ui, doc, root);
   return ui;
 }
 
@@ -152,9 +234,9 @@ function fit(ui) {
   if (ui.mode !== "reel") return;
   // a text's natural width in em (flex: none, so the row's own width cannot squeeze it first)
   const em = (node) => {
-    Object.assign(node.style, { fontSize: "100px", flex: "none" });
+    Object.assign(node.style, { fontSize: "100px", flex: "none", maxWidth: "none" });
     const width = node.getBoundingClientRect().width / 100;
-    node.style.flex = "";
+    Object.assign(node.style, { flex: "", maxWidth: "" });
     return width;
   };
   for (const row of ui.rows) {
@@ -172,9 +254,26 @@ function fit(ui) {
     b.chipBox.style.top = `${top}px`;
     b.chipScale = Math.max(0.4, Math.min(1, (CHIP_BOTTOM - top) / height));
   }
+  // a recap word is as big as its card allows (at most 84 px, at least 34 px, past that an ellipsis)
+  for (const card of ui.cards || []) {
+    const room = CARD_ROOM - (card.level ? LEVEL_ROOM : 0);
+    card.word.style.fontSize = `${Math.max(34, Math.min(84, Math.floor(room / em(card.word))))}px`;
+  }
+  // the quiz question fits in four lines' worth of height
+  if (ui.quiz) {
+    let size = 104;
+    ui.quiz.meaning.style.fontSize = `${size}px`;
+    while (ui.quiz.meaning.offsetHeight > QUIZ_MEANING_MAX && size > 44) {
+      size -= 4;
+      ui.quiz.meaning.style.fontSize = `${size}px`;
+    }
+  }
 }
 
-function applyCharacter(c, ms, doc, line, prevLine) {
+/** `pose` is what the reel around the line asks of the characters: `restFrom` (the line they turn back from,
+    at `restMs`, once no one is speaking), `nodMs` (the recap's start), `happy`, and `loop` (0..1, sinking back
+    below the floor for the first frame). */
+function applyCharacter(c, ms, doc, line, prevLine, pose = {}) {
   const delay = DROP_DELAY[c.side] ?? 150;
   const drop = dropIn(ms, delay);
   const landed = delay + DROP_MS;
@@ -185,14 +284,18 @@ function applyCharacter(c, ms, doc, line, prevLine) {
   // a listener leans towards the speaker; a thinking speaker tilts its head away
   const inward = c.side === "left" ? 1 : -1;
   const towards = (l) => (!l ? 0 : l.speaker !== c.id ? inward * TILT_DEG : -inward * emotionParts(l.emotion, false).tiltDeg);
-  const tilt = line ? lerp(towards(prevLine), towards(line), fade(ms, line.startMs, 300)) : 0;
-  const y = drop.y + idle + h.y;
-  c.box.style.visibility = ms < delay ? "hidden" : "visible";
-  c.box.style.transform =
-    `translateY(${y.toFixed(2)}px) rotate(${tilt.toFixed(3)}deg) scale(${(drop.scale * h.sx).toFixed(4)}, ${(drop.scale * h.sy).toFixed(4)})`;
+  const tilt = line ? lerp(towards(prevLine), towards(line), fade(ms, line.startMs, 300))
+    : pose.restFrom ? towards(pose.restFrom) * (1 - fade(ms, pose.restMs, 300)) : 0;
+  const n = pose.nodMs != null ? nod(ms, pose.nodMs, c.index) : { y: 0, sy: 1 };
+  const loop = pose.loop || 0;
+  const sink = DROP_PX * easeIn(loop), shrink = lerp(1, 0.8, loop);
+  const y = drop.y + idle + h.y + n.y + sink;
+  c.box.style.visibility = ms < delay || loop >= 1 ? "hidden" : "visible";
+  c.box.style.transform = `translateY(${y.toFixed(2)}px) rotate(${tilt.toFixed(3)}deg) ` +
+    `scale(${(drop.scale * shrink * h.sx).toFixed(4)}, ${(drop.scale * shrink * h.sy * n.sy).toFixed(4)})`;
   // the shadow stays on the floor: it shrinks and pales while the character is in the air
   const air = clamp01(-Math.min(0, h.y + idle) / 60);
-  const there = clamp01((ms - delay) / DROP_MS);
+  const there = clamp01((ms - delay) / DROP_MS) * (1 - loop);
   c.shadow.style.opacity = (there * (1 - 0.5 * air)).toFixed(3);
   c.shadow.style.transform = `scale(${(1 - 0.25 * air).toFixed(3)})`;
 
@@ -202,7 +305,7 @@ function applyCharacter(c, ms, doc, line, prevLine) {
     : mouthOpen(ms, line.words.length ? line.words : [{ startMs: line.startMs, endMs: line.endMs }]));
   const face = emotionParts(speaking ? line.emotion : "neutral", talking);
   // the hook's greeting (and the cast sheet) is happy too
-  if ((doc.mode === "reel" && ms >= landed && ms < (doc.hookMs || 0)) || (!line && doc.mode === "cast" && ms >= landed)) {
+  if ((doc.mode === "reel" && ms >= landed && (ms < (doc.hookMs || 0) || pose.happy)) || (!line && doc.mode === "cast" && ms >= landed)) {
     if (doc.mode === "reel") face.eyes = "happy";
     if (!talking) face.mouth = "smile";
   }
@@ -224,23 +327,22 @@ function applyCharacter(c, ms, doc, line, prevLine) {
   }
 }
 
-function applyBubble(b, line, ms, state) {
+/** `line` carries the times of the pass being played: the dialogue, or the listen pass (`listening`: the text
+    blurred, no reading, meaning or slow tag). */
+function applyBubble(b, line, ms, state, listening = false) {
   const { bubble } = b;
   if (state === null) {
     bubble.style.opacity = "0";
     return;
   }
+  if (b.listening !== listening) bubble.classList.toggle("listening", (b.listening = listening));
   bubble.style.opacity = state.opacity.toFixed(3);
   bubble.style.transformOrigin = state.origin || "";
   bubble.style.transform = `translateY(${state.y.toFixed(1)}px) scale(${state.scale.toFixed(4)})`;
   // the slow replay runs the karaoke again from the start, at its own pace
-  const replay = b.slow && ms >= line.slowStartMs;
-  const lit = litChars(ms, b.chars.length, replay ? b.slow.words : b.spoken);
-  if (lit !== b.lit) {
-    b.chars.forEach((node, i) => node.classList.toggle("lit", i < lit));
-    for (const rt of b.rts) rt.node.classList.toggle("lit", rt.first < lit);
-    b.lit = lit;
-  }
+  const replay = b.slow && line.slowStartMs != null && ms >= line.slowStartMs;
+  lightChars(b, litChars(ms, b.chars.length, replay ? b.slow.words : spokenOf(line)));
+  if (listening) return;
   const m = fade(ms, line.meaningMs, 250);
   b.meaning.style.opacity = m.toFixed(3);
   b.meaning.style.transform = `translateY(${((1 - m) * 14).toFixed(1)}px)`;
@@ -267,37 +369,166 @@ function applyChips(b, line, ms, state) {
   }
 }
 
+const px = (v) => `${v.toFixed(1)}px`;
+
+/** Shows `node` only while `alpha` > 0. */
+function reveal(node, alpha, transform) {
+  node.style.visibility = alpha > 0 ? "visible" : "hidden";
+  node.style.opacity = alpha.toFixed(3);
+  if (transform !== undefined) node.style.transform = transform;
+}
+
+/** A pop-in: 0..1 progress from `atMs` over `durMs` to an alpha and a back-out scale from `from`. */
+function popIn(ms, atMs, from = 0.6, durMs = POP_MS) {
+  const p = clamp01((ms - atMs) / durMs);
+  return { p, alpha: clamp01(p * 2), scale: lerp(from, 1, backOut(p)) };
+}
+
+/** The listen-first banner over the blurred pass with a sound wave that moves with the voice (`line` is the
+    listen line being played), and the "now with subtitles" card that wipes across after it. */
+function applyListen(ui, doc, ms, line) {
+  if (ui.banner) {
+    const first = ui.listenLines[0].startMs;
+    const p = clamp01((ms - first) / POP_MS);
+    const alpha = fade(ms, first, POP_MS) * (1 - fade(ms, doc.bridgeMs, 200));
+    reveal(ui.banner, alpha,
+      `translateY(${px(-40 * (1 - backOut(p)))}) scale(${(1 + 0.012 * Math.sin((2 * Math.PI * ms) / 900)).toFixed(4)})`);
+    reveal(ui.wave, alpha, `scale(${lerp(0.6, 1, backOut(p)).toFixed(4)})`);
+    const words = line ? spokenOf(line) : [];
+    ui.bars.forEach((bar, i) => { bar.style.transform = `scaleY(${waveLevel(ms, words, i).toFixed(4)})`; });
+  }
+  if (ui.bridge) {
+    const x = bridgeSlide(ms, doc.bridgeMs);
+    reveal(ui.bridge, Math.abs(x) < 1 ? 1 : 0, `translateX(${px(x * 1240)}) rotate(-4deg)`);
+    ui.bridgeText.style.transform = `translateX(${px(x * 260)})`;
+  }
+}
+
+/** The recap: its title pops in, the cards rise in one by one, and all of it leaves before the quiz. */
+function applyRecap(ui, doc, ms) {
+  if (!ui.recap) return;
+  const at = doc.recapMs;
+  const on = ms >= at && ms < at + RECAP_MS;
+  ui.recap.style.visibility = on ? "visible" : "hidden";
+  if (!on) return;
+  const title = popIn(ms, at, 0.7), out = fade(ms, at + RECAP_MS - 260, 260);
+  reveal(ui.recapTitle, title.alpha * (1 - out), `translateY(${px(-40 * out)}) scale(${title.scale.toFixed(4)})`);
+  ui.cards.forEach((card, i) => {
+    const s = recapCard(ms, at, i);
+    reveal(card.node, s.alpha, `translateY(${px(s.y)}) scale(${lerp(0.9, 1, s.alpha).toFixed(4)})`);
+  });
+}
+
+/** The quiz: the question and its meaning, the 3-2-1 ring; at the reveal the answer (spoken, with its karaoke),
+    then the call to comment and to follow. It all shrinks away as the reel loops. */
+function applyQuiz(ui, ms, loop) {
+  const q = ui.quiz;
+  if (!q) return;
+  const w = q.window;
+  const on = ms >= w.startMs && loop < 0.5;
+  q.box.style.visibility = on ? "visible" : "hidden";
+  if (!on) return;
+  q.box.style.opacity = (1 - clamp01(loop * 2)).toFixed(3);
+  q.box.style.transform = `scale(${lerp(1, 0.9, loop).toFixed(4)})`;
+  const label = popIn(ms, w.startMs), meaning = popIn(ms, w.startMs + 120, 0.8);
+  reveal(q.label, label.alpha, `scale(${label.scale.toFixed(4)})`);
+  reveal(q.meaning, meaning.alpha, `translateY(${px(30 * (1 - meaning.p))}) scale(${meaning.scale.toFixed(4)})`);
+
+  const cd = countdown(ms, w);
+  const shown = Math.max(1, cd.n); // the 1 bursts away with the ring at the reveal
+  if (shown !== q.n) q.num.textContent = String((q.n = shown));
+  q.ring.style.setProperty("--p", cd.ring.toFixed(4));
+  // the number pops on every second; at the reveal the ring bursts outwards and goes
+  const tick = popIn(ms, w.startMs + Math.floor(Math.max(0, ms - w.startMs) / 1000) * 1000, 1.45, 220);
+  q.num.style.transform = `scale(${tick.scale.toFixed(4)})`;
+  const count = popIn(ms, w.startMs + 200, 0.5), burst = clamp01((ms - w.revealMs) / RING_BURST_MS);
+  reveal(q.count, count.alpha * (1 - burst), `scale(${(count.scale * lerp(1, 1.5, burst)).toFixed(4)})`);
+
+  const answer = popIn(ms, w.revealMs, 0.55, 320);
+  reveal(q.answer, answer.alpha);
+  q.card.style.transform = `scale(${answer.scale.toFixed(4)})`;
+  lightChars(q, ms >= w.revealMs ? litChars(ms, q.chars.length, spokenOf(q.line)) : 0);
+  const sway = 5 * Math.sin((2 * Math.PI * ms) / 700);
+  const cta = popIn(ms, w.revealMs + CTA_AT_MS, 0.6), follow = popIn(ms, w.revealMs + FOLLOW_AT_MS, 0.8);
+  reveal(q.cta, cta.alpha, `translateY(${px(36 * (1 - cta.p) + sway * cta.p)}) scale(${cta.scale.toFixed(4)})`);
+  reveal(q.follow, follow.alpha, `translateY(${px(24 * (1 - follow.p))}) scale(${follow.scale.toFixed(4)})`);
+}
+
+/** The lines the bubbles and the speaker follow at `ms`: the listen pass until its bridge has gone, then the dialogue. */
+function passAt(ui, doc, ms) {
+  if (ui.listenLines.length && ms < doc.bridgeMs + BRIDGE_MS) return { pass: ui.listenLines, listening: true };
+  return { pass: doc.lines || [], listening: false };
+}
+
 function renderFrame(ui, doc, t) {
   const ms = Math.max(0, t * 1000);
-  const lines = doc.lines || [];
-  const a = activeLine(lines, ms);
-  const line = a >= 0 ? lines[a] : null;
-  const prevLine = a > 0 ? lines[a - 1] : null;
-  for (const c of ui.chars) applyCharacter(c, ms, doc, line, prevLine);
-  if (doc.mode !== "reel") return;
+  if (doc.mode !== "reel") {
+    for (const c of ui.chars) applyCharacter(c, ms, doc, null, null);
+    return;
+  }
+  const durationMs = doc.duration * 1000;
+  const loop = loopBack(ms, durationMs);
+  const { pass, listening } = passAt(ui, doc, ms);
+  const a = activeLine(pass, ms);
+  // the dialogue's first line turns from the listen pass's last
+  const prevOf = (k) => (k > 0 ? pass[k - 1] : !listening && ui.listenLines.length ? ui.listenLines[ui.listenLines.length - 1] : null);
+  // the dialogue leaves for the recap or the quiz; without them it stays until the loop
+  const next = doc.recapMs ?? (doc.quiz ? doc.quiz.startMs : null);
+  const stageOutMs = next != null ? next - STAGE_LEAD_MS : durationMs - LOOP_MS;
+  let line = a >= 0 ? pass[a] : null;
+  let prevLine = a >= 0 ? prevOf(a) : null;
+  const pose = { loop };
+  if (!listening && ms >= stageOutMs) {
+    Object.assign(pose, { restFrom: line, restMs: stageOutMs });
+    line = prevLine = null;
+  }
+  if (section(ms, doc) === "recap") Object.assign(pose, { nodMs: doc.recapMs, happy: true });
+  if (ui.quiz && ms >= ui.quiz.window.revealMs) {
+    line = ui.quiz.line; // the answer's speaker says it
+    prevLine = null;
+  }
+  for (const c of ui.chars) applyCharacter(c, ms, doc, line, prevLine, pose);
 
-  ui.bar.style.transform = `scaleX(${progress(ms, doc.duration * 1000).toFixed(5)})`;
+  ui.bar.style.transform = `scaleX(${progress(ms, durationMs).toFixed(5)})`;
+  // the hook card; in the loop's last half second it comes back as the first frame shows it
   const out = fade(ms, (doc.hookMs || 0) - 300, 300);
   const pop = clamp01(ms / 400);
-  ui.hook.style.opacity = (1 - out).toFixed(3);
-  ui.hook.style.transform = `translateY(${(-50 * out).toFixed(1)}px) scale(${(lerp(0.9, 1, pop >= 1 ? 1 : 1 - Math.pow(1 - pop, 3)) * (1 - 0.08 * out)).toFixed(4)})`;
-  if (ui.scene) ui.scene.style.transform = `rotate(${(7 * Math.sin((2 * Math.PI * ms) / 1200)).toFixed(2)}deg)`;
+  if (loop > 0) {
+    // after the quiz has gone, so the two never read on top of each other
+    ui.hook.style.opacity = clamp01((loop - 0.5) / 0.5).toFixed(3);
+    ui.hook.style.transform = `translateY(0px) scale(${lerp(0.8, 0.9, 1 - Math.pow(1 - loop, 3)).toFixed(4)})`;
+  } else {
+    ui.hook.style.opacity = (1 - out).toFixed(3);
+    ui.hook.style.transform = `translateY(${(-50 * out).toFixed(1)}px) scale(${(lerp(0.9, 1, pop >= 1 ? 1 : 1 - Math.pow(1 - pop, 3)) * (1 - 0.08 * out)).toFixed(4)})`;
+  }
+  // the scene's wobble is in phase with the first frame's as the reel loops
+  if (ui.scene) ui.scene.style.transform = `rotate(${(7 * Math.sin((2 * Math.PI * (loop > 0 ? ms - durationMs : ms)) / 1200)).toFixed(2)}deg)`;
+
+  const gone = fade(ms, listening ? doc.bridgeMs : stageOutMs, listening || next == null ? 200 : STAGE_OUT_MS);
+  ui.stage.style.opacity = (1 - gone).toFixed(3);
+  ui.stage.style.transform = `translateY(${px(listening ? 0 : -40 * gone)})`;
+  applyListen(ui, doc, ms, listening && a >= 0 ? pass[a] : null);
+  applyRecap(ui, doc, ms);
+  applyQuiz(ui, ms, loop);
+  if (gone >= 1) return;
 
   // the active bubble pops in; the one before it shrinks up into the history as it goes
   // (the old one is nearly gone before the new one shows, so the two never read on top of each other)
-  const exit = line ? fade(ms, line.startMs, EXIT_MS) : 0;
-  const enter = line ? fade(ms, line.startMs + (a > 0 ? ENTER_DELAY_MS : 0), ENTER_MS) : 0;
+  const current = a >= 0 ? pass[a] : null;
+  const exit = current ? fade(ms, current.startMs, EXIT_MS) : 0;
+  const enter = current ? fade(ms, current.startMs + (a > 0 ? ENTER_DELAY_MS : 0), ENTER_MS) : 0;
   ui.bubbles.forEach((b, k) => {
     let state = null;
     if (k === a) state = { opacity: enter, y: 28 * (1 - enter), scale: lerp(0.9, 1, enter) };
     else if (k === a - 1 && exit < 1) state = { opacity: (1 - exit) ** 2, y: -60 * exit, scale: lerp(1, 0.7, exit), origin: "50% 0" };
-    applyBubble(b, lines[k], ms, state);
-    applyChips(b, lines[k], ms, state && k === a ? { opacity: 1, y: 0 } : state);
+    applyBubble(b, pass[k], ms, state, listening);
+    // the listen pass shows no chips and no history
+    applyChips(b, pass[k], ms, listening ? null : state && k === a ? { opacity: 1, y: 0 } : state);
   });
 
-  const slide = line ? fade(ms, line.startMs, SLIDE_MS) : 0;
-  const shown = new Set(history(lines, a));
-  if (a >= 3) shown.add(a - 3); // leaving through the top
+  const slide = current ? fade(ms, current.startMs, SLIDE_MS) : 0;
+  const shown = new Set(listening ? [] : history(pass, a));
+  if (!listening && a >= 3) shown.add(a - 3); // leaving through the top
   const before = rowTops(ui.rows, a - 1), after = rowTops(ui.rows, a);
   ui.rows.forEach(({ node }, k) => {
     if (!shown.has(k)) {

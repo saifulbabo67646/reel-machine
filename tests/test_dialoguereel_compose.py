@@ -281,3 +281,72 @@ def test_the_slow_replay_times_pass_through():
     assert (lines[0]["slowStartMs"], lines[0]["slowEndMs"]) == (w.slow_start_ms, w.slow_start_ms + w.slow_ms)
     assert lines[0]["slowStartMs"] == lines[0]["endMs"] + 350 and lines[0]["slowEndMs"] - lines[0]["slowStartMs"] == 1333
     assert (lines[1]["slowStartMs"], lines[1]["slowEndMs"]) == (None, None)
+
+
+# ------------------------------------------------- listen-first, bridge, recap and quiz in the document
+
+def test_the_section_fixture_the_runtime_tests_use_is_what_compose_writes():
+    from pathlib import Path
+    fixture = json.loads((Path(compose.RUNTIME_DIR) / "tests" / "sections.json").read_text(encoding="utf-8"))
+    two = INPUTS.model_copy(update={"lines": INPUTS.lines[:2]})
+    doc = reel_document(two, CAST, schedule([1000, 1000], listen_first=True, recap=True, quiz_line=0), WORDS[:2])
+    assert doc["duration"] == fixture["duration"] and doc["hookMs"] == fixture["hookMs"]
+    assert doc["listen"] == fixture["listen"] and doc["bridgeMs"] == fixture["bridgeMs"]
+    assert doc["recapMs"] == fixture["recapMs"] and doc["quiz"] == fixture["quiz"]
+    assert [{k: line[k] for k in ("startMs", "endMs", "slowStartMs", "slowEndMs")} for line in doc["lines"]] == fixture["lines"]
+
+
+def test_a_plain_reel_has_no_sections():
+    doc = reel_document(INPUTS, CAST, PLAN, WORDS)
+    assert (doc["listen"], doc["bridgeMs"], doc["recapMs"], doc["recap"], doc["quiz"]) == ([], None, None, [], None)
+
+
+def test_without_a_quiz_the_document_has_none_and_the_reveal_gets_no_ding():
+    from reelmachine.recipes.dialoguereel.schedule import estimate
+    inputs = _learning().model_copy(update={"quiz": False})
+    plan = estimate(inputs)
+    doc = reel_document(inputs, CAST, plan, WORDS)
+    assert doc["quiz"] is None and plan.quiz is None
+    # the render's ding sits on the quiz reveal, and every voice cue is a dialogue line
+    assert sorted(c.at_ms for c in plan.cues) == sorted([w.start_ms for w in plan.lines] + [plan.lines[0].slow_start_ms])
+    asked = estimate(_learning())
+    assert reel_document(_learning(), CAST, asked, WORDS)["quiz"] == {
+        "line": 0, "startMs": asked.quiz.start_ms, "revealMs": asked.quiz.reveal_ms, "endMs": asked.quiz.end_ms}
+
+
+def test_the_section_strings_follow_the_meaning_language():
+    from reelmachine.recipes.dialoguereel.strings import strings_for
+    en = reel_document(INPUTS, CAST, PLAN, WORDS)["strings"]
+    assert en == strings_for("en", "N5") and en["follow"] == "Follow for daily N5" and en["quiz"] == "How do you say:"
+    ja = reel_document(INPUTS.model_copy(update={"meaning_language": "ja-JP"}), CAST, PLAN, WORDS)["strings"]
+    assert ja["recap"] == "この動画のことば"
+    fr = reel_document(INPUTS.model_copy(update={"meaning_language": "fr", "level": ""}), CAST, PLAN, WORDS)["strings"]
+    assert fr["bridge"] == "Now with subtitles" and fr["follow"] == "Follow for more"
+
+
+def test_the_recap_lists_the_matched_keys_in_order_at_most_six():
+    data = INPUTS.model_dump()
+    data["lines"][0]["keys"] = [{"text": "手伝う", "reading": "てつだう", "meaning": "to help"},
+                                {"text": "ねこ", "meaning": "cat"},             # not in the line: not in the recap
+                                {"text": "ましょう", "meaning": "let's"}]
+    data["lines"][1]["text"] = "なにをしますか？いつですか？"
+    data["lines"][1]["keys"] = [{"text": "なに", "meaning": "what"}, {"text": "します", "meaning": "to do"},
+                                {"text": "ましょう", "meaning": "let's"},       # already in the recap
+                                {"text": "いつ", "meaning": "when"}]
+    data["lines"][2]["text"] = "あとでですね"
+    data["lines"][2]["keys"] = [{"text": "です", "meaning": "is"}, {"text": "あとで", "meaning": "later"}]
+    inputs = DialogueReelInputs.model_validate(data)
+    assert reel_document(inputs, CAST, PLAN, WORDS)["recap"] == [], "no recap section, no cards"
+    recap = reel_document(inputs, CAST, schedule([1000, 1200, 900], recap=True), WORDS)["recap"]
+    assert [card["text"] for card in recap] == ["手伝う", "ましょう", "なに", "します", "いつ", "です"]
+    assert recap[0] == {"text": "手伝う", "runs": [{"t": "手伝う", "r": None}], "reading": "てつだう",
+                        "meaning": "to help", "level": 4}
+    assert recap[2] == {"text": "なに", "runs": [{"t": "なに", "r": None}], "reading": None, "meaning": "what",
+                        "level": recap[2]["level"]}
+
+
+def test_a_recap_card_keeps_the_ruby_in_its_key():
+    from reelmachine.recipes.dialoguereel.models import KeyWord
+    card = compose.recap_card(KeyWord(text="手伝{てつだ}う", meaning="to help"), None)
+    assert card == {"text": "手伝う", "runs": [{"t": "手伝", "r": "てつだ"}, {"t": "う", "r": None}], "reading": None,
+                    "meaning": "to help", "level": None}

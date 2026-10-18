@@ -153,7 +153,7 @@ export const flag = (language) => FLAGS[String(language || "").toLowerCase().spl
 // ------------------------------------------------------------ key words, emotions and slow replays
 
 /** A line's spoken spans, or one span over the whole line when TTS gave none. */
-const spokenOf = (line) => (line.words && line.words.length ? line.words : [{ text: "", startMs: line.startMs, endMs: line.endMs }]);
+export const spokenOf = (line) => (line.words && line.words.length ? line.words : [{ text: "", startMs: line.startMs, endMs: line.endMs }]);
 
 export const KEY_POP_MS = 220;
 
@@ -226,4 +226,118 @@ export function rowFit(textLen, meaningLen, widthPx, base = { textPx: 70, meanin
   const k = need > 0 ? Math.max(ROW_MIN, Math.min(1, widthPx / need)) : 1;
   const size = (px) => (k >= 1 ? px : Math.max(Math.round(px * ROW_MIN), Math.floor(px * k)));
   return { textPx: size(base.textPx), meaningPx: size(base.meaningPx) };
+}
+
+// ------------------------------------------------------------ listen-first, bridge, recap and quiz
+
+// schedule.py's section lengths
+export const BRIDGE_MS = 700;
+export const RECAP_MS = 3000;
+
+const easeOut = (p) => 1 - Math.pow(1 - p, 3);
+const easeIn = (p) => p * p * p;
+
+/** When the dialogue's last line (its slow replay included) has been spoken; the hook's end without lines. */
+export function dialogueEndMs(doc) {
+  let end = doc.hookMs || 0;
+  for (const line of doc.lines || []) end = Math.max(end, line.slowEndMs ?? line.endMs);
+  return end;
+}
+
+/** When the tail starts: after the quiz, else the recap, else the dialogue. */
+export function tailMs(doc) {
+  if (doc.quiz) return doc.quiz.endMs;
+  if (doc.recapMs != null) return doc.recapMs + RECAP_MS;
+  return dialogueEndMs(doc);
+}
+
+/** Which part of the reel `ms` falls in. A gap before the recap or the quiz still belongs to the dialogue. */
+export function section(ms, doc) {
+  if (ms < (doc.hookMs || 0)) return "hook";
+  if (ms >= tailMs(doc)) return "tail";
+  if (doc.quiz && ms >= doc.quiz.startMs) return "quiz";
+  if (doc.recapMs != null && ms >= doc.recapMs) return "recap";
+  if (doc.bridgeMs != null && ms >= doc.bridgeMs && ms < doc.bridgeMs + BRIDGE_MS) return "bridge";
+  if (doc.listen && doc.listen.length && doc.bridgeMs != null && ms < doc.bridgeMs) return "listen";
+  return "dialogue";
+}
+
+/** A line moved to start at `atMs` (the listen pass, the quiz answer): its spans keep their offsets; no replay. */
+export function shiftLine(line, atMs) {
+  const d = atMs - line.startMs;
+  return {
+    ...line, startMs: atMs, endMs: line.endMs + d, meaningMs: line.meaningMs != null ? line.meaningMs + d : undefined,
+    slowStartMs: null, slowEndMs: null,
+    words: (line.words || []).map((w) => ({ text: w.text, startMs: w.startMs + d, endMs: w.endMs + d })),
+  };
+}
+
+const BRIDGE_IN_MS = 220, BRIDGE_OUT_MS = 220;
+
+/** The bridge card's x offset in card widths: 1 (off to the right) → 0, held, → -1 (off to the left). */
+export function bridgeSlide(ms, bridgeMs) {
+  const d = ms - bridgeMs;
+  if (d <= 0) return 1;
+  if (d >= BRIDGE_MS) return -1;
+  if (d < BRIDGE_IN_MS) return 1 - easeOut(d / BRIDGE_IN_MS);
+  const out = d - (BRIDGE_MS - BRIDGE_OUT_MS);
+  return out > 0 ? -easeIn(out / BRIDGE_OUT_MS) : 0;
+}
+
+/** The quiz countdown: 3, 2, 1 for a second each (`ring` drains from 1 to 0 every second), then 0 at the reveal. */
+export function countdown(ms, quiz) {
+  if (ms >= quiz.revealMs) return { n: 0, ring: 0 };
+  const d = Math.max(0, ms - quiz.startMs);
+  const seconds = Math.round((quiz.revealMs - quiz.startMs) / 1000);
+  return { n: Math.max(1, seconds - Math.floor(d / 1000)), ring: 1 - (d % 1000) / 1000 };
+}
+
+export const RECAP_CARD_PX = 70;
+export const CARD_DELAY_MS = 250, CARD_STAGGER_MS = 120, CARD_IN_MS = 380, CARD_OUT_MS = 260;
+
+/** Recap card `index`: after the title (250 ms), each rises 70 px into place 120 ms after the one before,
+    overshooting a little; all of them leave together in the recap's last 260 ms. */
+export function recapCard(ms, recapMs, index) {
+  const p = clamp01((ms - recapMs - CARD_DELAY_MS - index * CARD_STAGGER_MS) / CARD_IN_MS);
+  const out = fade(ms, recapMs + RECAP_MS - CARD_OUT_MS, CARD_OUT_MS);
+  if (p <= 0) return { y: RECAP_CARD_PX, alpha: 0 };
+  const rise = p >= 1 ? 0 : RECAP_CARD_PX * (1 - backOut(p));
+  return { y: rise - 40 * out, alpha: clamp01(p * 2) * (1 - out) };
+}
+
+export const NOD_MS = 750, NOD_PX = 10;
+
+/** The characters nod along to the recap: dips of 10 px every 750 ms, character 1 half a nod behind;
+    only whole nods, so both are at rest when the recap ends. */
+export function nod(ms, startMs, index) {
+  const offset = index * (NOD_MS / 2);
+  const d = ms - startMs - offset;
+  if (d < 0 || d >= Math.floor((RECAP_MS - offset) / NOD_MS) * NOD_MS) return { y: 0, sy: 1 };
+  const k = Math.pow(Math.sin((Math.PI * (d % NOD_MS)) / NOD_MS), 2);
+  return { y: NOD_PX * k, sy: 1 - 0.04 * k };
+}
+
+export const LOOP_MS = 500, LOOP_HOLD_MS = 100;
+
+/** The loop: 0 until the last 500 ms, then 1 by 100 ms before the end, when the frame matches the first one
+    (the hook card, the characters not yet risen). */
+export function loopBack(ms, durationMs) {
+  return clamp01((ms - (durationMs - LOOP_MS)) / (LOOP_MS - LOOP_HOLD_MS));
+}
+
+export const WAVE_BARS = 7, WAVE_REST = 0.15;
+
+/** The listen pass's sound wave: bar `i`'s height, 0..1. At rest 0.15; while a word is spoken the bars dance
+    (taller in the middle), easing in and out over 60 ms at the word's edges. */
+export function waveLevel(ms, words, i) {
+  let on = 0;
+  for (const w of words) {
+    if (ms >= w.startMs && ms < w.endMs) {
+      on = Math.min(1, (ms - w.startMs) / 60, (w.endMs - ms) / 60);
+      break;
+    }
+  }
+  const middle = 1 - Math.abs(i - (WAVE_BARS - 1) / 2) / WAVE_BARS;
+  const dance = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(ms / (55 + 9 * i) + i * 1.7));
+  return WAVE_REST + (1 - WAVE_REST) * on * middle * dance;
 }

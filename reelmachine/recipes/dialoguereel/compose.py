@@ -18,9 +18,10 @@ from reelmachine.core.timeline import WordSpan
 from .cast import ResolvedCast
 from .keys import match_keys
 from .levels import jlpt_level
-from .models import DialogueReelInputs, Line
-from .ruby import parse_ruby
-from .schedule import Schedule
+from .models import DialogueReelInputs, KeyWord, Line
+from .ruby import parse_ruby, plain_text
+from .schedule import QuizWindow, Schedule
+from .strings import strings_for
 from .svg import inline_svg
 
 HERE = Path(__file__).resolve().parent
@@ -29,6 +30,7 @@ RUNTIME_FILES = ("*.mjs", "*.css")
 
 WIDTH, HEIGHT, FPS = 1080, 1920, 30
 CAST_SECONDS = 2
+RECAP_MAX = 6
 # the hook's "can you understand this?" line, in the viewer's language (meaning_language's primary subtag);
 # any other language has no prompt and the runtime shows no pill
 PROMPTS: dict[str, str] = {
@@ -64,6 +66,30 @@ def _keys(line: Line, language: str) -> list[dict[str, Any]]:
     return out
 
 
+def recap_card(key: KeyWord, level: int | None) -> dict[str, Any]:
+    """A recap card: the key as ruby runs (one plain run when it has no ruby), its reading, meaning and level."""
+    runs, _ = parse_ruby(key.text)
+    return {"text": plain_text(runs), "runs": [{"t": run.text, "r": run.ruby} for run in runs],
+            "reading": key.reading, "meaning": key.meaning, "level": level}
+
+
+def _recap(inputs: DialogueReelInputs) -> list[dict[str, Any]]:
+    """The matched keys of every line in order, each word once, at most six."""
+    cards: list[dict[str, Any]] = []
+    for line in inputs.lines:
+        for key in _keys(line, inputs.language):
+            card = recap_card(KeyWord(text=key["text"], reading=key["reading"], meaning=key["meaning"]), key["level"])
+            if len(cards) < RECAP_MAX and all(c["text"] != card["text"] for c in cards):
+                cards.append(card)
+    return cards
+
+
+def _quiz(quiz: QuizWindow | None) -> dict[str, int] | None:
+    if quiz is None:
+        return None
+    return {"line": quiz.line, "startMs": quiz.start_ms, "revealMs": quiz.reveal_ms, "endMs": quiz.end_ms}
+
+
 def _characters(cast: ResolvedCast) -> list[dict[str, Any]]:
     return [{"id": c.id, "side": c.side, "parts": list(c.parts)} for c in cast.characters]
 
@@ -91,6 +117,10 @@ def reel_document(inputs: DialogueReelInputs, cast: ResolvedCast, plan: Schedule
         "mode": "reel", "width": WIDTH, "height": HEIGHT, "duration": plan.duration_ms / 1000,
         "look": dict(LOOKS[inputs.look]), "title": inputs.title, "level": inputs.level, "scene": inputs.scene or "",
         "language": inputs.language, "prompt": prompt_for(inputs.meaning_language), "hookMs": plan.hook_ms, "characters": _characters(cast), "lines": lines,
+        "strings": strings_for(inputs.meaning_language, inputs.level),
+        "listen": [{"startMs": w.start_ms, "endMs": w.end_ms} for w in plan.listen],
+        "bridgeMs": plan.bridge_ms, "recapMs": plan.recap_ms,
+        "recap": _recap(inputs) if plan.recap_ms is not None else [], "quiz": _quiz(plan.quiz),
     }
 
 

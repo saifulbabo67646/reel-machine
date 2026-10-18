@@ -1,0 +1,13 @@
+{
+  "about": "the section fields of reel_document for schedule([1000, 1000], listen_first=True, recap=True, quiz_line=0); tests/test_dialoguereel_compose.py checks it still matches",
+  "duration": 16.3,
+  "hookMs": 1500,
+  "listen": [{"startMs": 1500, "endMs": 2500}, {"startMs": 2850, "endMs": 3850}],
+  "bridgeMs": 4200,
+  "lines": [
+    {"startMs": 4900, "endMs": 5900, "slowStartMs": null, "slowEndMs": null},
+    {"startMs": 6250, "endMs": 7250, "slowStartMs": null, "slowEndMs": null}
+  ],
+  "recapMs": 7600,
+  "quiz": {"line": 0, "startMs": 10600, "revealMs": 13600, "endMs": 15400}
+}
