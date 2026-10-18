@@ -30,9 +30,11 @@ def cast_id(spec: CastSpec) -> str:
 
 
 def resolve(spec: CastSpec, *, path: str = "cast") -> ResolvedCast:
+    """Load and check every character. Errors carry `<path>.characters[i]...` (no prefix when `path` is empty)."""
+    prefix = f"{path}." if path else ""
     out: list[ResolvedCharacter] = []
     for index, char in enumerate(spec.characters):
-        where = f"{path}.characters[{index}].source"
+        where = f"{prefix}characters[{index}].source"
         source = char.source
         try:
             if source.kind == "builtin":
@@ -40,7 +42,7 @@ def resolve(spec: CastSpec, *, path: str = "cast") -> ResolvedCast:
                 svg = load_builtin(source.name, source.colors)
             else:
                 svg = source.svg
-            where = f"{path}.characters[{index}].source.svg"
+            where = f"{prefix}characters[{index}].source.svg"
             parts = check_svg(svg, path=where)
         except InvalidInput as exc:
             exc.details = {**exc.details, "path": where}

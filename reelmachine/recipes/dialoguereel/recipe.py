@@ -10,6 +10,7 @@ from ...core.manifest import CheckResult, VerificationReport
 from ...core.recipe import CostNote, ProbeContext, ProbeReport, ProviderReq, RecipeSpec, StageSpec
 from ...core.stage import StageContext
 from . import cast as casts
+from .guide import GUIDE
 from .models import DialogueReelInputs
 from .ruby import parse_ruby, plain_text
 from .schedule import estimate
@@ -73,6 +74,7 @@ class DialogueReelRecipe:
         artifacts=("reel.mp4", "captions.srt", "reel.json", "storyboard.jpg", "cast.png", "script.resolved.json"),
         render_modes=("hyperframes",),
         example=EXAMPLE,
+        guide=GUIDE,
     )
 
     def probe(self, inputs: DialogueReelInputs, ctx: ProbeContext) -> ProbeReport:

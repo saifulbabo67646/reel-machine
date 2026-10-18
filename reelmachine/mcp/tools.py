@@ -76,6 +76,17 @@ def _guard(fn: Callable[..., dict[str, Any]]) -> Callable[..., dict[str, Any]]:
     return wrapper
 
 
+def _loc_path(loc: tuple[Any, ...]) -> str:
+    """A pydantic error location as `characters[0].source.name` (the union's tag left out)."""
+    path = "characters"
+    for part in loc[1:] if loc and loc[0] == "characters" else loc:
+        if isinstance(part, int):
+            path += f"[{part}]"
+        elif part not in ("builtin", "svg") or not path.endswith(".source"):
+            path += f".{part}"
+    return path
+
+
 def _job_payload(job: Job, *, artifacts: bool = True) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "schemaVersion": SCHEMA_VERSION,
@@ -474,6 +485,49 @@ class McpTools:
                 if found else "nothing matched; try the English name or an ISO 3166 alpha-3 code like 'ITA'"
             )
         return {"schemaVersion": SCHEMA_VERSION, "query": query, "places": found, "hint": hint}
+
+    @_guard
+    def make_cast(self, ctx: Any, characters: list[dict[str, Any]], preview: bool = True) -> dict[str, Any]:
+        """Check and save a dialoguereel cast for this caller; optionally start a job that draws it (cast.png)."""
+        from pydantic import ValidationError
+
+        from ..core.errors import InvalidInput
+        from ..recipes.dialoguereel import cast as casts
+        from ..recipes.dialoguereel.models import CastSpec
+
+        caller = self._caller(ctx)
+        try:
+            spec = CastSpec.model_validate({"characters": characters})
+        except ValidationError as exc:
+            errors = exc.errors(include_url=False, include_input=False, include_context=False)
+            first = errors[0]
+            raise InvalidInput(
+                f"the cast does not match the schema: {first['msg']}",
+                hint="two characters, each {id, name, side, source}, standing on opposite sides; "
+                "see describe_recipe('dialoguereel').guide.characters",
+                details={"path": _loc_path(first["loc"]),
+                         "errors": errors[:8]},
+            ) from exc
+        resolved = casts.resolve(spec, path="")
+        ident = casts.save(self.engine.store.caller_dir(caller), spec)
+        job_id = None
+        if preview:
+            job = self.engine.submit(
+                JobRequest(recipe="dialoguereel", inputs={"mode": "cast", "cast": ident, "lines": []}),
+                caller=caller,
+            )
+            job_id = job.id
+        return {
+            "schemaVersion": SCHEMA_VERSION,
+            "castId": ident,
+            "characters": [
+                {"id": c.id, "name": c.name, "side": c.side, "voice": c.voice, "parts": c.parts}
+                for c in resolved.characters
+            ],
+            "previewJobId": job_id,
+            "hint": 'pass castId as the reel\'s "cast"; get_job(previewJobId) then '
+            'get_artifact(…, "cast.png") to see the characters',
+        }
 
     @_guard
     def find_images(

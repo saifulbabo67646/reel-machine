@@ -129,6 +129,14 @@ DESCRIPTIONS: dict[str, str] = {
         "include_nonfree. kind: any | logo | photo | flag. Logos may be trademarked.\n"
         "Example: {\"query\": \"Nike\", \"kind\": \"logo\"}"
     ),
+    "make_cast": (
+        "Make the two characters for a dialoguereel: built-ins by name (cupcake, mug, …) or your own SVG "
+        "following describe_recipe('dialoguereel').guide.characters. Free and instant; returns a castId to "
+        "reuse across reels and starts a preview job whose cast.png shows each character. Example: "
+        "{\"characters\": [{\"id\": \"kid\", \"name\": \"Cupcake\", \"side\": \"left\", \"source\": "
+        "{\"kind\": \"builtin\", \"name\": \"cupcake\"}}, {\"id\": \"mom\", \"name\": \"Mug\", "
+        "\"side\": \"right\", \"source\": {\"kind\": \"builtin\", \"name\": \"mug\"}}]}"
+    ),
     "find_models": (
         "Search the CC0 3D model catalogue (Poly Haven, Khronos samples) for an explainer3d "
         "cast: bowls, food, rocks, plants, tools, a photoreal fish. Returns model sources "
@@ -251,6 +259,10 @@ def build_server(
         ctx: Context, query: str, kind: str = "any", limit: int = 12, include_nonfree: bool = False
     ) -> dict[str, Any]:
         return tools.find_images(ctx, query, kind, limit, include_nonfree)
+
+    @server.tool(name="make_cast", description=DESCRIPTIONS["make_cast"])
+    def make_cast(ctx: Context, characters: list[dict[str, Any]], preview: bool = True) -> dict[str, Any]:
+        return tools.make_cast(ctx, characters, preview)
 
     @server.custom_route("/artifacts/{caller}/{job}/{name}", methods=["GET"], name="artifact")
     async def artifact_route(request: Any) -> Any:  # pragma: no cover - exercised over HTTP
