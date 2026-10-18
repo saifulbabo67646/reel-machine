@@ -24,6 +24,8 @@ class ErrorCode(StrEnum):
     SOURCE_UNRESOLVED = "SOURCE_UNRESOLVED"
     ALIGNMENT_FAILED = "ALIGNMENT_FAILED"
     RENDER_FAILED = "RENDER_FAILED"
+    RENDERER_UNAVAILABLE = "RENDERER_UNAVAILABLE"
+    SHOT_RENDER_FAILED = "SHOT_RENDER_FAILED"
     PREFLIGHT_FAILED = "PREFLIGHT_FAILED"
     VERIFICATION_FAILED = "VERIFICATION_FAILED"
     INTERRUPTED = "INTERRUPTED"
@@ -112,6 +114,14 @@ class AlignmentFailed(ReelError):
 
 class RenderFailed(ReelError):
     code = ErrorCode.RENDER_FAILED
+
+
+class RendererUnavailable(ProviderUnavailable):
+    code = ErrorCode.RENDERER_UNAVAILABLE
+
+
+class ShotRenderFailed(RenderFailed):
+    code = ErrorCode.SHOT_RENDER_FAILED
 
 
 class PreflightFailed(ReelError):

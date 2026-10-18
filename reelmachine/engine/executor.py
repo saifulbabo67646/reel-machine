@@ -176,6 +176,7 @@ def run_job(
         settings,
         workdir=workdir,
         outdir=workdir / "artifacts",
+        shared_cache=settings.shared_cache or settings.cache_dir,
         ledger_file=store.root() / job.caller / "quota" / "nadeshiko.json",
     )
 
@@ -415,7 +416,8 @@ def _collect_artifacts(outputs: dict[str, Any], workdir: Path) -> list[ArtifactR
     render = outputs.get("render")
     if render is not None:
         artifacts.append(_artifact("reel.mp4", Path(render.video), AssetKind.VIDEO))
-        artifacts.append(_artifact("captions.ass", Path(render.ass), AssetKind.SUBTITLE))
+        if getattr(render, "ass", ""):
+            artifacts.append(_artifact("captions.ass", Path(render.ass), AssetKind.SUBTITLE))
         artifacts.append(_artifact("captions.srt", Path(render.srt), AssetKind.SUBTITLE))
         artifacts.append(_artifact("reel.json", Path(render.manifest), AssetKind.REPORT))
 

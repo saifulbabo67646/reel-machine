@@ -1,0 +1,368 @@
+{
+ "name": "monster-fish-bait-25s",
+ "title": "$1 BAIT FOR *MONSTER FISH* \ud83c\udfa3",
+ "look": "cinematic",
+ "length": 25,
+ "music": "auto",
+ "voice": "cartesia:710feaa3-b550-42f3-b3eb-6f37f2a7cc0a",
+ "set": {
+  "environment": "lake",
+  "stage": "stone-slab"
+ },
+ "cast": {
+  "monster": {
+   "asset": {
+    "model": "khronos:BarramundiFish",
+    "size": 1.15
+   }
+  },
+  "school": {
+   "asset": {
+    "model": "khronos:BarramundiFish",
+    "size": 0.75,
+    "count": 5
+   }
+  },
+  "bowl": {
+   "asset": {
+    "model": "polyhaven:wooden_bowl_01",
+    "size": 0.3,
+    "container": true
+   },
+   "at": "stage.center"
+  },
+  "bread": {
+   "asset": {
+    "model": "polyhaven:hamburger_buns",
+    "size": 0.2,
+    "colour": "#c98a45"
+   }
+  },
+  "honey": {
+   "asset": {
+    "model": "polyhaven:ceramic_pot",
+    "height": 0.12
+   }
+  },
+  "potato": {
+   "asset": {
+    "model": "polyhaven:sweet_potato",
+    "size": 0.15
+   }
+  },
+  "balls": {
+   "asset": {
+    "shape": "ball",
+    "height": 0.045,
+    "material": "dough",
+    "colour": "#c97a34",
+    "count": 5
+   }
+  },
+  "bait": {
+   "asset": {
+    "shape": "ball",
+    "height": 0.06,
+    "material": "dough",
+    "colour": "#c97a34"
+   }
+  }
+ },
+ "shots": [
+  {
+   "narration": "This [*$1*|one dollar] bait pulls *monster fish* out of hiding.",
+   "camera": {
+    "move": "orbit",
+    "target": "lake.far",
+    "from": -12,
+    "to": 8,
+    "radius": 2.6,
+    "height": 0.35,
+    "fov": 46,
+    "aim": [
+     0,
+     0.55,
+     0
+    ]
+   },
+   "actions": [
+    {
+     "move": "leap",
+     "actor": "monster",
+     "spot": "lake.far",
+     "at": [
+      0.0,
+      1.0
+     ]
+    }
+   ]
+  },
+  {
+   "narration": "You need *three* things.",
+   "camera": {
+    "move": "orbit",
+    "target": "stage.center",
+    "from": -8,
+    "to": 8,
+    "radius": 1.55,
+    "height": 0.75,
+    "aim": [
+     0,
+     0.05,
+     0.12
+    ]
+   },
+   "actions": [
+    {
+     "move": "slam",
+     "actor": "bread",
+     "on": "stage.near_left",
+     "at": [
+      0.0,
+      0.3
+     ]
+    },
+    {
+     "move": "slam",
+     "actor": "honey",
+     "on": "stage.back",
+     "at": [
+      0.25,
+      0.55
+     ]
+    },
+    {
+     "move": "slam",
+     "actor": "potato",
+     "on": "stage.near_right",
+     "at": [
+      0.5,
+      0.8
+     ]
+    }
+   ]
+  },
+  {
+   "narration": "Stale bread. *Crush* it.",
+   "camera": {
+    "move": "orbit",
+    "target": "bowl",
+    "from": -30,
+    "to": -10,
+    "radius": 0.75,
+    "height": 0.45
+   },
+   "actions": [
+    {
+     "move": "burst",
+     "actor": "bread",
+     "into": "bowl",
+     "colour": "#c98a45",
+     "at": [
+      0.05,
+      0.9
+     ]
+    }
+   ]
+  },
+  {
+   "narration": "*Honey.* A lot of it.",
+   "camera": {
+    "move": "orbit",
+    "target": "bowl",
+    "from": 10,
+    "to": 25,
+    "radius": 0.55,
+    "height": 0.32
+   },
+   "actions": [
+    {
+     "move": "drizzle",
+     "into": "bowl",
+     "colour": "#f2a521",
+     "at": [
+      0.0,
+      0.95
+     ]
+    }
+   ]
+  },
+  {
+   "narration": "One boiled *sweet potato*. *Smash* it in.",
+   "camera": {
+    "move": "orbit",
+    "target": "bowl",
+    "from": 30,
+    "to": 50,
+    "radius": 0.85,
+    "height": 0.5
+   },
+   "actions": [
+    {
+     "move": "smash",
+     "actor": "potato",
+     "into": "bowl",
+     "at": [
+      0.0,
+      1.0
+     ]
+    }
+   ]
+  },
+  {
+   "narration": "Roll it into *balls*.",
+   "camera": {
+    "move": "orbit",
+    "target": "stage.front",
+    "from": -10,
+    "to": 10,
+    "radius": 0.9,
+    "height": 0.55
+   },
+   "actions": [
+    {
+     "move": "pop_out",
+     "actor": "balls",
+     "from": "bowl",
+     "to": "stage.front",
+     "at": [
+      0.0,
+      1.0
+     ]
+    }
+   ]
+  },
+  {
+   "narration": "Throw one in, and [*WATCH* \ud83d\udc40|watch].",
+   "camera": {
+    "move": "track",
+    "target": "bait",
+    "offset": [
+     0.0,
+     0.45,
+     1.3
+    ]
+   },
+   "actions": [
+    {
+     "move": "throw",
+     "actor": "bait",
+     "to": "lake.far",
+     "at": [
+      0.0,
+      1.0
+     ]
+    }
+   ]
+  },
+  {
+   "duration": 1.1,
+   "camera": {
+    "move": "dive",
+    "target": "lake.far"
+   },
+   "actions": [
+    {
+     "move": "splash",
+     "spot": "lake.far",
+     "size": 1.3,
+     "at": [
+      0.0,
+      0.9
+     ]
+    }
+   ]
+  },
+  {
+   "duration": 3.2,
+   "set": {
+    "environment": "underwater"
+   },
+   "camera": {
+    "move": "orbit",
+    "target": "underwater.center",
+    "from": -20,
+    "to": 10,
+    "radius": 2.2,
+    "height": 0.2,
+    "fov": 58
+   },
+   "actions": [
+    {
+     "move": "sink",
+     "actor": "bait",
+     "at": [
+      0.0,
+      0.7
+     ]
+    },
+    {
+     "move": "school",
+     "actor": "school",
+     "around": "bait",
+     "at": [
+      0.0,
+      1.0
+     ]
+    }
+   ]
+  },
+  {
+   "narration": "They *can't* *resist* it.",
+   "set": {
+    "environment": "underwater"
+   },
+   "camera": {
+    "move": "orbit",
+    "target": "bait",
+    "from": 10,
+    "to": 25,
+    "radius": 1.7,
+    "height": 0.15,
+    "fov": 58
+   },
+   "actions": [
+    {
+     "move": "school",
+     "actor": "school",
+     "around": "bait",
+     "eat": true,
+     "at": [
+      0.0,
+      1.0
+     ]
+    }
+   ]
+  },
+  {
+   "narration": "Save this for your next trip.",
+   "card": "SAVE THIS \ud83d\udccc",
+   "camera": {
+    "move": "orbit",
+    "target": "lake.far",
+    "from": -10,
+    "to": 10,
+    "radius": 2.4,
+    "height": 0.3,
+    "fov": 48,
+    "aim": [
+     0,
+     0.5,
+     0
+    ]
+   },
+   "actions": [
+    {
+     "move": "leap",
+     "actor": "monster",
+     "spot": "lake.far",
+     "direction": "left",
+     "at": [
+      0.0,
+      1.0
+     ]
+    }
+   ]
+  }
+ ]
+}

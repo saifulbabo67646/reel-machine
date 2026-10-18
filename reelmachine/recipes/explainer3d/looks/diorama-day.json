@@ -1,0 +1,15 @@
+{
+  "id": "diorama-day",
+  "sky": {"top": "#4f93dc", "bottom": "#cfe6f5"},
+  "fog": {"colour": "#cfe6f5", "near": 9, "far": 32},
+  "ground": {"colour": "#b9a35a"},
+  "lights": {
+    "hemi": {"sky": "#ffffff", "ground": "#5b6b3a", "intensity": 1.1},
+    "key": {"colour": "#fff3df", "intensity": 2.6, "position": [3, 5, 2.5]},
+    "fill": {"colour": "#cfe0ff", "intensity": 0.5, "position": [-3, 2, -2]}
+  },
+  "exposure": 1.0,
+  "banner": {"background": "#e0121b", "text": "#ffffff", "border": "#ffffff"},
+  "label": {"background": "rgba(0,0,0,0.55)", "text": "#ffffff"},
+  "caption": {"text": "#ffffff", "active": "#ffd400", "shadow": "rgba(0,0,0,0.85)", "size": 64}
+}

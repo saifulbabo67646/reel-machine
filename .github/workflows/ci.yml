@@ -5,6 +5,10 @@ on:
     branches: ["**"]
   pull_request:
 
+env:
+  # shared runners render HyperFrames shots well past the 120 s default floor
+  REEL_HYPERFRAMES_TIMEOUT_S: "600"
+
 jobs:
   full:
     name: full (extras installed)
@@ -59,3 +63,27 @@ jobs:
           uv run --no-dev reel doctor | tail -20
       - name: The fast tests pass with extras absent (they skip)
         run: uv run --isolated --no-dev --with pytest pytest -q -m "not slow"
+
+  explainer3d:
+    name: explainer3d (Node + HyperFrames)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install ffmpeg (with ffprobe)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Sync
+        run: uv sync --frozen
+      - name: Runtime unit tests
+        run: node --test "reelmachine/recipes/explainer3d/runtime/tests/*.test.mjs"
+      - name: mapreel runtime tests
+        run: node --test "reelmachine/recipes/mapreel/runtime/tests/*.test.mjs"
+      # tests/test_mapreel_render.py uses the real map data: the first run on a fresh runner downloads
+      # about 45 MB (Natural Earth borders, NASA Blue Marble) into the mapreel geo cache.
+      - name: Recipe tests, including real renders
+        run: uv run pytest -q tests/test_explainer3d.py tests/test_explainer3d_engine.py tests/test_explainer3d_render.py tests/test_hyperframes_renderer.py tests/test_mapreel_render.py

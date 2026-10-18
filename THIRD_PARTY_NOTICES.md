@@ -80,3 +80,22 @@ Arabic, `Helvetica` for Latin); the deployment installs them under their own lic
 The default install depends on `httpx`, `numpy`, `pydantic`, `rich`, `scipy` and `typer`.
 Optional extras: `mcp` (the MCP server), `stroke` (`opencv-python-headless`, `Pillow`,
 `av`), `program` (`Pillow`), `s3` (`boto3`). Each is used under its own licence.
+
+## three.js 0.181.2 (MIT)
+
+`reelmachine/recipes/explainer3d/runtime/vendor/three.module.js` and `three.core.js` are
+the unmodified build files of three.js 0.181.2 (https://github.com/mrdoob/three.js),
+copyright © 2010–2025 three.js authors, MIT licence (`vendor/LICENSE`). They are shipped
+so a shot renders with no network access. `vendor/jsm/` holds unmodified add-ons from the
+same release (loaders, Water, RoundedBoxGeometry, post-processing passes and shaders),
+under the same licence.
+
+## Cinematic assets (CC0, fetched at build time — not shipped)
+
+explainer3d's cinematic sets and models download into the local cache when first used and
+record their licence in each reel's manifest: Poly Haven models, HDRIs and textures
+(https://polyhaven.com/license, CC0), the Khronos glTF sample BarramundiFish (CC0) and
+three.js's `waternormals.jpg` (MIT). Characters are Quaternius's Universal Base Characters
+and Universal Animation Library (CC0, https://quaternius.com), downloaded once on first
+use; the packs' own licence files are kept beside the install. Music and sound effects are
+synthesised by the recipe.

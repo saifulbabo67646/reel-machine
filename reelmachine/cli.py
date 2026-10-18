@@ -1117,3 +1117,21 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+explainer3d_app = typer.Typer(add_completion=False, help="explainer3d: 3D explainer reels.")
+app.add_typer(explainer3d_app, name="explainer3d")
+
+
+@explainer3d_app.command("import-characters")
+def explainer3d_import_characters(
+    base: Path = typer.Argument(..., help="Universal Base Characters zip (quaternius.itch.io)."),
+    animations: Path = typer.Argument(..., help="Universal Animation Library zip (quaternius.itch.io)."),
+) -> None:
+    """Install the CC0 character packs from zips downloaded by hand (when the automatic
+    download is unavailable)."""
+    from .recipes.explainer3d.characters import import_packs
+    from .recipes.explainer3d.stages import asset_cache
+
+    root = import_packs(base, animations, asset_cache(get_settings()))
+    console.print(f"[green]characters installed[/green]  {root}")

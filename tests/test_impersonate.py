@@ -41,6 +41,7 @@ def test_the_missing_dependency_is_reported_not_raised(monkeypatch) -> None:
 
 
 def test_fetch_returns_the_bytes_and_sends_the_referer(monkeypatch) -> None:
+    pytest.importorskip("curl_cffi")
     seen: dict = {}
 
     def fake_get(url, **kwargs):
@@ -58,6 +59,7 @@ def test_fetch_returns_the_bytes_and_sends_the_referer(monkeypatch) -> None:
 
 def test_a_block_page_is_refused_even_with_a_200(monkeypatch) -> None:
     """A host that answers HTML has not answered with the file, whatever its status code."""
+    pytest.importorskip("curl_cffi")
     monkeypatch.setattr(
         "curl_cffi.requests.get",
         lambda url, **kwargs: _Response(200, b"<!DOCTYPE html><title>Just a moment...</title>",
@@ -70,6 +72,7 @@ def test_a_block_page_is_refused_even_with_a_200(monkeypatch) -> None:
 
 
 def test_the_impersonation_target_can_be_overridden(monkeypatch) -> None:
+    pytest.importorskip("curl_cffi")
     seen: dict = {}
     monkeypatch.setattr("curl_cffi.requests.get",
                         lambda url, **kwargs: seen.update(kwargs) or _Response())
