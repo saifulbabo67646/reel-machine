@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, field_
 from reelmachine.core.stage import StageOutput
 from reelmachine.core.timeline import WordSpan
 
-Look = Literal["pop"]
+Look = Literal["pop", "pastel", "night"]
 Mode = Literal["cast", "storyboard", "full"]
 Emotion = Literal["neutral", "happy", "surprised", "sad", "thinking"]
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")

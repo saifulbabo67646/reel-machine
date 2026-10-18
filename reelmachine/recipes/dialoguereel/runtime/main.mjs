@@ -208,6 +208,8 @@ function build(doc, root) {
   root.style.setProperty("--meaning", doc.look.meaning);
   root.style.setProperty("--accent", doc.look.accent);
   root.style.setProperty("--bubble", doc.look.bubble);
+  root.style.setProperty("--ink", doc.look.ink);
+  root.style.setProperty("--shade", doc.look.shade);
   root.prepend(el("div", "floor"));
   root.prepend(el("div", "glow"));
   const ui = { root, mode: doc.mode };

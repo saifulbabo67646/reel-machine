@@ -1,4 +1,5 @@
 import json
+import re
 from html.parser import HTMLParser
 
 from reelmachine.core.timeline import WordSpan
@@ -33,6 +34,27 @@ PLAN = schedule([1000, 1200, 900])
 def test_the_constants():
     assert (WIDTH, HEIGHT, FPS) == (1080, 1920, 30)
     assert LOOKS["pop"]["bg"] == "#4b2bff"
+
+
+LOOK_KEYS = {"bg", "text", "reading", "meaning", "accent", "bubble", "ink", "shade"}
+
+
+def test_every_look_has_every_token():
+    assert set(LOOKS) == {"pop", "pastel", "night"}
+    for look in LOOKS.values():
+        assert set(look) == LOOK_KEYS
+        assert re.fullmatch(r"\d{1,3},\d{1,3},\d{1,3}", look["shade"])
+
+
+def test_reel_document_carries_the_look():
+    doc = reel_document(INPUTS.model_copy(update={"look": "night"}), CAST, PLAN, WORDS)
+    assert doc["look"] == LOOKS["night"]
+
+
+def test_css_has_no_look_literals():
+    css = (compose.RUNTIME_DIR / "reel.css").read_text()
+    body = css.split("#root {", 1)[1].split("}", 1)[1]   # the defaults block on #root may name pop's values
+    assert "rgba(20,0,90" not in body and "rgba(10,0,80" not in body and "#241466" not in body
 
 
 def test_the_document_carries_reel_times_and_ruby_runs():
