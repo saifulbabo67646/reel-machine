@@ -244,7 +244,9 @@ https URL or a local file is marked caller-supplied: you answer for its rights.
 After a build, `verify` inspects the file itself: format (1080x1920 with video and
 audio), duration against the narration, the narration's volume, no still stretch longer
 than 2.4 s, every item visibly popping, and the segments and manifest naming the same
-renderer. A failed check fails the job and names what is wrong.
+renderer. The report is saved in the job's manifest with each check's result; a failed
+check names what is wrong but does not fail the job, so read it before you publish. A map
+layer that fails to load in the renderer does fail the job, with the layer named.
 
 ## Data and licences
 
