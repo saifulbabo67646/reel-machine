@@ -24,7 +24,8 @@ def build_guide() -> dict[str, Any]:
     return {
         "workflow": [
             "1. Pick a topic with a payoff people want (a secret, a result, a transformation).",
-            "2. find_models for the cast; use look 'cinematic' and a set environment ('lake', or 'studio').",
+            "2. find_models for the cast (or build props from parts); use look 'cinematic' and the set that "
+            "fits the topic — 'studio' or a set built from parts for abstract ones (tech, money, science).",
             "3. Write shots: open on the payoff (shot 1, a big move at 0 s), then the steps, a re-hook past "
             "20 s on long reels, the payoff again, and a call to action ('Save this…').",
             "4. probe: fix every warning (hook, beat gaps, length); then start_job with mode 'storyboard', "

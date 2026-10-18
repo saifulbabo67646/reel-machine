@@ -20,8 +20,10 @@ echo "$@" >> "$HF_LOG"
 cmd="$3"; shift 3
 case "$cmd" in
   lint) if [ -n "$HF_LINT_FAIL" ]; then echo "x missing_timeline_registry"; echo "1 error(s), 0 warning(s)"; exit 1; fi; echo "0 errors, 0 warnings";;
-  render) while [ "$1" != "--output" ]; do shift; done; [ -n "$HF_SLEEP" ] && sleep "$HF_SLEEP"; printf 'mp4' > "$2";;
-  snapshot) while [ "$1" != "--output" ]; do shift; done; mkdir -p "$2"; printf 'png' > "$2/frame-00-at-1s.png";;
+  render) if [ -n "$HF_PAGE_ERROR" ]; then echo '[INFO] [Render] Failure summary {"failedStage":"capture","error":"'"$HF_PAGE_ERROR"'"}'; printf '✗  Render failed\n\n   %s\n' "$HF_PAGE_ERROR"; exit 1; fi
+    while [ "$1" != "--output" ]; do shift; done; [ -n "$HF_SLEEP" ] && sleep "$HF_SLEEP"; printf 'mp4' > "$2";;
+  snapshot) if [ -n "$HF_PAGE_ERROR" ]; then printf '✗ Snapshot failed: %s\n' "$HF_PAGE_ERROR"; exit 1; fi
+    while [ "$1" != "--output" ]; do shift; done; mkdir -p "$2"; printf 'png' > "$2/frame-00-at-1s.png";;
 esac
 """
 
@@ -88,6 +90,7 @@ def test_snapshot_returns_the_frame(tmp_path, fake_npx):
 
 def test_timeout_kills_the_process_and_unregisters_it(tmp_path, fake_npx, monkeypatch):
     monkeypatch.setenv("HF_SLEEP", "30")
+    monkeypatch.delenv("REEL_HYPERFRAMES_TIMEOUT_S", raising=False)  # CI raises the floor for real renders
     project = tmp_path / "shot"
     project.mkdir()
     token = CancellationToken()
@@ -97,6 +100,19 @@ def test_timeout_kills_the_process_and_unregisters_it(tmp_path, fake_npx, monkey
         renderer.render(project, tmp_path / "out.mp4", seconds=0.01, cancel=token)
     assert "timed out" in info.value.message
     assert not token._processes
+
+
+def test_the_timeout_floor_can_be_raised_from_the_environment(tmp_path, fake_npx, monkeypatch):
+    monkeypatch.setenv("HF_SLEEP", "2")
+    project = tmp_path / "shot"
+    project.mkdir()
+    renderer = _renderer(tmp_path)
+    renderer.timeout_floor_s = 1
+    monkeypatch.setenv("REEL_HYPERFRAMES_TIMEOUT_S", "30")
+    assert renderer.render(project, tmp_path / "out.mp4", seconds=0.01).read_text() == "mp4"
+    monkeypatch.setenv("REEL_HYPERFRAMES_TIMEOUT_S", "soon")  # not a number: the renderer's own floor
+    with pytest.raises(ShotRenderFailed, match="timed out"):
+        renderer.render(project, tmp_path / "out2.mp4", seconds=0.01)
 
 
 def test_missing_reports_instead_of_raising(tmp_path, monkeypatch):
@@ -115,3 +131,15 @@ def test_workers_can_be_pinned_for_a_low_disk_machine(tmp_path, fake_npx, monkey
     monkeypatch.delenv("REEL_HYPERFRAMES_WORKERS")
     _renderer(tmp_path).render(project, tmp_path / "out2.mp4")
     assert "--workers" not in fake_npx.read_text().splitlines()[3]
+
+
+def test_a_page_error_is_named_in_the_render_failure(tmp_path, fake_npx, monkeypatch):
+    monkeypatch.setenv("HF_PAGE_ERROR", "mapreel: layer layers/world.jpg failed to load")
+    project = tmp_path / "shot"
+    project.mkdir()
+    with pytest.raises(ShotRenderFailed) as info:
+        _renderer(tmp_path).render(project, tmp_path / "out.mp4")
+    assert "mapreel: layer layers/world.jpg failed to load" in info.value.message
+    with pytest.raises(ShotRenderFailed) as info:
+        _renderer(tmp_path).snapshot(project, 1.0, tmp_path / "still.png")
+    assert "mapreel: layer layers/world.jpg failed to load" in info.value.message

@@ -1,6 +1,6 @@
 # MCP reference
 
-reel-machine exposes its engine to agents through one MCP server with eleven tools, over
+reel-machine exposes its engine to agents through one MCP server with fifteen tools, over
 two transports: `stdio` (a local agent) and `streamable-http` (a hosted deployment).
 
 ```
@@ -230,6 +230,47 @@ a result in a cast member as `{"asset": {"model": "polyhaven:wooden_bowl_01", "s
 {"query": "wooden bowl"}
 ```
 
+### `find_places`
+
+Countries for a `mapreel` script, by code or by any name (`Holland` -> `NLD`). A name that
+means more than one country (`Korea`) comes back with `ambiguous: true` on each candidate;
+use the code. The Natural Earth data is fetched once on first use.
+
+With `country` (a code or name), it finds that country's states, prefectures or provinces
+instead: `level: "region"`, ISO 3166-2 codes (`US-TX`, `JP-13`), `parent` the country's code.
+An empty `query` lists them all, up to `limit`. A code-shaped query without `country`
+(`US-TX`) also searches regions. Country results carry `regions: true` when the country has
+admin-1 data, but only once the larger regions file (about 40 MB) is already cached; a plain
+country search never downloads it.
+
+The result is `{"schemaVersion": 1, "query": "...", "places": [...], "hint": "..."}`.
+
+```json
+{"query": "korea"}
+{"query": "texas", "country": "USA"}
+```
+
+### `find_images`
+
+Wikimedia Commons images for a `mapreel` item. `kind` accepts `any` (the default), `logo`,
+`photo` or `flag`: `logo` and `flag` bias the search and `photo` leaves out SVGs.
+Each result has an `id` like `commons:File:Nike.svg` (use it as an item's `image`), a 320 px
+`thumb_url`, the original `url`, size, `mime`, `licence`, `attribution` (plain text) and
+`permitted`: true when the licence is free. Files without a free licence are hidden unless
+`include_nonfree` is set, and `restrictions` (for example `trademarked`) is passed through.
+`limit` is clamped to 1..50. Commons being down is a `PROVIDER_UNAVAILABLE` error.
+The result is `{"schemaVersion": 1, "query": "...", "results": [...], "note": "..."}`; `note` says
+how to use a hit, or what to try when nothing matched.
+
+```json
+{"query": "Nike", "kind": "logo"}
+```
+
+**mapreel workflow.** `describe_recipe("mapreel")` for the guide, `find_places` for the
+country codes, `find_images` for item images, `probe` to check the script and its hook
+lint, then `start_job` in `storyboard` mode and again in `build` mode. See
+[MAPREEL.md](MAPREEL.md).
+
 ### `find_assets`
 
 CC0 models, skies (360° photos of real places — kitchens, living rooms, workshops, streets
@@ -270,5 +311,5 @@ false. Read-only: no job, no render.
 
 ## What the server deliberately does not expose
 
-No MCP resources, prompts or sampling — tools only, and only the eight above. No tool
+No MCP resources, prompts or sampling — tools only, and only the fifteen listed above. No tool
 returns file bytes. No tool call waits for a render. No secret appears in a result.

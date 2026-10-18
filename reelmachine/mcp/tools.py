@@ -435,3 +435,69 @@ class McpTools:
         }
         return {"schemaVersion": SCHEMA_VERSION, "query": query, "kind": kind, "assets": found,
                 "hint": f"use one as {hints[kind]}" if found else "nothing matched; try a simpler word"}
+
+    @_guard
+    def find_places(self, ctx: Any, query: str, limit: int = 8, country: str | None = None) -> dict[str, Any]:
+        """Countries, or with `country` that country's states/prefectures/provinces, for mapreel segments."""
+        import re
+
+        from ..recipes.mapreel import geodata
+        from ..recipes.mapreel.places import atlas_for
+        from ..recipes.mapreel.regions import region_atlas_for, region_counts
+
+        self._caller(ctx)
+        settings, limit = self.engine.settings, max(1, min(int(limit), 50))
+        atlas = atlas_for(settings)
+        if country:
+            code = atlas.resolve(country).code
+            found = region_atlas_for(settings).search(query, code, limit)
+        else:
+            found = atlas.search(query, limit=limit)
+            if re.fullmatch(r"[A-Za-z]{2}-[A-Za-z0-9]{1,3}", (query or "").strip()):  # 'US-TX', 'JP-1'
+                found += region_atlas_for(settings).search_all(query, limit - len(found))
+            else:  # never a download for a plain country search, and the 40 MB file parsed once, ever
+                counts = region_counts(geodata.geo_cache(settings)) or {}
+                for place in found:
+                    if counts.get(place["code"]):
+                        place["regions"] = True
+        if country:
+            hint = (
+                'use the code in a regions segment: {"kind": "regions", "country": "<country>", '
+                '"regions": [{"region": "<code>", "items": [{"name": "..."}]}, ...]}'
+                if found else "nothing matched in that country; leave query empty to list its regions"
+            )
+        else:
+            hint = (
+                'use the code in a mapreel segment: {"kind": "country", "country": "<code>"} or '
+                '{"kind": "highlight", "countries": ["<code>", ...]}; an ambiguous name needs its code; '
+                'a place with "regions": true has states/prefectures: call again with country=<code>'
+                if found else "nothing matched; try the English name or an ISO 3166 alpha-3 code like 'ITA'"
+            )
+        return {"schemaVersion": SCHEMA_VERSION, "query": query, "places": found, "hint": hint}
+
+    @_guard
+    def find_images(
+        self, ctx: Any, query: str, kind: str = "any", limit: int = 12, include_nonfree: bool = False
+    ) -> dict[str, Any]:
+        """Wikimedia Commons images for mapreel items, with licence and attribution."""
+        from dataclasses import asdict
+
+        from ..core.errors import InvalidInput
+        from ..recipes.mapreel import commons
+
+        self._caller(ctx)
+        if not (query or "").strip():
+            raise InvalidInput("query is empty", hint="say what to look for, e.g. 'Nike logo'", details={"path": "query"})
+        hits = commons.search(
+            query, kind=kind, limit=max(1, min(int(limit), 50)), include_nonfree=bool(include_nonfree)  # type: ignore[arg-type]
+        )
+        return {
+            "schemaVersion": SCHEMA_VERSION,
+            "query": query,
+            "results": [asdict(hit) for hit in hits],
+            "note": (
+                "use a result's id as an item's \"image\"; logos and brand names may be trademarked, "
+                "so check restrictions; attribution is credited in sources.md"
+                if hits else "nothing free matched; try a simpler word, another kind, or include_nonfree"
+            ),
+        }

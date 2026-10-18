@@ -8,6 +8,7 @@ group so a cancelled job takes Chrome down with it.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -22,6 +23,27 @@ from ..core.errors import ShotRenderFailed
 
 HYPERFRAMES_VERSION = "0.8.146"
 _ERRORS = re.compile(r"(\d+)\s+errors?")
+_SUMMARY = re.compile(r"\[Render\] Failure summary (\{.*\})")
+_FAILED = re.compile(r"\u2717\s*(?:Snapshot failed:\s*(\S.*)|Render failed\s*\n\s*(\S.*))")
+
+
+def _page_error(log: str) -> str:
+    """Why HyperFrames gave up, as it says it: a page that sets window.__hfStartupError (mapreel's runtime
+    does when a layer fails to load) fails the render with that text."""
+    for line in _SUMMARY.findall(log):
+        try:
+            error = json.loads(line).get("error")
+        except ValueError:
+            continue
+        if isinstance(error, str) and error.strip():
+            return error.strip()[:500]
+    match = _FAILED.search(log)
+    return (match.group(1) or match.group(2)).strip()[:500] if match else ""
+
+
+def _failed(message: str, log: str) -> str:
+    reason = _page_error(log)
+    return f"{message}: {reason}" if reason else message
 
 
 def _node_major(node: str) -> int:
@@ -37,6 +59,16 @@ def _workers() -> list[str]:
     temporary frame files, which matters on a nearly full disk. Unset: HyperFrames decides."""
     value = os.environ.get("REEL_HYPERFRAMES_WORKERS", "").strip()
     return ["--workers", value] if value.isdigit() and int(value) > 0 else []
+
+
+def _timeout_floor(default: float) -> float:
+    """REEL_HYPERFRAMES_TIMEOUT_S raises the shortest time a render may take before it is killed —
+    for slow machines and shared CI runners. Unset or not a positive number: the renderer's own floor."""
+    try:
+        value = float(os.environ.get("REEL_HYPERFRAMES_TIMEOUT_S", "") or 0)
+    except ValueError:
+        value = 0.0
+    return value if value > 0 else default
 
 
 class HyperframesRenderer:
@@ -121,12 +153,12 @@ class HyperframesRenderer:
         with tempfile.TemporaryDirectory() as tmp:
             code, out = self._run(
                 ["snapshot", "--at", f"{at_s:.3f}", "--no-end", "--output", tmp],
-                Path(project), timeout_s=max(60, self.timeout_floor_s), cancel=cancel,
+                Path(project), timeout_s=max(60, _timeout_floor(self.timeout_floor_s)), cancel=cancel,
             )
             frames = sorted(Path(tmp).glob("frame-*.png"))
             if code != 0 or not frames:
                 raise ShotRenderFailed(
-                    "HyperFrames could not capture a still",
+                    _failed("HyperFrames could not capture a still", out),
                     details={"project": str(project), "log": out[-2000:]},
                 )
             dest = Path(dest).resolve()
@@ -148,7 +180,7 @@ class HyperframesRenderer:
                 details={"project": str(project), "lint": lint_out[-2000:]},
             )
         dest.parent.mkdir(parents=True, exist_ok=True)
-        timeout_s = max(self.timeout_floor_s, 20 * seconds)
+        timeout_s = max(_timeout_floor(self.timeout_floor_s), 20 * seconds)
         code, out = self._run(
             ["render", "--output", str(dest), "--fps", str(fps), "--quality", "looks", "--strict", *_workers()],
             project, timeout_s=timeout_s, cancel=cancel,
@@ -156,7 +188,7 @@ class HyperframesRenderer:
         (project / "render.log").write_text(out, encoding="utf-8")
         if code != 0 or not dest.is_file() or dest.stat().st_size == 0:
             raise ShotRenderFailed(
-                "HyperFrames did not produce the shot",
+                _failed("HyperFrames did not produce the shot", out),
                 details={"project": str(project), "log": out[-2000:]},
             )
         return dest

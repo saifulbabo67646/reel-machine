@@ -324,3 +324,31 @@ def test_component_effects_count_as_big_moments():
     windows = shot_windows([1000, 1000])
     assert not any(w.startswith("hook") for w in retention_warnings(inputs, shots, windows))
     assert length_advice(shots, windows, inputs)[0] == 1
+
+
+def test_any_topic_can_hook_without_water_or_food_moves():
+    """A pop or a fly-in opens a reel about chips or money as well as a leap opens a fishing one."""
+    from reelmachine.recipes.explainer3d.lint import length_advice
+
+    for move in ("scale_pop", "fly_in"):
+        inputs = Explainer3DInputs.model_validate(_script(shots=[
+            {"narration": "One chip.", "camera": {"move": "orbit", "target": "bowl"},
+             "actions": [{"move": move, "actor": "bowl", "at": [0, 0.4]}]},
+            {"narration": "Save this.", "camera": {"move": "orbit", "target": "bowl"}}]))
+        shots = resolve_script(inputs)
+        windows = shot_windows([1000, 1000])
+        assert not any(w.startswith("hook") for w in retention_warnings(inputs, shots, windows)), move
+        assert length_advice(shots, windows, inputs)[0] == 1
+
+
+def test_the_hook_hint_names_moves_any_topic_can_use():
+    slow = [{"narration": "Welcome to my channel.", "camera": {"move": "orbit", "target": "bowl"}}]
+    hook = next(w for w in _lint(slow) if w.startswith("hook"))
+    assert "scale_pop" in hook and "fly_in" in hook and "slam" in hook
+
+
+def test_the_guide_does_not_steer_every_topic_to_the_lake():
+    from reelmachine.recipes.explainer3d.guide import build_guide
+
+    step = build_guide()["workflow"][1]
+    assert "'lake'" not in step and "studio" in step

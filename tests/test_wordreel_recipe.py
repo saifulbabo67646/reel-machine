@@ -347,6 +347,7 @@ def mcp_tools(monkeypatch, fake_source):
 
 
 def test_mcp_suggest_words_proposes_from_the_corpus(mcp_tools, fake_source) -> None:
+    pytest.importorskip("mcp")
     result = mcp_tools.suggest_words(
         None, recipe="wordreel", inputs={"library": [str(fake_source.root)]}, limit=6
     )
@@ -356,6 +357,7 @@ def test_mcp_suggest_words_proposes_from_the_corpus(mcp_tools, fake_source) -> N
 
 
 def test_mcp_find_examples_reports_lines_and_their_footage(mcp_tools, fake_source) -> None:
+    pytest.importorskip("mcp")
     result = mcp_tools.find_examples(
         None, word="light", recipe="wordreel", inputs={"library": [str(fake_source.root)]}, limit=3
     )
@@ -367,6 +369,7 @@ def test_mcp_find_examples_reports_lines_and_their_footage(mcp_tools, fake_sourc
 
 def test_mcp_find_examples_matches_inflections(mcp_tools, fake_source) -> None:
     """The tool must answer the question an agent asks, not only a literal one."""
+    pytest.importorskip("mcp")
     result = mcp_tools.find_examples(
         None, word="tell", recipe="wordreel",
         inputs={"library": [str(fake_source.root)], "allow_inflected": True}, limit=5,
@@ -377,6 +380,7 @@ def test_mcp_find_examples_matches_inflections(mcp_tools, fake_source) -> None:
 
 
 def test_mcp_find_examples_respects_allow_inflected(mcp_tools, fake_source) -> None:
+    pytest.importorskip("mcp")
     result = mcp_tools.find_examples(
         None, word="tell", recipe="wordreel",
         inputs={"library": [str(fake_source.root)], "allow_inflected": False},
@@ -387,6 +391,7 @@ def test_mcp_find_examples_respects_allow_inflected(mcp_tools, fake_source) -> N
 def test_mcp_find_examples_is_empty_rather_than_an_error_for_an_absent_word(
     mcp_tools, fake_source
 ) -> None:
+    pytest.importorskip("mcp")
     result = mcp_tools.find_examples(
         None, word="zzzznotaword", recipe="wordreel",
         inputs={"library": [str(fake_source.root)]},

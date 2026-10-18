@@ -5,6 +5,10 @@ on:
     branches: ["**"]
   pull_request:
 
+env:
+  # shared runners render HyperFrames shots well past the 120 s default floor
+  REEL_HYPERFRAMES_TIMEOUT_S: "600"
+
 jobs:
   full:
     name: full (extras installed)
@@ -77,5 +81,9 @@ jobs:
         run: uv sync --frozen
       - name: Runtime unit tests
         run: node --test "reelmachine/recipes/explainer3d/runtime/tests/*.test.mjs"
+      - name: mapreel runtime tests
+        run: node --test "reelmachine/recipes/mapreel/runtime/tests/*.test.mjs"
+      # tests/test_mapreel_render.py uses the real map data: the first run on a fresh runner downloads
+      # about 45 MB (Natural Earth borders, NASA Blue Marble) into the mapreel geo cache.
       - name: Recipe tests, including real renders
-        run: uv run pytest -q tests/test_explainer3d.py tests/test_explainer3d_engine.py tests/test_explainer3d_render.py tests/test_hyperframes_renderer.py
+        run: uv run pytest -q tests/test_explainer3d.py tests/test_explainer3d_engine.py tests/test_explainer3d_render.py tests/test_hyperframes_renderer.py tests/test_mapreel_render.py

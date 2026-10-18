@@ -1,0 +1,235 @@
+{
+  "title": "Foods you'd never eat",
+  "mode": "storyboard",
+  "voice": "fake:default",
+  "segments": [
+    {
+      "kind": "highlight",
+      "countries": [
+        "NLD",
+        "GBR",
+        "NOR",
+        "JPN",
+        "ITA"
+      ],
+      "legend": "Foods you'd never eat",
+      "narration": "Five foods you'd never eat. Number one is banned for sale."
+    },
+    {
+      "kind": "rank",
+      "rank": 5,
+      "country": "NLD",
+      "source": "https://en.wikipedia.org/wiki/Hagelslag",
+      "stat": {
+        "value": "750,000",
+        "label": "hagelslag sandwiches a day",
+        "source": "https://en.wikipedia.org/wiki/Hagelslag"
+      },
+      "narration": "Number five starts gentle. The Netherlands eats 750,000 sandwiches a day under chocolate sprinkles.",
+      "items": [
+        {
+          "name": "Hagelslag",
+          "say": "chocolate sprinkles",
+          "emoji": "🍫"
+        }
+      ]
+    },
+    {
+      "kind": "rank",
+      "rank": 4,
+      "country": "GBR",
+      "source": "https://en.wikipedia.org/wiki/Marmite",
+      "narration": "Number four: Britain's Marmite, from beer leftovers. Love it or hate it.",
+      "items": [
+        {
+          "name": "Marmite",
+          "emoji": "🫙",
+          "image": "commons:File:Marmite - Feb 2013.jpg"
+        },
+        {
+          "name": "Beer leftovers",
+          "say": "beer",
+          "emoji": "🍺"
+        },
+        {
+          "name": "Love it",
+          "emoji": "❤️"
+        },
+        {
+          "name": "Hate it",
+          "emoji": "💔"
+        }
+      ]
+    },
+    {
+      "kind": "versus",
+      "countries": [
+        "VNM",
+        "KOR",
+        "JPN"
+      ],
+      "stats": [
+        {
+          "value": "81",
+          "label": "instant noodles per person, 2024",
+          "source": "https://www.koreatimes.co.kr/amp/southkorea/society/20251009/koreans-per-capita-ramyeon-consumption-ranks-2nd-after-vietnam"
+        },
+        {
+          "value": "79",
+          "label": "instant noodles per person, 2024",
+          "source": "https://www.koreatimes.co.kr/amp/southkorea/society/20251009/koreans-per-capita-ramyeon-consumption-ranks-2nd-after-vietnam"
+        },
+        {
+          "value": "47",
+          "label": "instant noodles per person, 2024",
+          "source": "https://www.koreatimes.co.kr/amp/southkorea/society/20251009/koreans-per-capita-ramyeon-consumption-ranks-2nd-after-vietnam"
+        }
+      ],
+      "narration": "Who eats the most instant noodles? Vietnam, 81. South Korea, 79. Japan, 47."
+    },
+    {
+      "kind": "country",
+      "country": "FRA",
+      "narration": "France didn't even make the list, and it eats snails and about 4,000 tonnes of frog legs a year.",
+      "items": [
+        {
+          "name": "Snails",
+          "emoji": "🐌",
+          "source": "https://en.wikipedia.org/wiki/Escargot"
+        },
+        {
+          "name": "Frog legs",
+          "emoji": "🐸",
+          "source": "https://en.wikipedia.org/wiki/Frog_legs"
+        }
+      ]
+    },
+    {
+      "kind": "regions",
+      "country": "JPN",
+      "narration": "Even in Japan: Osaka eats takoyaki, octopus balls. Hokkaido grills mutton, jingisukan.",
+      "regions": [
+        {
+          "region": "JP-27",
+          "say": "Osaka",
+          "items": [
+            {
+              "name": "Takoyaki",
+              "emoji": "🧆",
+              "image": "commons:File:Takoyaki balls (1).jpg",
+              "source": "https://en.wikipedia.org/wiki/Takoyaki"
+            },
+            {
+              "name": "Octopus",
+              "emoji": "🐙",
+              "source": "https://en.wikipedia.org/wiki/Takoyaki"
+            }
+          ]
+        },
+        {
+          "region": "JP-01",
+          "say": "Hokkaido",
+          "items": [
+            {
+              "name": "Mutton",
+              "emoji": "🐑",
+              "source": "https://en.wikipedia.org/wiki/Jingisukan"
+            },
+            {
+              "name": "Jingisukan",
+              "emoji": "🍖",
+              "source": "https://en.wikipedia.org/wiki/Jingisukan"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "rank",
+      "rank": 3,
+      "country": "NOR",
+      "source": "https://en.wikipedia.org/wiki/Lutefisk",
+      "narration": "Number three, Norway's lutefisk: dried fish, cured in lye, for Christmas.",
+      "items": [
+        {
+          "name": "Lutefisk",
+          "emoji": "🐟",
+          "image": "commons:File:Lutefisk.jpg"
+        },
+        {
+          "name": "Dried fish",
+          "say": "fish",
+          "emoji": "🎣"
+        },
+        {
+          "name": "Lye",
+          "emoji": "🧪"
+        },
+        {
+          "name": "Christmas",
+          "emoji": "🎄"
+        }
+      ]
+    },
+    {
+      "kind": "rank",
+      "rank": 2,
+      "country": "JPN",
+      "source": "https://en.wikipedia.org/wiki/Natt%C5%8D",
+      "narration": "But wait, it gets weirder. Number two, Japan's natto: sticky fermented soybeans with a powerful smell.",
+      "items": [
+        {
+          "name": "Natto",
+          "emoji": "🫘",
+          "image": "commons:File:Natto mixed.jpg"
+        }
+      ]
+    },
+    {
+      "kind": "rank",
+      "rank": 1,
+      "country": "ITA",
+      "source": "https://en.wikipedia.org/wiki/Casu_martzu",
+      "narration": "And number one has live maggots in it. Sardinia's casu martzu, so dangerous its sale is banned.",
+      "items": [
+        {
+          "name": "Live maggots",
+          "say": "maggots",
+          "emoji": "🐛"
+        },
+        {
+          "name": "Casu martzu",
+          "say": "Sardinia's casu",
+          "emoji": "🧀",
+          "image": "commons:File:Casu Marzu cheese.jpg"
+        },
+        {
+          "name": "Rotten cheese",
+          "say": "martzu",
+          "emoji": "🤢"
+        },
+        {
+          "name": "Dangerous",
+          "emoji": "⚠️"
+        },
+        {
+          "name": "Sale banned",
+          "say": "sale is banned",
+          "emoji": "🚫"
+        }
+      ]
+    },
+    {
+      "kind": "highlight",
+      "countries": [
+        "NLD",
+        "GBR",
+        "FRA",
+        "NOR",
+        "JPN",
+        "ITA"
+      ],
+      "narration": "Which one would you actually try? Tell me in the comments."
+    }
+  ]
+}
