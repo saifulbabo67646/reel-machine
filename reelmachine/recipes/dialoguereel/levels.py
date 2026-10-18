@@ -34,3 +34,13 @@ def n_level(label: str) -> int | None:
     """"N5"/"n3" -> 5/3; anything else -> None."""
     m = re.fullmatch(r"[Nn]([1-5])", label.strip())
     return int(m.group(1)) if m else None
+
+
+def primary_language(language: str) -> str:
+    """"ja-JP"/"JA"/"ja_jp" -> "ja": the lower-cased primary subtag of a language tag."""
+    return language.strip().lower().replace("_", "-").split("-")[0]
+
+
+def is_japanese(language: str) -> bool:
+    """Whether JLPT levels apply: the reel's language is Japanese, however its tag is written."""
+    return primary_language(language) == "ja"

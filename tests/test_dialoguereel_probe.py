@@ -45,6 +45,7 @@ def _check(report, name):
 def test_the_example_probes_clean():
     report = probe(EXAMPLE)
     assert report.ok, report.checks
+    assert report.details["lint"] == []   # no warnings either: every key is found in its line and is N5
     assert report.details["cast"].startswith("cast_") and report.details["estimatedMs"] > 1500
     assert len(report.details["lines"]) == len(EXAMPLE["lines"])
     assert report.details["lines"][0] == {"index": 0, "estimatedMs": report.details["lines"][0]["estimatedMs"]}

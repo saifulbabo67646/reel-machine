@@ -64,7 +64,9 @@ GUIDE: dict[str, Any] = {
         "`flow: \"listen_first\"` plays the dialogue once without subtitles before the subtitled pass.",
         "6. probe the inputs: it checks the script, the lint, the voices and the renderer and spends nothing. "
         "Fix every `key-missing` and `level` finding; the other warnings are advice.",
-        "7. start_job in `storyboard` mode (the default) and look at storyboard.jpg: one still per line.",
+        "7. start_job in `storyboard` mode (the default) and look at storyboard.jpg: the hook, a still of the "
+        "listen pass (with `flow: \"listen_first\"`), one still per line once its meaning shows, the recap, and two "
+        "quiz stills (the question during the countdown, then the answer).",
         "8. start_job again in `full` mode for reel.mp4, captions.srt and reel.json.",
     ],
     "builtins": builtin_names(),
@@ -114,8 +116,11 @@ GUIDE: dict[str, Any] = {
                  "what is said in the target language, meaning is its translation; keys, emotion and slow are "
                  "optional (see `writing` and `emotions`).",
         "keys": "Up to 4 per line, each {text, reading, meaning}: text is the word in dictionary form (あらう for "
-                "あらって, だす for だして) and may carry ruby (手伝{てつだ}う); it is found in the line by its plain "
-                "text or its stem, then underlined and shown as a chip, and every key returns on the recap card. "
+                "あらって, 手伝う for 手伝いましょう) and may carry ruby (手伝{てつだ}う); it is found in the line by its "
+                "plain text or its stem, then underlined and shown as a chip, and every key returns on the recap card. "
+                "A stem is never shorter than 2 characters (one kanji aside), so for very short verbs key the form "
+                "used in the line (のんだ, だして) or write the kanji with ruby (飲{の}む, which matches by its kanji "
+                "stem); otherwise lint reports `key-missing`. "
                 "reading is romanised like the line's (arau); meaning is short (to wash).",
         "ruby": {
             "rule": "Furigana: put the reading in braces right after a kanji run; it attaches to that run only.",

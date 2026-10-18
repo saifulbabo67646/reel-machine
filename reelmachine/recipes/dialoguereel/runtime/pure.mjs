@@ -284,6 +284,10 @@ export function bridgeSlide(ms, bridgeMs) {
   return out > 0 ? -easeIn(out / BRIDGE_OUT_MS) : 0;
 }
 
+/** When the countdown ring and its first number pop in, after the quiz starts: with the first countdown pop
+    (stages.COUNTDOWN_MS[0]), so the sound and the picture land together. */
+export const RING_IN_MS = 0;
+
 /** The quiz countdown: 3, 2, 1 for a second each (`ring` drains from 1 to 0 every second), then 0 at the reveal. */
 export function countdown(ms, quiz) {
   if (ms >= quiz.revealMs) return { n: 0, ring: 0 };

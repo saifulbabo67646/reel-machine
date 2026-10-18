@@ -46,3 +46,17 @@ def test_jlpt_levels():
 def test_a_key_with_ruby_matches_by_its_plain_text():
     assert match_keys("手伝{てつだ}う？", [kw("手伝{てつだ}う")]) == [KeySpan(0, 0, 3)]
     assert match_keys("手伝{てつだ}いましょうか。", [kw("手伝{てつだ}う")]) == [KeySpan(0, 0, 2)]
+
+
+def test_a_one_kana_stem_never_matches():
+    # a two-kana key would leave a one-kana stem that lands on a particle or the wrong word
+    assert match_keys("ぼくのジュースをのんだ", [kw("のむ")]) == [None]
+    assert match_keys("いいね、いこう！", [kw("いく")]) == [None]
+    assert match_keys("ごみもだして", [kw("だす")]) == [None]
+
+
+def test_short_verbs_match_by_their_form_or_their_kanji():
+    assert match_keys("ぼくのジュースをのんだ", [kw("のんだ")]) == [KeySpan(0, 8, 11)]
+    assert match_keys("ごみもだしてね。", [kw("だして")]) == [KeySpan(0, 3, 6)]
+    assert match_keys("ジュースを飲{の}んだ", [kw("飲{の}む")]) == [KeySpan(0, 5, 6)]
+    assert match_keys("いく", [kw("いく")]) == [KeySpan(0, 0, 2)]   # the exact text still matches

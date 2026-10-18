@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .keys import match_keys
-from .levels import jlpt_level, n_level
+from .levels import is_japanese, jlpt_level, n_level
 from .models import DialogueReelInputs
 from .ruby import parse_ruby, plain_text
 from .schedule import estimate
@@ -64,7 +64,7 @@ def check(inputs: DialogueReelInputs, speakers: set[str]) -> list[Finding]:
 def _script_rules(inputs: DialogueReelInputs) -> list[Finding]:
     found: list[Finding] = []
     lines = inputs.lines
-    ceiling = n_level(inputs.level) if inputs.language.startswith("ja") else None
+    ceiling = n_level(inputs.level) if is_japanese(inputs.language) else None
     for i, line in enumerate(lines):
         plain = plain_text(parse_ruby(line.text)[0])
         if _non_latin(plain) and not (line.reading or "").strip():

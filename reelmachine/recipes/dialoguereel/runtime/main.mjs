@@ -5,7 +5,7 @@
 // index.html?t=3.2 shows the frame at 3.2 s.
 import { activeLine, dropIn, hop, mouthOpen, blinking, litChars, fade, history, progress, bob, seedOf, fitFont, flag, clamp01, DROP_MS, partId,
   backOut, keyVisible, emotionParts, emojiPop, slowActive, slowWords, rowFit, SLOW_FLAP_MS,
-  section, shiftLine, spokenOf, bridgeSlide, countdown, recapCard, nod, loopBack, waveLevel, WAVE_BARS, BRIDGE_MS, RECAP_MS, LOOP_MS, DROP_PX } from "./pure.mjs";
+  section, shiftLine, spokenOf, bridgeSlide, countdown, RING_IN_MS, recapCard, nod, loopBack, waveLevel, WAVE_BARS, BRIDGE_MS, RECAP_MS, LOOP_MS, DROP_PX } from "./pure.mjs";
 
 const done = () => window.__reelResolve && window.__reelResolve();
 const DROP_DELAY = { left: 150, right: 300 };
@@ -451,7 +451,7 @@ function applyQuiz(ui, ms, loop) {
   // the number pops on every second; at the reveal the ring bursts outwards and goes
   const tick = popIn(ms, w.startMs + Math.floor(Math.max(0, ms - w.startMs) / 1000) * 1000, 1.45, 220);
   q.num.style.transform = `scale(${tick.scale.toFixed(4)})`;
-  const count = popIn(ms, w.startMs + 200, 0.5), burst = clamp01((ms - w.revealMs) / RING_BURST_MS);
+  const count = popIn(ms, w.startMs + RING_IN_MS, 0.5), burst = clamp01((ms - w.revealMs) / RING_BURST_MS);
   reveal(q.count, count.alpha * (1 - burst), `scale(${(count.scale * lerp(1, 1.5, burst)).toFixed(4)})`);
 
   const answer = popIn(ms, w.revealMs, 0.55, 320);

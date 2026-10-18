@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, field_validator, model_validator
 
 from reelmachine.core.stage import StageOutput
 from reelmachine.core.timeline import WordSpan
@@ -108,7 +108,7 @@ class DialogueReelInputs(BaseModel):
     mode: Mode = "storyboard"
     lint: Literal["strict", "warn"] = "strict"
     flow: Literal["standard", "listen_first"] = "standard"
-    quiz: bool | int = True                           # an int is the 0-based line to ask about
+    quiz: StrictBool | StrictInt = True               # an int is the 0-based line to ask about; strict, so 1.0 or "1" is refused
     music: str | None = None
     name: str | None = Field(None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")  # the output file's stem
     outdir: str | None = None

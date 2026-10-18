@@ -1,3 +1,4 @@
+import json
 import pytest
 from pydantic import ValidationError
 
@@ -64,3 +65,17 @@ def test_learning_fields_default_and_validate():
     for bad in ({"keys": [{"text": "a", "meaning": "b"}] * 5}, {"emotion": "angry"}, {"keys": [{"text": "", "meaning": "b"}]}):
         with pytest.raises(ValidationError):
             DialogueReelInputs.model_validate({**SCRIPT, "lines": [{**SCRIPT["lines"][0], **bad}]})
+
+
+@pytest.mark.parametrize("quiz", [1.0, "1", "true", 0.0])
+def test_quiz_is_strict_so_an_index_is_never_turned_into_auto(quiz):
+    with pytest.raises(ValidationError):
+        DialogueReelInputs.model_validate({**SCRIPT, "quiz": quiz})
+    with pytest.raises(ValidationError):
+        DialogueReelInputs.model_validate_json(json.dumps({**SCRIPT, "quiz": quiz}))
+
+
+def test_quiz_takes_a_bool_or_an_int():
+    assert DialogueReelInputs.model_validate_json(json.dumps({**SCRIPT, "quiz": 1})).quiz == 1
+    assert DialogueReelInputs.model_validate_json(json.dumps({**SCRIPT, "quiz": False})).quiz is False
+    assert DialogueReelInputs.model_validate({**SCRIPT, "quiz": True}).quiz is True

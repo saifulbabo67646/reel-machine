@@ -134,3 +134,39 @@ def test_reference_dialogue_regression():
     keyless = [{k: v for k, v in line.items() if k != "keys"} for line in EXAMPLE["lines"]]
     assert "key-count" in rules(check(inputs.model_copy(update={"lines": DialogueReelInputs(
         cast="x", lines=keyless).lines}), SP))
+
+
+def test_a_two_kana_key_that_only_a_one_kana_stem_would_match_is_missing():
+    from reelmachine.recipes.dialoguereel.models import KeyWord
+    from reelmachine.recipes.dialoguereel.stages import lint_findings
+
+    def missing(text, key):
+        lines = [line(), line(text=text, keys=[KeyWord(text=key, meaning="m")]), line()]
+        return [f["path"] for f in lint_findings(script(lines=lines), SP) if f["rule"] == "key-missing"]
+    assert missing("ぼくのジュースをのんだ", "のむ") == ["lines[1].keys[0]"]
+    assert missing("いいね、いこう！", "いく") == ["lines[1].keys[0]"]
+    assert missing("ごみもだして", "だす") == ["lines[1].keys[0]"]
+    assert missing("ぼくのジュースをのんだ", "のんだ") == []
+    assert missing("ジュースを飲{の}んだ", "飲{の}む") == []
+
+
+@pytest.mark.parametrize("language", ["ja", "JA", "ja-JP", "ja_JP", " Ja "])
+def test_levels_are_linted_however_japanese_is_written(language):
+    from reelmachine.recipes.dialoguereel.compose import recap_card
+    from reelmachine.recipes.dialoguereel.models import KeyWord
+
+    key = KeyWord(text="一応", meaning="m")
+    lines = [line(), line(text="これは一応です", keys=[key]), line()]
+    assert "level" in rules(check(script(lines=lines, level="N5", language=language), SP))
+    assert recap_card(key, language)["level"] is not None   # the page shows a level exactly when lint checks it
+
+
+def test_levels_are_not_linted_for_other_languages():
+    from reelmachine.recipes.dialoguereel.compose import recap_card
+    from reelmachine.recipes.dialoguereel.models import KeyWord
+
+    key = KeyWord(text="一応", meaning="m")
+    lines = [line(), line(text="これは一応です", keys=[key]), line()]
+    for language in ("jam", "zh", "en-JA"):
+        assert "level" not in rules(check(script(lines=lines, level="N5", language=language), SP))
+        assert recap_card(key, language)["level"] is None

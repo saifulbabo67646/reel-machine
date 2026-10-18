@@ -12,6 +12,8 @@ from .ruby import KANJI, parse_ruby, plain_text
 _KANA = "぀-ゟ゠-ヿ"
 _JAPANESE = re.compile(rf"[{_KANA}{KANJI}]")
 _FINAL_KANA = re.compile(rf"[{_KANA}]$")
+_ONE_KANJI = re.compile(rf"[{KANJI}]")
+MIN_STEM = 2   # a shorter stem (one kana, one letter) would match a particle or any word's first sound
 
 
 @dataclass(frozen=True)
@@ -21,9 +23,14 @@ class KeySpan:
     end: int
 
 
-def _stem(text: str) -> str:
+def _stem(text: str) -> str | None:
+    """The part of the key a conjugated form keeps, or None when that part would be too short to place safely.
+    A lone kanji is still a safe stem (飲 for 飲む): it carries the word's meaning, unlike a lone kana."""
     if _JAPANESE.search(text):
-        return text[:-1] if len(text) > 1 and _FINAL_KANA.search(text) else text
+        if len(text) <= 1 or not _FINAL_KANA.search(text):
+            return text
+        stem = text[:-1]
+        return stem if len(stem) >= MIN_STEM or _ONE_KANJI.fullmatch(stem) else None
     low = text.lower()
     if len(low) >= 6:
         return low[:-2]
@@ -56,7 +63,7 @@ def match_keys(text: str, keys: Sequence[KeyWord]) -> list[KeySpan | None]:
         hit = _find(plain, text, taken, latin, whole=True)
         if hit is None:
             stem = _stem(text)
-            if stem != text:
+            if stem is not None and stem != text:
                 hit = _find(plain, stem, taken, latin)
         if hit is None:
             out.append(None)

@@ -36,8 +36,20 @@ from .ruby import parse_ruby, plain_text
 from .schedule import HOOK_MS, SLOW_RATE, Cue, LineWindow, QuizWindow, Schedule, quiz_line_for, schedule
 
 DROP_INS_MS = (150, 300)   # the two characters land: one pop each
-COUNTDOWN_MS = (0, 1000, 2000)   # the quiz countdown: one pop per second
+COUNTDOWN_MS = (0, 1000, 2000)   # the quiz countdown: one pop per number, the first as the ring appears
 CAST_MS = compose.CAST_SECONDS * 1000
+
+
+def sfx_cues(plan: Schedule) -> list[tuple[int, str]]:
+    """When each sound effect plays: a pop per character drop-in, a whoosh into the bridge and the recap, and in the
+    quiz a pop on each countdown number (the first as the ring and its 3 appear, runtime RING_IN_MS) and a ding at
+    the reveal."""
+    cues = [(at, "pop") for at in DROP_INS_MS]
+    cues += [(at, "whoosh") for at in (plan.bridge_ms, plan.recap_ms) if at is not None]
+    if plan.quiz:
+        cues += [(plan.quiz.start_ms + at, "pop") for at in COUNTDOWN_MS]
+        cues.append((plan.quiz.reveal_ms, "ding"))
+    return cues
 
 
 def _artifacts(ctx: StageContext) -> Path:
@@ -371,11 +383,7 @@ class RenderStage:
         plan = plan_of(narration)
         sfx = {n: synth_sfx(n, work / "sfx" / f"{n}.wav", settings=settings, designed=True)
                for n in ("pop", "whoosh", "ding")}
-        cues = [(at, sfx["pop"]) for at in DROP_INS_MS]
-        cues += [(at, sfx["whoosh"]) for at in (plan.bridge_ms, plan.recap_ms) if at is not None]
-        if plan.quiz:
-            cues += [(plan.quiz.start_ms + at, sfx["pop"]) for at in COUNTDOWN_MS]
-            cues.append((plan.quiz.reveal_ms, sfx["ding"]))
+        cues = [(at, sfx[name]) for at, name in sfx_cues(plan)]
         audio = mix(ctx.assets.get(narration.audio_asset), cues, None,
                     work / "audio.wav", total_ms=total_ms, settings=settings, profile="studio", cancel=ctx.cancel)
         video = mux(cached, audio, outdir / f"{name}.mp4", total_ms=total_ms, settings=settings, cancel=ctx.cancel)

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { activeLine, dropIn, hop, mouthOpen, blinking, litChars, fade, history, progress, bob, seedOf, fitFont, flag, partId,
   keyVisible, emotionParts, emojiPop, slowActive, slowWords, rowFit, SLOW_FLAP_MS,
-  section, countdown, recapCard, RECAP_CARD_PX, shiftLine, bridgeSlide, nod, loopBack, waveLevel, WAVE_BARS, WAVE_REST } from "../pure.mjs";
+  section, countdown, RING_IN_MS, recapCard, RECAP_CARD_PX, shiftLine, bridgeSlide, nod, loopBack, waveLevel, WAVE_BARS, WAVE_REST } from "../pure.mjs";
 
 test("a line is active from its start until the next starts", () => {
   const lines = [{ startMs: 1500 }, { startMs: 2850 }];
@@ -126,8 +126,12 @@ test("a key chip is hidden until its first character is lit, then pops in over 2
   assert.ok(mid > 0 && mid < 1, `mid-pop ${mid}`);
   assert.equal(keyVisible(1720, LINE, key, 10), 1);
   assert.equal(keyVisible(9000, LINE, key, 10), 1, "it stays (the bubble's exit hides it)");
-  assert.equal(keyVisible(1000, LINE, { start: 0, end: 2 }, 10) >= 0, true);
-  assert.equal(keyVisible(1320, LINE, { start: 0, end: 2 }, 10), 1);
+  // character 0 lights once 1 of 10 is lit: at 1100 ms; until then (from the line's start) it is hidden
+  const first = { start: 0, end: 2 };
+  assert.equal(keyVisible(1000, LINE, first, 10), 0);
+  assert.equal(keyVisible(1099, LINE, first, 10), 0);
+  assert.equal(keyVisible(1100, LINE, first, 10), 0);
+  assert.equal(keyVisible(1100 + 220, LINE, first, 10), 1);
 });
 
 test("a line without word timings lights its keys across the whole line", () => {
@@ -219,6 +223,15 @@ test("the countdown shows 3, 2, 1 a second each, its ring draining every second,
   assert.deepEqual(countdown(13600, quiz), { n: 0, ring: 0 });
   assert.deepEqual(countdown(20000, quiz), { n: 0, ring: 0 });
   assert.deepEqual(countdown(9000, quiz), { n: 3, ring: 1 });
+});
+
+test("the countdown ring appears with the first countdown pop, and each number lands on a pop", () => {
+  // stages.COUNTDOWN_MS = (0, 1000, 2000) after quiz.startMs: the ring and its 3 at the first, 2 and 1 at the next
+  const quiz = SECTIONS.quiz;
+  assert.equal(RING_IN_MS, 0);
+  const at = [0, 1000, 2000].map((k) => quiz.startMs + k);
+  assert.deepEqual(at.map((ms) => countdown(ms, quiz).n), [3, 2, 1]);
+  assert.deepEqual(at.map((ms) => countdown(ms - 1, quiz).n), [3, 3, 2]);
 });
 
 test("recap cards rise in one after another, 120 ms apart, and all leave together", () => {

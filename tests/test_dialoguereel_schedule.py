@@ -84,3 +84,22 @@ def test_strings_fall_back_to_english_and_format_the_level():
     assert strings_for("fr", "N5")["follow"] == "Follow for daily N5"
     assert strings_for("en", "")["follow"] == "Follow for more" and strings_for("ja-JP", "N5")["recap"] != STRINGS["en"]["recap"]
     assert strings_for("ja", "N5")["follow"] == "毎日のN5はフォローしてね"
+
+
+def test_the_countdown_pops_land_with_the_ring_and_each_number():
+    import re
+    from pathlib import Path
+
+    from reelmachine.recipes.dialoguereel.stages import sfx_cues
+
+    s = schedule([1000, 1200], recap=True, quiz_line=1)
+    q = s.quiz
+    cues = sfx_cues(s)
+    assert [at for at, name in cues if name == "pop"] == [150, 300, q.start_ms, q.start_ms + 1000, q.start_ms + 2000]
+    assert [at for at, name in cues if name == "ding"] == [q.reveal_ms] == [q.start_ms + 3000]
+    assert [at for at, name in cues if name == "whoosh"] == [s.recap_ms]
+    # the page pops the ring (and its 3) in RING_IN_MS after the quiz starts: with the first countdown pop
+    pure = Path(__file__).resolve().parents[1] / "reelmachine/recipes/dialoguereel/runtime/pure.mjs"
+    ring_in = int(re.search(r"export const RING_IN_MS = (\d+);", pure.read_text(encoding="utf-8")).group(1))
+    assert q.start_ms + ring_in == next(at for at, name in cues if name == "pop" and at >= q.start_ms)
+    assert not sfx_cues(schedule([1000, 1200]))[2:]

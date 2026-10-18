@@ -44,7 +44,7 @@ EXAMPLE: dict[str, Any] = {
          "keys": [{"text": "あらう", "reading": "arau", "meaning": "to wash"}]},
         {"speaker": "mom", "text": "ごみもだしてね。", "reading": "Gomi mo dashite ne.",
          "meaning": "Take out the trash too, okay?",
-         "keys": [{"text": "だす", "reading": "dasu", "meaning": "to take out"}]},
+         "keys": [{"text": "だして", "reading": "dashite", "meaning": "take out"}]},
         {"speaker": "kid", "text": "いまからします。", "reading": "Ima kara shimasu.", "meaning": "I'll do it now.",
          "emotion": "happy", "keys": [{"text": "いま", "reading": "ima", "meaning": "now"}]},
     ],

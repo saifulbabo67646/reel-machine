@@ -17,7 +17,7 @@ from reelmachine.core.timeline import WordSpan
 
 from .cast import ResolvedCast
 from .keys import match_keys
-from .levels import jlpt_level
+from .levels import is_japanese, jlpt_level, primary_language
 from .models import DialogueReelInputs, KeyWord, Line
 from .ruby import parse_ruby, plain_text
 from .schedule import QuizWindow, Schedule
@@ -44,11 +44,7 @@ LOOKS: dict[str, dict[str, str]] = {
 
 
 def prompt_for(meaning_language: str) -> str | None:
-    return PROMPTS.get(_primary(meaning_language))
-
-
-def _primary(language: str) -> str:
-    return language.strip().lower().replace("_", "-").split("-")[0]
+    return PROMPTS.get(primary_language(meaning_language))
 
 
 def _key_word(key: KeyWord, japanese: bool) -> dict[str, Any]:
@@ -62,14 +58,14 @@ def _key_word(key: KeyWord, japanese: bool) -> dict[str, Any]:
 
 def _keys(line: Line, language: str) -> list[dict[str, Any]]:
     """The line's key words that were found in it, with their place in its plain text (for the underline)."""
-    japanese = _primary(language) == "ja"
+    japanese = is_japanese(language)
     return [{**_key_word(line.keys[span.index], japanese), "start": span.start, "end": span.end}
             for span in match_keys(line.text, line.keys) if span is not None]
 
 
 def recap_card(key: KeyWord, language: str) -> dict[str, Any]:
     """A recap card: the key's plain text, ruby runs, reading, meaning and level."""
-    return _key_word(key, _primary(language) == "ja")
+    return _key_word(key, is_japanese(language))
 
 
 def _recap(inputs: DialogueReelInputs) -> list[dict[str, Any]]:
