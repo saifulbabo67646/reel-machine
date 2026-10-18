@@ -110,7 +110,7 @@ never a change to the core. See [docs/RECIPES.md](docs/RECIPES.md).
 One server, two transports (`stdio`, `streamable-http`). Eight tools run any recipe:
 `list_recipes`, `describe_recipe`, `probe`, `start_job`, `get_job`, `list_jobs`,
 `cancel_job`, `get_artifact`. The rest are read-only helpers for writing scripts (for
-mapreel: `find_places`, `find_images`). No tool call waits for a render; `start_job` returns a job
+mapreel: `find_places`, `find_images`; for dialoguereel: `make_cast`). No tool call waits for a render; `start_job` returns a job
 id and the caller polls. Per-caller bearer tokens, per-caller jobs, quotas, concurrency
 and disk limits; `get_artifact` returns a signed, expiring URL — never bytes. Full
 reference, with one example per tool: [docs/MCP.md](docs/MCP.md).

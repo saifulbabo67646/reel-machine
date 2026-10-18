@@ -153,3 +153,28 @@ assert finished.result.render_mode == "…"
 A recipe that renders must carry its render mode into the timeline
 (`Timeline.render_mode`); the manifest and the verifier take it from there, so a static
 pan can never be reported as stroke animation.
+
+## dialoguereel: two characters act out a language lesson
+
+`dialoguereel` makes a vertical 1080x1920 reel in which two cute characters (built-ins such
+as `cupcake`, `mug`, `onigiri`, `shiba`, or the caller's own SVG) act out a short
+conversation in the target language. Each line is spoken in its character's voice and shown
+with furigana, a reading and a meaning; key words are underlined and collected on a recap
+card, and the reel ends on a "How do you say:" quiz and a follow call to action.
+
+**Inputs at a glance.** `title` (the hook), `language`, `meaning_language`, `level` (`N5`,
+`TOPIK 1`, `A1`), `scene` (one emoji), `cast` (a `castId` or the cast itself), and 3 to 12
+`lines` of `{speaker, text, reading, meaning}`, each optionally with `keys` (up to 4
+`{text, reading, meaning}`), an `emotion` (`happy`, `surprised`, `sad`, `thinking`) and
+`slow` (a 0.75x replay). `flow: "listen_first"` plays the dialogue once without subtitles
+first; `quiz` is `true` (the line with the most keys), a line index, or `false`. `mode` is
+`cast`, `storyboard` (the default) or `full`. The shipped example is
+`describe_recipe("dialoguereel").example`.
+
+**MCP flow.** `make_cast` (free; its preview job's `cast.png` shows both characters) →
+`probe` (the script, the lint — including the JLPT level check on Japanese keys — the voices
+and the renderer, spending nothing) → `start_job` in `storyboard` mode → `start_job` in
+`full` mode for `reel.mp4`, `captions.srt` and `reel.json`. `describe_recipe("dialoguereel")`
+carries the `guide` an agent writes from: the workflow, about 30 N5-N3 situations, how to
+write natural lines, hook titles, endings, the emotion table, the level ladders (JLPT, TOPIK,
+CEFR) and the character SVG contract. See [MCP.md](MCP.md#make_cast).

@@ -271,6 +271,30 @@ country codes, `find_images` for item images, `probe` to check the script and it
 lint, then `start_job` in `storyboard` mode and again in `build` mode. See
 [MAPREEL.md](MAPREEL.md).
 
+### `make_cast`
+
+The two characters of a `dialoguereel`: each is a built-in by name (`cupcake`, `mug`, …; the list
+is `describe_recipe("dialoguereel").guide.builtins`) or the caller's own SVG following
+`guide.characters` (a `viewBox="0 0 400 400"`, the required part ids, no scripts, no `<style>`
+element — inline `style` attributes are fine). The cast is checked and saved for the caller
+only (another caller cannot use its id) and its id is a hash of how the characters look, so
+the same cast always gets the same `castId`. A bad character is an `INVALID_INPUT` error whose
+`details.path` names it, like `characters[0].source.svg`. Free and instant: unless `preview` is
+false it starts a `dialoguereel` job in `cast` mode whose `cast.png` shows both characters.
+The result is `{"schemaVersion": 1, "castId": "cast_…", "characters": [{"id", "name", "side",
+"voice", "parts"}], "previewJobId": "…" | null, "hint": "…"}`; `parts` lists the optional groups
+each character has. Pass `castId` as the reel's `cast`.
+
+```json
+{"characters": [
+  {"id": "kid", "name": "Cupcake", "side": "left", "source": {"kind": "builtin", "name": "cupcake"}},
+  {"id": "mom", "name": "Mug", "side": "right", "source": {"kind": "builtin", "name": "mug"}}]}
+```
+
+**dialoguereel workflow.** `describe_recipe("dialoguereel")` for the guide, `make_cast` and a look
+at its `cast.png`, then write the lines, `probe`, `start_job` in `storyboard` mode and again in
+`full` mode.
+
 ### `find_assets`
 
 CC0 models, skies (360° photos of real places — kitchens, living rooms, workshops, streets

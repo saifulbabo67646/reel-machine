@@ -8,6 +8,7 @@ and registers through the same entry point mechanism as any third-party recipe.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Mapping, Protocol, Sequence, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -77,6 +78,7 @@ class ProbeContext:
     providers: Any = None
     workdir: Any = None
     log: Any = None
+    caller_root: Path | None = None  # the caller's private directory (saved casts and the like); None outside the engine
 
 
 @runtime_checkable

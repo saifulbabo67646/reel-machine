@@ -33,6 +33,9 @@ class LocalJobStore:
     def _caller_dir(self, caller: str) -> Path:
         return self._root / _safe(caller)
 
+    def caller_dir(self, caller: str) -> Path:
+        return self._caller_dir(caller)
+
     def workdir(self, job_id: str, *, caller: str) -> Path:
         return self._caller_dir(caller) / _safe(job_id)
 

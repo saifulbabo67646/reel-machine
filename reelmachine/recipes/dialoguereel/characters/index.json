@@ -1,0 +1,12 @@
+[
+  {"name": "cupcake", "description": "a cheerful pink-frosted cupcake in a mint pleated wrapper", "role": "kid"},
+  {"name": "mug", "description": "a calm pale-blue mug with a round handle", "role": "parent"},
+  {"name": "onigiri", "description": "a little rice-ball onigiri with a nori wrap and pink furikake", "role": "kid"},
+  {"name": "dango", "description": "a three-ball hanami dango skewer: pink, white and green mochi", "role": "friend"},
+  {"name": "boba", "description": "a milk-tea boba cup with tapioca pearls, a domed lid and a pink straw", "role": "friend"},
+  {"name": "cat", "description": "a round cream-orange cat with a pink collar and a little gold bell", "role": "pet"},
+  {"name": "shiba", "description": "a fluffy shiba inu with a curly tail and a polka-dot bandana", "role": "friend"},
+  {"name": "penguin", "description": "a periwinkle penguin teacher in a graduation cap", "role": "teacher"},
+  {"name": "bunny", "description": "a soft pink-white bunny with long ears and a blue bow", "role": "kid"},
+  {"name": "kimchi-jar", "description": "a cheerful glass kimchi jar under a gingham cloth lid", "role": "shopkeeper"}
+]

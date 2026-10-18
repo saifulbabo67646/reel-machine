@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <defs>
+    <path id="mg-body" d="M74 100 L270 100 L266 348 Q264 382 230 382 L114 382 Q80 382 78 348 Z"/>
+    <path id="mg-handle" d="M264 168 C346 160 348 300 262 292"/>
+    <ellipse id="mg-rim" cx="172" cy="100" rx="98" ry="24"/>
+    <clipPath id="mg-clip-body"><use href="#mg-body"/></clipPath>
+  </defs>
+  <g id="arm-left" data-pivot="78,300">
+    <ellipse cx="50" cy="316" rx="26" ry="14.5" transform="rotate(-32 50 316)" fill="#fff" stroke="#fff" stroke-width="30"/>
+    <ellipse cx="50" cy="316" rx="26" ry="14.5" transform="rotate(-32 50 316)" style="fill:var(--primary,#b9e0f7)" stroke="#3a2a3a" stroke-width="5.5"/>
+  </g>
+  <g id="arm-right" data-pivot="268,318">
+    <ellipse cx="294" cy="334" rx="26" ry="14.5" transform="rotate(32 294 334)" fill="#fff" stroke="#fff" stroke-width="30"/>
+    <ellipse cx="294" cy="334" rx="26" ry="14.5" transform="rotate(32 294 334)" style="fill:var(--primary,#b9e0f7)" stroke="#3a2a3a" stroke-width="5.5"/>
+  </g>
+  <g id="body">
+    <g stroke="#fff" stroke-linejoin="round" stroke-linecap="round">
+      <use href="#mg-handle" fill="none" stroke-width="66"/>
+      <use href="#mg-body" fill="#fff" stroke-width="34"/>
+      <use href="#mg-rim" fill="#fff" stroke-width="34"/>
+    </g>
+    <use href="#mg-handle" fill="none" stroke="#3a2a3a" stroke-width="40" stroke-linecap="round"/>
+    <use href="#mg-handle" fill="none" style="stroke:var(--primary,#b9e0f7)" stroke-width="29" stroke-linecap="round"/>
+    <path d="M300 196 C318 214 318 248 304 266" fill="none" stroke="#3a2a3a" stroke-width="8" stroke-linecap="round" opacity="0.1"/>
+    <use href="#mg-body" style="fill:var(--primary,#b9e0f7)"/>
+    <g clip-path="url(#mg-clip-body)">
+      <path d="M244 100 L280 100 L280 390 L232 390 Q252 300 244 100 Z" fill="#3a2a3a" opacity="0.08"/>
+      <rect x="60" y="326" width="230" height="18" style="fill:var(--accent,#ffc2d9)"/>
+      <g stroke="#3a2a3a" stroke-width="3.5" opacity="0.55">
+        <line x1="60" y1="326" x2="290" y2="326"/><line x1="60" y1="344" x2="290" y2="344"/>
+      </g>
+      <g fill="#fff" opacity="0.85">
+        <circle cx="104" cy="335" r="3"/><circle cx="138" cy="335" r="3"/><circle cx="172" cy="335" r="3"/>
+        <circle cx="206" cy="335" r="3"/><circle cx="240" cy="335" r="3"/>
+      </g>
+    </g>
+    <use href="#mg-body" fill="none" stroke="#3a2a3a" stroke-width="5.5" stroke-linejoin="round"/>
+    <rect x="92" y="138" width="13" height="64" rx="6.5" fill="#fff" opacity="0.7"/>
+    <circle cx="98.5" cy="216" r="6" fill="#fff" opacity="0.7"/>
+    <use href="#mg-rim" style="fill:var(--secondary,#86bde4)" stroke="#3a2a3a" stroke-width="5.5"/>
+    <ellipse cx="172" cy="103" rx="80" ry="15" fill="#b37a57" stroke="#3a2a3a" stroke-width="4"/>
+    <ellipse cx="150" cy="99" rx="26" ry="4" fill="#fff" opacity="0.25"/>
+    <rect x="-10" y="-8" width="20" height="16" rx="5" transform="translate(196 98) rotate(-12)" fill="#fff" stroke="#3a2a3a" stroke-width="3.5"/>
+    <rect x="-9" y="-7" width="18" height="14" rx="5" transform="translate(170 106) rotate(14)" fill="#ffd6e6" stroke="#3a2a3a" stroke-width="3.5"/>
+  </g>
+  <g id="blush">
+    <ellipse cx="108" cy="256" rx="16" ry="9" fill="#ff7aa8" opacity="0.6"/>
+    <ellipse cx="236" cy="256" rx="16" ry="9" fill="#ff7aa8" opacity="0.6"/>
+  </g>
+  <g id="eyes-open">
+    <circle cx="136" cy="236" r="12" fill="#3a2a3a"/><circle cx="208" cy="236" r="12" fill="#3a2a3a"/>
+    <circle cx="132" cy="231.5" r="4.2" fill="#fff"/><circle cx="204" cy="231.5" r="4.2" fill="#fff"/>
+    <circle cx="140" cy="240" r="1.8" fill="#fff"/><circle cx="212" cy="240" r="1.8" fill="#fff"/>
+  </g>
+  <g id="eyes-closed" display="none" fill="none" stroke="#3a2a3a" stroke-width="5" stroke-linecap="round">
+    <path d="M124 235 Q136 245 148 235"/><path d="M196 235 Q208 245 220 235"/>
+  </g>
+  <g id="eyes-happy" display="none" fill="none" stroke="#3a2a3a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M124 241 Q136 225 148 241"/><path d="M196 241 Q208 225 220 241"/>
+  </g>
+  <g id="eyes-surprised" display="none">
+    <circle cx="136" cy="234" r="14.5" fill="#fff" stroke="#3a2a3a" stroke-width="5"/>
+    <circle cx="208" cy="234" r="14.5" fill="#fff" stroke="#3a2a3a" stroke-width="5"/>
+    <circle cx="136" cy="235" r="6.5" fill="#3a2a3a"/><circle cx="208" cy="235" r="6.5" fill="#3a2a3a"/>
+  </g>
+  <g id="mouth-closed" fill="none" stroke="#3a2a3a" stroke-width="5" stroke-linecap="round">
+    <path d="M162 252 Q172 261 182 252"/>
+  </g>
+  <g id="mouth-open" display="none" stroke="#3a2a3a" stroke-width="4.5" stroke-linejoin="round">
+    <path d="M159 250 Q172 247 185 250 Q184 273 172 273 Q160 273 159 250 Z" fill="#8a2f45"/>
+    <path d="M164 268 Q172 260 180 268 Q177 272 172 272 Q167 272 164 268 Z" fill="#ff8fb0" stroke="none"/>
+  </g>
+  <g id="mouth-smile" display="none" stroke="#3a2a3a" stroke-width="4.5" stroke-linejoin="round">
+    <path d="M154 249 Q172 252 190 249 Q188 269 172 269 Q156 269 154 249 Z" fill="#8a2f45"/>
+    <path d="M162 264 Q172 257 182 264 Q178 268.5 172 268.5 Q166 268.5 162 264 Z" fill="#ff8fb0" stroke="none"/>
+  </g>
+  <g id="sweat" display="none">
+    <path d="M252 140 C242 156 240 166 252 170 C264 166 262 156 252 140 Z" fill="#fff" stroke="#fff" stroke-width="12" stroke-linejoin="round"/>
+    <path d="M252 140 C242 156 240 166 252 170 C264 166 262 156 252 140 Z" fill="#9ad8ff" stroke="#3a2a3a" stroke-width="4" stroke-linejoin="round"/>
+    <ellipse cx="248" cy="160" rx="2.5" ry="4" fill="#fff"/>
+  </g>
+  <g id="sparkle" display="none" stroke-linejoin="round">
+    <g fill="#fff" stroke="#fff" stroke-width="10">
+      <path d="M40 54 Q40 74 60 74 Q40 74 40 94 Q40 74 20 74 Q40 74 40 54 Z"/>
+      <path d="M330 40 Q330 54 344 54 Q330 54 330 68 Q330 54 316 54 Q330 54 330 40 Z"/>
+      <path d="M306 96 Q306 104 314 104 Q306 104 306 112 Q306 104 298 104 Q306 104 306 96 Z"/>
+    </g>
+    <g fill="#ffe27a" stroke="#3a2a3a" stroke-width="3.5">
+      <path d="M40 54 Q40 74 60 74 Q40 74 40 94 Q40 74 20 74 Q40 74 40 54 Z"/>
+      <path d="M330 40 Q330 54 344 54 Q330 54 330 68 Q330 54 316 54 Q330 54 330 40 Z"/>
+      <path d="M306 96 Q306 104 314 104 Q306 104 306 112 Q306 104 298 104 Q306 104 306 96 Z"/>
+    </g>
+  </g>
+</svg>

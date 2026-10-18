@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <defs>
+    <path id="cc-tip" d="M190 84 C178 70 186 46 214 36 C210 52 226 62 220 82 Z"/>
+    <path id="cc-top" d="M146 128 C130 112 144 82 172 86 C178 64 222 60 232 80 C256 78 270 104 256 128 Z"/>
+    <path id="cc-mid" d="M108 170 C92 152 106 118 138 122 C148 98 188 92 204 104 C222 92 258 100 264 124 C294 120 308 152 292 170 Z"/>
+    <path id="cc-low" d="M80 232 C52 230 52 196 82 188 C80 160 112 146 140 156 C160 140 240 140 260 156 C288 146 320 160 318 188 C348 196 348 230 320 232 Q300 262 280 232 Q260 262 240 232 Q220 262 200 232 Q180 262 160 232 Q140 262 120 232 Q100 262 80 232 Z"/>
+    <path id="cc-cake" d="M86 226 L314 226 L312 274 L88 274 Z"/>
+    <path id="cc-wrap" d="M90 268 L310 268 L286 370 Q283 382 270 382 L130 382 Q117 382 114 370 Z"/>
+    <clipPath id="cc-clip-top"><use href="#cc-top"/></clipPath>
+    <clipPath id="cc-clip-mid"><use href="#cc-mid"/></clipPath>
+    <clipPath id="cc-clip-low"><use href="#cc-low"/></clipPath>
+    <clipPath id="cc-clip-wrap"><use href="#cc-wrap"/></clipPath>
+  </defs>
+  <g id="arm-left" data-pivot="100,296">
+    <ellipse cx="70" cy="314" rx="26" ry="14.5" transform="rotate(-32 70 314)" fill="#fff" stroke="#fff" stroke-width="30"/>
+    <ellipse cx="70" cy="314" rx="26" ry="14.5" transform="rotate(-32 70 314)" style="fill:var(--secondary,#9fe2c8)" stroke="#3a2a3a" stroke-width="5.5"/>
+  </g>
+  <g id="arm-right" data-pivot="300,296">
+    <ellipse cx="330" cy="314" rx="26" ry="14.5" transform="rotate(32 330 314)" fill="#fff" stroke="#fff" stroke-width="30"/>
+    <ellipse cx="330" cy="314" rx="26" ry="14.5" transform="rotate(32 330 314)" style="fill:var(--secondary,#9fe2c8)" stroke="#3a2a3a" stroke-width="5.5"/>
+  </g>
+  <g id="body">
+    <g fill="#fff" stroke="#fff" stroke-width="34" stroke-linejoin="round">
+      <use href="#cc-wrap"/><use href="#cc-cake"/><use href="#cc-low"/><use href="#cc-mid"/><use href="#cc-top"/><use href="#cc-tip"/>
+    </g>
+    <use href="#cc-wrap" style="fill:var(--secondary,#9fe2c8)"/>
+    <g clip-path="url(#cc-clip-wrap)">
+      <g fill="#3a2a3a" opacity="0.1">
+        <polygon points="117.5,268 145,268 157,382 135.5,382"/>
+        <polygon points="172.5,268 200,268 200,382 178.5,382"/>
+        <polygon points="227.5,268 255,268 243,382 221.5,382"/>
+        <polygon points="282.5,268 310,268 286,382 264.5,382"/>
+      </g>
+      <g stroke="#3a2a3a" stroke-width="3" stroke-linecap="round" opacity="0.4">
+        <line x1="117.5" y1="272" x2="135.5" y2="382"/><line x1="145" y1="272" x2="157" y2="382"/>
+        <line x1="172.5" y1="272" x2="178.5" y2="382"/><line x1="200" y1="272" x2="200" y2="382"/>
+        <line x1="227.5" y1="272" x2="221.5" y2="382"/><line x1="255" y1="272" x2="243" y2="382"/>
+        <line x1="282.5" y1="272" x2="264.5" y2="382"/>
+      </g>
+    </g>
+    <use href="#cc-wrap" fill="none" stroke="#3a2a3a" stroke-width="5.5" stroke-linejoin="round"/>
+    <use href="#cc-cake" fill="#f4b56e" stroke="#3a2a3a" stroke-width="5.5" stroke-linejoin="round"/>
+    <use href="#cc-tip" style="fill:var(--primary,#ffb3d1)" stroke="#3a2a3a" stroke-width="5.5" stroke-linejoin="round"/>
+    <use href="#cc-top" style="fill:var(--primary,#ffb3d1)"/>
+    <g clip-path="url(#cc-clip-top)"><ellipse cx="206" cy="132" rx="72" ry="14" fill="#3a2a3a" opacity="0.1"/></g>
+    <use href="#cc-top" fill="none" stroke="#3a2a3a" stroke-width="5.5" stroke-linejoin="round"/>
+    <use href="#cc-mid" style="fill:var(--primary,#ffb3d1)"/>
+    <g clip-path="url(#cc-clip-mid)"><ellipse cx="206" cy="174" rx="112" ry="18" fill="#3a2a3a" opacity="0.1"/></g>
+    <use href="#cc-mid" fill="none" stroke="#3a2a3a" stroke-width="5.5" stroke-linejoin="round"/>
+    <use href="#cc-low" style="fill:var(--primary,#ffb3d1)"/>
+    <g clip-path="url(#cc-clip-low)"><ellipse cx="210" cy="252" rx="170" ry="24" fill="#3a2a3a" opacity="0.1"/></g>
+    <use href="#cc-low" fill="none" stroke="#3a2a3a" stroke-width="5.5" stroke-linejoin="round"/>
+    <g fill="#fff" opacity="0.75">
+      <ellipse cx="98" cy="188" rx="11" ry="6" transform="rotate(-40 98 188)"/>
+      <ellipse cx="128" cy="134" rx="9" ry="5" transform="rotate(-35 128 134)"/>
+      <ellipse cx="164" cy="98" rx="8" ry="4.5" transform="rotate(-35 164 98)"/>
+      <ellipse cx="202" cy="58" rx="5" ry="3" transform="rotate(-50 202 58)"/>
+    </g>
+    <g stroke="#3a2a3a" stroke-width="2.5">
+      <rect x="-6" y="-2.5" width="12" height="5" rx="2.5" transform="translate(130 140) rotate(-25)" style="fill:var(--accent,#ffd36e)"/>
+      <rect x="-6" y="-2.5" width="12" height="5" rx="2.5" transform="translate(268 140) rotate(30)" fill="#fff"/>
+      <rect x="-6" y="-2.5" width="12" height="5" rx="2.5" transform="translate(286 154) rotate(-20)" style="fill:var(--accent,#ffd36e)"/>
+      <rect x="-6" y="-2.5" width="12" height="5" rx="2.5" transform="translate(114 156) rotate(40)" fill="#8fd3ff"/>
+      <rect x="-6" y="-2.5" width="12" height="5" rx="2.5" transform="translate(172 108) rotate(20)" fill="#8fd3ff"/>
+      <rect x="-6" y="-2.5" width="12" height="5" rx="2.5" transform="translate(214 92) rotate(-30)" style="fill:var(--accent,#ffd36e)"/>
+      <rect x="-6" y="-2.5" width="12" height="5" rx="2.5" transform="translate(242 112) rotate(60)" fill="#fff"/>
+    </g>
+  </g>
+  <g id="blush">
+    <ellipse cx="128" cy="214" rx="16" ry="9" fill="#ff5f95" opacity="0.5"/>
+    <ellipse cx="272" cy="214" rx="16" ry="9" fill="#ff5f95" opacity="0.5"/>
+  </g>
+  <g id="eyes-open">
+    <circle cx="162" cy="196" r="11.5" fill="#3a2a3a"/><circle cx="238" cy="196" r="11.5" fill="#3a2a3a"/>
+    <circle cx="158" cy="191.5" r="4" fill="#fff"/><circle cx="234" cy="191.5" r="4" fill="#fff"/>
+    <circle cx="166" cy="200" r="1.8" fill="#fff"/><circle cx="242" cy="200" r="1.8" fill="#fff"/>
+  </g>
+  <g id="eyes-closed" display="none" fill="none" stroke="#3a2a3a" stroke-width="5" stroke-linecap="round">
+    <path d="M150 195 Q162 205 174 195"/><path d="M226 195 Q238 205 250 195"/>
+  </g>
+  <g id="eyes-happy" display="none" fill="none" stroke="#3a2a3a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M150 201 Q162 185 174 201"/><path d="M226 201 Q238 185 250 201"/>
+  </g>
+  <g id="eyes-surprised" display="none">
+    <circle cx="162" cy="194" r="14" fill="#fff" stroke="#3a2a3a" stroke-width="5"/>
+    <circle cx="238" cy="194" r="14" fill="#fff" stroke="#3a2a3a" stroke-width="5"/>
+    <circle cx="162" cy="195" r="6.5" fill="#3a2a3a"/><circle cx="238" cy="195" r="6.5" fill="#3a2a3a"/>
+  </g>
+  <g id="mouth-closed" fill="none" stroke="#3a2a3a" stroke-width="5" stroke-linecap="round">
+    <path d="M190 211 Q200 220 210 211"/>
+  </g>
+  <g id="mouth-open" display="none" stroke="#3a2a3a" stroke-width="4.5" stroke-linejoin="round">
+    <path d="M187 209 Q200 206 213 209 Q212 232 200 232 Q188 232 187 209 Z" fill="#8a2f45"/>
+    <path d="M192 227 Q200 219 208 227 Q205 231 200 231 Q195 231 192 227 Z" fill="#ff8fb0" stroke="none"/>
+  </g>
+  <g id="mouth-smile" display="none" stroke="#3a2a3a" stroke-width="4.5" stroke-linejoin="round">
+    <path d="M182 208 Q200 211 218 208 Q216 228 200 228 Q184 228 182 208 Z" fill="#8a2f45"/>
+    <path d="M190 223 Q200 216 210 223 Q206 227.5 200 227.5 Q194 227.5 190 223 Z" fill="#ff8fb0" stroke="none"/>
+  </g>
+  <g id="sweat" display="none">
+    <path d="M306 146 C296 162 294 172 306 176 C318 172 316 162 306 146 Z" fill="#fff" stroke="#fff" stroke-width="12" stroke-linejoin="round"/>
+    <path d="M306 146 C296 162 294 172 306 176 C318 172 316 162 306 146 Z" fill="#9ad8ff" stroke="#3a2a3a" stroke-width="4" stroke-linejoin="round"/>
+    <ellipse cx="302" cy="166" rx="2.5" ry="4" fill="#fff"/>
+  </g>
+  <g id="sparkle" display="none" stroke-linejoin="round">
+    <g fill="#fff" stroke="#fff" stroke-width="10">
+      <path d="M58 92 Q58 112 78 112 Q58 112 58 132 Q58 112 38 112 Q58 112 58 92 Z"/>
+      <path d="M346 62 Q346 76 360 76 Q346 76 346 90 Q346 76 332 76 Q346 76 346 62 Z"/>
+      <path d="M330 118 Q330 126 338 126 Q330 126 330 134 Q330 126 322 126 Q330 126 330 118 Z"/>
+    </g>
+    <g fill="#ffe27a" stroke="#3a2a3a" stroke-width="3.5">
+      <path d="M58 92 Q58 112 78 112 Q58 112 58 132 Q58 112 38 112 Q58 112 58 92 Z"/>
+      <path d="M346 62 Q346 76 360 76 Q346 76 346 90 Q346 76 332 76 Q346 76 346 62 Z"/>
+      <path d="M330 118 Q330 126 338 126 Q330 126 330 134 Q330 126 322 126 Q330 126 330 118 Z"/>
+    </g>
+  </g>
+</svg>
