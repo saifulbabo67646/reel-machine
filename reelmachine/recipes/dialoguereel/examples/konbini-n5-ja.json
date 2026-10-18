@@ -1,0 +1,38 @@
+{
+  "mode": "storyboard",
+  "title": "At the konbini till",
+  "language": "ja",
+  "meaning_language": "en",
+  "level": "N5",
+  "scene": "🏪",
+  "look": "pastel",
+  "flow": "listen_first",
+  "quiz": true,
+  "cast": {"characters": [
+    {"id": "customer", "name": "Onigiri", "voice": "fake:default", "side": "left",
+     "source": {"kind": "builtin", "name": "onigiri"}},
+    {"id": "clerk", "name": "Cat", "voice": "fake:default", "side": "right",
+     "source": {"kind": "builtin", "name": "cat"}}
+  ]},
+  "lines": [
+    {"speaker": "clerk", "text": "いらっしゃいませ。", "reading": "Irasshaimase.", "meaning": "Welcome!",
+     "emotion": "happy"},
+    {"speaker": "customer", "text": "このお弁当{べんとう}をください。", "reading": "Kono obentou o kudasai.",
+     "meaning": "This bento, please.",
+     "keys": [{"text": "お弁当{べんとう}", "reading": "obentou", "meaning": "boxed lunch"},
+              {"text": "ください", "reading": "kudasai", "meaning": "please (give me)"}]},
+    {"speaker": "clerk", "text": "五百{ごひゃく}円{えん}です。", "reading": "Gohyaku en desu.",
+     "meaning": "That's 500 yen."},
+    {"speaker": "clerk", "text": "袋{ふくろ}はいりますか。", "reading": "Fukuro wa irimasu ka?",
+     "meaning": "Do you need a bag?", "slow": true,
+     "keys": [{"text": "いります", "reading": "irimasu", "meaning": "to need"}]},
+    {"speaker": "customer", "text": "いいえ、いりません。", "reading": "Iie, irimasen.",
+     "meaning": "No, I don't need one."},
+    {"speaker": "customer", "text": "あ、おはしをください。", "reading": "A, ohashi o kudasai.",
+     "meaning": "Oh, chopsticks, please.", "emotion": "surprised",
+     "keys": [{"text": "はし", "reading": "hashi", "meaning": "chopsticks"}]},
+    {"speaker": "clerk", "text": "はい、どうぞ。", "reading": "Hai, douzo.", "meaning": "Here you go."},
+    {"speaker": "customer", "text": "ありがとうございます。", "reading": "Arigatou gozaimasu.",
+     "meaning": "Thank you!", "emotion": "happy"}
+  ]
+}
