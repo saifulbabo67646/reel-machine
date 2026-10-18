@@ -27,17 +27,18 @@ _W, _H = 270, 480
 _SILENCE = re.compile(r"silence_(start|end):\s*(-?[\d.]+)")
 
 
-def dialogue_span(plan: Schedule) -> tuple[int, int]:
-    """From the first listen pass (or first line) to the last line's end, its slow replay included."""
-    first = plan.listen[0] if plan.listen else plan.lines[0]
+def dialogue_spans(plan: Schedule) -> list[tuple[int, int]]:
+    """The spans that must not go quiet: the listen pass, if any, and the lines to the last one's end, slow
+    replay included. The bridge between the two is a planned pause, so it is left out."""
     end = max(w.slow_start_ms + w.slow_ms if w.slow_start_ms is not None else w.end_ms for w in plan.lines)
-    return first.start_ms, end
+    listen = [(plan.listen[0].start_ms, plan.listen[-1].end_ms)] if plan.listen else []
+    return [*listen, (plan.lines[0].start_ms, end)]
 
 
-def long_silences(silences: list[tuple[int, int]], span: tuple[int, int],
+def long_silences(silences: list[tuple[int, int]], spans: list[tuple[int, int]],
                   max_ms: int = SILENT_MAX_MS) -> list[tuple[int, int]]:
-    """Each silence clipped to `span`, keeping those longer than `max_ms`."""
-    clipped = [(max(s, span[0]), min(e, span[1])) for s, e in silences]
+    """Each silence clipped to each span, keeping those longer than `max_ms`."""
+    clipped = [(max(s, a), min(e, b)) for a, b in spans for s, e in silences]
     return [(s, e) for s, e in clipped if e - s > max_ms]
 
 
@@ -61,11 +62,16 @@ def check_silence(audio: Path, plan: Schedule, settings: Settings) -> CheckResul
     proc = subprocess.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-i", str(audio), "-af",
                            f"silencedetect=n={SILENCE_DB}dB:d={SILENT_MAX_MS / 1000}", "-f", "null", "-"],
                           capture_output=True, text=True)
-    span = dialogue_span(plan)
-    found = long_silences(parse_silences(proc.stderr or "", plan.duration_ms), span)
+    if proc.returncode != 0:
+        lines = (proc.stderr or "").strip().splitlines()
+        return CheckResult(name="silence", ok=False,
+                           detail=f"ffmpeg failed ({proc.returncode}): {lines[-1] if lines else 'no output'}")
+    spans = dialogue_spans(plan)
+    found = long_silences(parse_silences(proc.stderr or "", plan.duration_ms), spans)
+    where = ", ".join(f"{a}-{b} ms" for a, b in spans)
     return CheckResult(name="silence", ok=not found,
                        detail="silent " + ", ".join(f"{s}-{e} ms" for s, e in found) if found
-                       else f"no gap over {SILENT_MAX_MS} ms in {span[0]}-{span[1]} ms")
+                       else f"no gap over {SILENT_MAX_MS} ms in {where}")
 
 
 def _grey(video: Path, at_s: float, settings: Settings) -> np.ndarray | None:

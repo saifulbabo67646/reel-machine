@@ -11,7 +11,7 @@ from reelmachine.recipes.dialoguereel.schedule import schedule
 
 
 def test_long_silences_clips_to_span():
-    assert verify.long_silences([(0, 1500), (2000, 4000), (9000, 9600)], (1500, 9200)) == [(2000, 4000)]
+    assert verify.long_silences([(0, 1500), (2000, 4000), (9000, 9600)], [(1500, 9200)]) == [(2000, 4000)]
 
 
 def test_parse_silences_open_end():
@@ -21,17 +21,30 @@ def test_parse_silences_open_end():
     assert verify.parse_silences(err, 10_000) == [(1200, 3000), (8500, 10_000)]
 
 
-def test_dialogue_span_listen_first():
+def test_dialogue_spans_listen_first_leave_out_the_bridge():
     plan = schedule([1000] * 4, slow=[False, True, False, False], listen_first=True, recap=True, quiz_line=1)
-    start, end = verify.dialogue_span(plan)
-    assert start == plan.listen[0].start_ms
-    assert end == max(w.slow_start_ms + w.slow_ms if w.slow_start_ms is not None else w.end_ms for w in plan.lines)
-    assert verify.long_silences([], (start, end)) == []
+    listen, dialogue = verify.dialogue_spans(plan)
+    assert listen == (plan.listen[0].start_ms, plan.listen[-1].end_ms)
+    assert dialogue == (plan.lines[0].start_ms, max(
+        w.slow_start_ms + w.slow_ms if w.slow_start_ms is not None else w.end_ms for w in plan.lines))
+    spans = [listen, dialogue]
+    mid = (plan.listen[-1].end_ms + plan.lines[0].start_ms) // 2
+    over_bridge = (mid - 800, mid + 800)   # 1600 ms over the planned pause, reaching into both spans
+    assert over_bridge[0] < plan.listen[-1].end_ms and over_bridge[1] > plan.lines[0].start_ms
+    assert verify.long_silences([over_bridge], spans) == []
+    between = (plan.lines[0].end_ms - 50, plan.lines[0].end_ms + 1550)   # 1600 ms between two lines
+    assert verify.long_silences([between], spans) == [between]
 
 
-def test_dialogue_span_without_listen_ends_with_the_slow_replay():
+def test_dialogue_spans_without_listen_end_with_the_slow_replay():
     plan = schedule([1000, 1000], slow=[False, True])
-    assert verify.dialogue_span(plan) == (plan.lines[0].start_ms, plan.lines[1].slow_start_ms + plan.lines[1].slow_ms)
+    assert verify.dialogue_spans(plan) == [(plan.lines[0].start_ms, plan.lines[1].slow_start_ms + plan.lines[1].slow_ms)]
+
+
+def test_check_silence_fails_when_ffmpeg_fails(tmp_path):
+    plan = schedule([1000, 1000])
+    result = verify.check_silence(tmp_path / "missing.wav", plan, get_settings())
+    assert result.name == "silence" and not result.ok and result.detail
 
 
 def test_text_energy_flat_vs_text():
