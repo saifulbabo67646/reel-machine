@@ -1,4 +1,5 @@
 import json
+from html.parser import HTMLParser
 
 from reelmachine.core.timeline import WordSpan
 from reelmachine.recipes.dialoguereel import compose
@@ -86,3 +87,57 @@ def test_project_key_changes_with_the_cast_and_the_runtime(tmp_path, monkeypatch
     assert project_key(doc, CAST) == key
     (runtime / "reel.css").write_text((runtime / "reel.css").read_text() + "\n/* changed */")
     assert project_key(doc, CAST) != key
+
+
+class _Scripts(HTMLParser):
+    """The page's <script> elements as the HTML parser sees them: (attrs, text)."""
+
+    def __init__(self):
+        super().__init__()
+        self.scripts, self._open = [], None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script":
+            self._open = (dict(attrs), [])
+
+    def handle_data(self, data):
+        if self._open is not None:
+            self._open[1].append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "script" and self._open is not None:
+            self.scripts.append((self._open[0], "".join(self._open[1])))
+            self._open = None
+
+
+def _with_text(text):
+    data = INPUTS.model_dump()
+    data["lines"][2]["text"] = text
+    return DialogueReelInputs.model_validate(data)
+
+
+def test_markup_in_a_line_cannot_swallow_the_runtime_script(tmp_path):
+    for text in ("<!--<script>", "<!--<script></script>-->", "</script><script>alert(1)</script>"):
+        project = write_project(reel_document(_with_text(text), CAST, PLAN, WORDS), CAST, tmp_path / "p")
+        html = (project / "index.html").read_text(encoding="utf-8")
+        data_at = html.index('<script id="reel-data"')
+        assert "<" not in html[data_at + len('<script id="reel-data" type="application/json">'):].split("</script>")[0]
+        parser = _Scripts()
+        parser.feed(html)
+        by_id = {attrs.get("id") or attrs.get("src"): body for attrs, body in parser.scripts}
+        assert json.loads(by_id["reel-data"])["lines"][2]["runs"][0]["t"] == text
+        assert "./runtime/main.mjs" in by_id and by_id["./runtime/main.mjs"] == ""
+        # the module script comes after the data script closes, in the raw text too
+        assert html.index('<script type="module" src="./runtime/main.mjs">') > html.index("</script>", data_at)
+
+
+def test_the_hook_prompt_follows_the_meaning_language():
+    for lang, prompt in (("en", "Can you understand this?"), ("ja", "わかるかな？"), ("ko", "이해할 수 있나요?"),
+                         ("es-MX", "¿Lo entiendes?"), ("zh", "你能听懂吗？")):
+        inputs = INPUTS.model_copy(update={"meaning_language": lang})
+        assert reel_document(inputs, CAST, PLAN, WORDS)["prompt"] == prompt
+
+
+def test_other_meaning_languages_have_no_prompt():
+    inputs = INPUTS.model_copy(update={"meaning_language": "fr"})
+    assert reel_document(inputs, CAST, PLAN, WORDS)["prompt"] is None

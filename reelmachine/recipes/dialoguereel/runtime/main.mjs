@@ -11,8 +11,20 @@ const TILT_DEG = 4;
 const EXIT_MS = 140; // the previous bubble shrinks up into the history ...
 const ENTER_DELAY_MS = 70, ENTER_MS = 220; // ... and the new one pops in just after
 const SLIDE_MS = 300; // history rows move up one slot
-const ROW_H = 54, ROW_GAP = 8, BUBBLE_TOP = 300;
-const ROW_TOP = [BUBBLE_TOP - 14 - ROW_H, BUBBLE_TOP - 14 - 2 * ROW_H - ROW_GAP, BUBBLE_TOP - 14 - 3 * ROW_H - 2 * ROW_GAP];
+// history rows are their line at 70 % size: the bubble's fitted text size and its meaning size, times 0.7
+const ROW_SCALE = 0.7, MEANING_PX = 56, ROW_LEADING = 1.3, ROW_GAP = 10, ROW_AIR = 14;
+const BUBBLE_TOP = 372; // two rows at the largest size fit between the badge (bottom 148) and the bubble
+
+/** Each history row's top when line `a` is active: the newest sits just above the bubble, older ones above it. */
+function rowTops(rows, a) {
+  const tops = new Map();
+  let bottom = BUBBLE_TOP - ROW_AIR;
+  for (let k = a - 1; k >= Math.max(0, a - 3); k--) {
+    tops.set(k, bottom - rows[k].height);
+    bottom -= rows[k].height + ROW_GAP;
+  }
+  return tops;
+}
 
 function el(tag, className, parent, text) {
   const node = document.createElement(tag);
@@ -91,14 +103,18 @@ function build(doc, root) {
   ui.hook = el("div", "hook", root);
   ui.scene = doc.scene ? el("div", "scene", ui.hook, doc.scene) : null;
   el("div", "title", ui.hook, doc.title);
-  el("div", "sub", ui.hook, "Can you understand this?");
+  if (doc.prompt) el("div", "sub", ui.hook, doc.prompt);
 
   const stage = el("div", "stage", root);
   ui.rows = doc.lines.map((line) => {
-    const row = el("div", `row ${ui.bySide[line.speaker] || "left"}`, stage);
-    el("span", "row-text", row, line.runs.map((r) => r.t).join(""));
-    el("span", "row-meaning", row, line.meaning);
-    return row;
+    const node = el("div", `row ${ui.bySide[line.speaker] || "left"}`, stage);
+    const plain = line.runs.map((r) => r.t).join("");
+    const size = Math.round(ROW_SCALE * fitFont(plain));
+    const height = Math.round(size * ROW_LEADING);
+    Object.assign(node.style, { height: `${height}px`, lineHeight: `${height}px`, borderRadius: `${height / 2}px` });
+    el("span", "row-text", node, plain).style.fontSize = `${size}px`;
+    el("span", "row-meaning", node, line.meaning).style.fontSize = `${Math.round(ROW_SCALE * MEANING_PX)}px`;
+    return { node, height };
   });
   ui.bubbles = doc.lines.map((line) => buildBubble(stage, line, ui.bySide[line.speaker] || "left"));
   return ui;
@@ -189,17 +205,18 @@ function renderFrame(ui, doc, t) {
   const slide = line ? fade(ms, line.startMs, SLIDE_MS) : 0;
   const shown = new Set(history(lines, a));
   if (a >= 3) shown.add(a - 3); // leaving through the top
-  ui.rows.forEach((row, k) => {
+  const before = rowTops(ui.rows, a - 1), after = rowTops(ui.rows, a);
+  ui.rows.forEach(({ node }, k) => {
     if (!shown.has(k)) {
-      row.style.opacity = "0";
+      node.style.opacity = "0";
       return;
     }
     const slot = a - 1 - k;
-    const from = slot === 0 ? BUBBLE_TOP + 10 : ROW_TOP[slot - 1];
-    const top = lerp(from, ROW_TOP[slot], slide);
+    const from = slot === 0 ? BUBBLE_TOP + 10 : before.get(k);
+    const top = lerp(from, after.get(k), slide);
     const alpha = slot === 0 ? 0.45 * slide : slot === 2 ? 0.45 * (1 - slide) : 0.45;
-    row.style.opacity = alpha.toFixed(3);
-    row.style.transform = `translateY(${top.toFixed(1)}px)`;
+    node.style.opacity = alpha.toFixed(3);
+    node.style.transform = `translateY(${top.toFixed(1)}px)`;
   });
 }
 

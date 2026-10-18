@@ -27,10 +27,20 @@ RUNTIME_FILES = ("*.mjs", "*.css")
 
 WIDTH, HEIGHT, FPS = 1080, 1920, 30
 CAST_SECONDS = 2
+# the hook's "can you understand this?" line, in the viewer's language (meaning_language's primary subtag);
+# any other language has no prompt and the runtime shows no pill
+PROMPTS: dict[str, str] = {
+    "en": "Can you understand this?", "ja": "わかるかな？", "ko": "이해할 수 있나요?", "es": "¿Lo entiendes?",
+    "zh": "你能听懂吗？",
+}
 LOOKS: dict[str, dict[str, str]] = {
     "pop": {"bg": "#4b2bff", "text": "#ffffff", "reading": "#7fd3ff", "meaning": "#9fe0ff", "accent": "#ffe066",
             "bubble": "rgba(255,255,255,0.10)"},
 }
+
+
+def prompt_for(meaning_language: str) -> str | None:
+    return PROMPTS.get(meaning_language.strip().lower().replace("_", "-").split("-")[0])
 
 
 def _characters(cast: ResolvedCast) -> list[dict[str, Any]]:
@@ -56,7 +66,7 @@ def reel_document(inputs: DialogueReelInputs, cast: ResolvedCast, plan: Schedule
     return {
         "mode": "reel", "width": WIDTH, "height": HEIGHT, "duration": plan.duration_ms / 1000,
         "look": dict(LOOKS[inputs.look]), "title": inputs.title, "level": inputs.level, "scene": inputs.scene or "",
-        "language": inputs.language, "hookMs": plan.hook_ms, "characters": _characters(cast), "lines": lines,
+        "language": inputs.language, "prompt": prompt_for(inputs.meaning_language), "hookMs": plan.hook_ms, "characters": _characters(cast), "lines": lines,
     }
 
 
@@ -103,7 +113,10 @@ def write_project(doc: dict[str, Any], cast: ResolvedCast, dest: Path) -> Path:
     (dest / "runtime").mkdir(parents=True)
     for path in _runtime_paths():
         shutil.copy2(path, dest / "runtime" / path.name)
-    data = json.dumps(doc, ensure_ascii=False, allow_nan=False).replace("</", "<\\/")
+    # every "<" escaped, not only "</": text like "<!--<script>" would otherwise put the HTML parser into its
+    # "script data double escaped" state, the real </script> would not close the data script, and the
+    # runtime's module script would be swallowed (buildReady never settles and the render hangs)
+    data = json.dumps(doc, ensure_ascii=False, allow_nan=False).replace("<", "\\u003c")
     html = _TEMPLATE.format(w=WIDTH, h=HEIGHT, lang=escape(str(doc.get("language") or "en")),
                             duration=f"{doc['duration']:.3f}", characters=_character_html(cast), data=data)
     (dest / "index.html").write_text(html, encoding="utf-8")
