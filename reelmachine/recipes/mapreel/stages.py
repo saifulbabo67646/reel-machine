@@ -686,6 +686,12 @@ def credits(inputs: MapReelInputs) -> list[str]:
     return out
 
 
+def map_data(look: str) -> dict[str, dict]:
+    """The licences of the map data the look draws from, as the manifest lists them (as credits() does)."""
+    return {k: v.model_dump() for k, v in geodata.LICENCES.items()
+            if look == "satellite" or v is not geodata.BLUE_MARBLE}
+
+
 class ComposeStage:
     id = "compose"
     revision = 1
@@ -751,7 +757,7 @@ class RenderStage:
         manifest = {"reel": str(video), "recipe": "mapreel", "mode": "hyperframes",
                     "created": datetime.now(timezone.utc).isoformat(), "durationMs": timeline.duration_ms,
                     "segments": len(prep.tracks), "look": inputs.look, "renderer": prep.renderer,
-                    "data": {k: v.model_dump() for k, v in geodata.LICENCES.items()},
+                    "data": map_data(inputs.look),
                     "credits": options["credits"]}
         manifest_path = outdir / f"{name}.json"
         manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")

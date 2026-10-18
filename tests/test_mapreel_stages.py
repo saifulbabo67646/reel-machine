@@ -423,3 +423,9 @@ def test_hold_right_after_a_versus_is_refused_at_its_path():
         stages.resolve_segments(inputs, Atlas.load(FIXTURE))
     assert caught.value.details["path"] == "segments[1].camera.hold"
     assert caught.value.hint == "a versus has no single frame to hold; drop hold"
+
+
+@pytest.mark.parametrize("look, keys", [("satellite", {"countries", "regions", "world", "detail"}),
+                                        ("flat", {"countries", "regions"}), ("dark", {"countries", "regions"})])
+def test_the_manifest_credits_blue_marble_only_on_the_satellite_look(look, keys):
+    assert set(stages.map_data(look)) == keys
