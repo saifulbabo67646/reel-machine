@@ -18,11 +18,13 @@ GUIDE: dict[str, Any] = {
         "5. Places: resolve countries with find_places (codes like 'ITA'). For a regions segment, list the "
         "country's states or prefectures with find_places(query, limit, country='USA'); an empty query lists "
         "every region (raise `limit`, up to 50). Name each by its ISO 3166-2 code ('US-TX', 'JP-13') or name.",
-        "6. Images: give an item `image` (an https URL or a local file) or an `emoji`; anything unusable shows "
-        "as a bold text badge. 'commons:File:<name>' is accepted but shows as a badge for now (until Commons "
-        "images are fetched); link the file's https URL instead.",
+        "6. Images: search with find_images(query, kind='logo'|'photo'|'flag'|'any') and put a result's `id` "
+        "('commons:File:<name>') in the item's `image` (see `images`). An https URL or a local file works too; "
+        "an `emoji` is the light option. Anything unusable shows as a bold text badge.",
         "7. probe and fix every failed check and every `lint` finding in details.lint (see `lint`).",
-        "8. start_job with mode 'storyboard', look at storyboard.jpg, then start_job with mode 'build'.",
+        "8. start_job with mode 'storyboard', look at storyboard.jpg, then start_job with mode 'build'. Paste "
+        "sources.md (every claim's source, every image's licence, the map and voice credits) into the video "
+        "description.",
     ],
     "kinds": [
         "country: `country` and 1-8 `items` (name, plus say/emoji/image/source/at). The camera flies in, the "
@@ -43,6 +45,23 @@ GUIDE: dict[str, Any] = {
         "dark: a night map, navy land on near-black sea; fills glow neon in their own colour. Good for "
         "dramatic or 'shocking' topics.",
         "Set `look` on the script; every segment uses it. flat and dark need no satellite download.",
+        "Every look's map credits go in sources.md: Natural Earth for the borders, and NASA Blue Marble for "
+        "the satellite imagery when the look is satellite.",
+    ],
+    "images": [
+        "find_images(query, kind, limit, include_nonfree) searches Wikimedia Commons. kind 'logo' adds 'logo' to "
+        "the query and puts SVG and PNG first, 'flag' adds 'flag', 'photo' drops SVGs. Each result has an `id` "
+        "('commons:File:<name>'), a title, a thumb_url to look at, its licence, attribution and `permitted`.",
+        "Put the `id` exactly as given in the item's `image`: 'commons:File:Nike_logo.svg'. The build checks its licence, "
+        "fetches it (an SVG as a 1024 px PNG) and caches it for later reels.",
+        "Licence note: only free licences (public domain, CC0, CC BY, CC BY-SA and the like) are returned unless "
+        "you pass include_nonfree; a result with `permitted: false` is never drawn and shows as a badge. Logos "
+        "and brand names may be trademarked even when the file is free: check `restrictions`, and leave a logo "
+        "out when unsure.",
+        "Attribution is automatic: every image's licence, author and link are written to sources.md, the "
+        "file each reel ships for the video description. An https URL or local file is credited there as "
+        "caller-supplied: you answer for its rights.",
+        "No image found? Use an `emoji`, or nothing: the item shows as a bold text badge in its country's colour.",
     ],
     "hooks": [
         "Curiosity gap: hold back the answer. 'Number five might shock you.' / 'Only one country eats this "
@@ -132,8 +151,8 @@ GUIDE: dict[str, Any] = {
         "Items pop when the voice says their name: write the name in the narration exactly, or give `say` "
         "for how it is pronounced and `at` (seconds) to force a time.",
         "Keep a new visual every second: 3-5 items per country segment, segments of 3-5 seconds.",
-        "`image` takes an https URL, a local file or 'commons:File:<name>' (a badge for now); anything unusable "
-        "shows as a bold text badge.",
+        "`image` takes a 'commons:File:<name>' id from find_images, an https URL or a local file; anything "
+        "unusable shows as a bold text badge.",
         "Every stat needs a source: give each item, stat and rank a `source` URL to the page that states it.",
         "A region's tag on the map is its `say` or its name shortened ('Ōsaka Prefecture' shows 'Ōsaka'); "
         "keep `say` short.",

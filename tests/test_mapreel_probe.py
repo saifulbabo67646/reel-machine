@@ -267,3 +267,19 @@ def test_hold_after_a_versus_fails_probe_with_its_path(tmp_path):
     report = MapReelRecipe().probe(MapReelInputs.model_validate({"segments": segs, "lint": "warn"}), _ctx(tmp_path))
     assert not report.ok and report.details["error"]["path"] == "segments[1].camera.hold"
     assert report.details["error"]["hint"] == "a versus has no single frame to hold; drop hold"
+
+
+def test_the_guide_tells_the_agent_how_images_and_credits_work():
+    from reelmachine.recipes.mapreel.guide import GUIDE
+
+    images = " ".join(GUIDE["images"])
+    for needle in ("find_images", "commons:File:", "licence", "include_nonfree", "trademark", "sources.md",
+                   "video description"):
+        assert needle in images, needle
+    looks = " ".join(GUIDE["looks"])
+    assert "sources.md" in looks and "Blue Marble" in looks and "Natural Earth" in looks
+    step = next(s for s in GUIDE["workflow"] if "Images" in s)
+    assert "find_images" in step and "commons:File:" in step and "badge for now" not in step
+    assert any("sources.md" in s for s in GUIDE["workflow"])
+    every = " ".join(line for lines in GUIDE.values() for line in lines)
+    assert "a badge for now" not in every and "until Commons" not in every
