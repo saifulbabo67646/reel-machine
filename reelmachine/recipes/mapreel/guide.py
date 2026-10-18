@@ -52,8 +52,8 @@ GUIDE: dict[str, Any] = {
         "find_images(query, kind, limit, include_nonfree) searches Wikimedia Commons. kind 'logo' adds 'logo' to "
         "the query and puts SVG and PNG first, 'flag' adds 'flag', 'photo' drops SVGs. Each result has an `id` "
         "('commons:File:<name>'), a title, a thumb_url to look at, its licence, attribution and `permitted`.",
-        "Put the `id` exactly as given in the item's `image`: 'commons:File:Nike_logo.svg'. The build checks its licence, "
-        "fetches it (an SVG as a 1024 px PNG) and caches it for later reels.",
+        "Put the `id` exactly as given in the item's `image`: 'commons:File:Nike_logo.svg'. The build checks "
+        "its licence, fetches it (an SVG as a 1024 px PNG) and caches it for later reels.",
         "Licence note: only free licences (public domain, CC0, CC BY, CC BY-SA and the like) are returned unless "
         "you pass include_nonfree; a result with `permitted: false` is never drawn and shows as a badge. Logos "
         "and brand names may be trademarked even when the file is free: check `restrictions`, and leave a logo "
