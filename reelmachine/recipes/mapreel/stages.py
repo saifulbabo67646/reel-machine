@@ -33,7 +33,7 @@ from ..explainer3d.stages import speak_line
 from ..explainer3d.timing import ShotWindow, estimate_speech_ms, fit_windows, shot_windows
 from ..explainer3d.video import join_shots, mux
 from . import basemap, commons, compose, geodata, kinds, lint, palette, sources
-from .geometry import SAFE, Frame, frame_for, shape_of, visible_bbox
+from .geometry import SAFE, Frame, Shape, frame_for, shape_of, visible_bbox
 from .models import (
     ComposeOutput, GeoOutput, ImagesOutput, MapReelInputs, NarrationOutput, PrepOutput, RenderOutput,
     ResolvedSegment, ScriptOutput, SegmentProject, SegmentsOutput, Track, Window,
@@ -92,6 +92,10 @@ def resolve_segments(inputs: MapReelInputs, atlas: Atlas,
     admin-1 data; it is called once, and only when a `regions` segment needs it."""
     resolved: list[tuple[str, int, Any, list[str], dict[str, str]]] = []
     for index, (seg_id, segment) in enumerate(zip(inputs.segment_ids(), inputs.segments)):
+        if index and segment.camera.hold and inputs.segments[index - 1].kind == "versus":
+            raise InvalidInput(f"segment {index + 1} holds the camera right after a versus",
+                               hint="a versus has no single frame to hold; drop hold",
+                               details={"path": f"segments[{index}].camera.hold"})
         codes, names = [], {}
         for j, query in enumerate(_codes(segment)):
             try:
@@ -193,6 +197,17 @@ class ScriptStage:
         return ScriptOutput(inputs=inputs, segments=segments, lint=[asdict(f) for f in found])
 
 
+def choose_frame(spec: Any, shapes: list[Shape], previous: Frame | None) -> Frame:
+    """A segment's landed frame: the previous one when it holds the camera, else its places fitted to the screen.
+    A rank sits lower, under its badge and stat card: a held rank whose country the held frame would put under
+    them (or off RANK_SAFE at all) is framed afresh inside RANK_SAFE."""
+    safe = kinds.RANK_SAFE if spec.kind == "rank" else SAFE
+    if spec.camera.hold and previous is not None and spec.kind != "versus":
+        if spec.kind != "rank" or all(compose.inside(previous, shape, safe) for shape in shapes):
+            return previous
+    return compose.segment_frame(shapes, spec.camera.zoom, safe=safe)
+
+
 class GeoStage:
     """Frames for every segment, the world layer, and one sharp layer per segment."""
 
@@ -211,13 +226,7 @@ class GeoStage:
         previous = None
         for seg, spec in zip(payload.segments, payload.inputs.segments):
             ctx.cancel.raise_if_cancelled()
-            if spec.camera.hold and previous is not None and spec.kind != "versus":
-                frame = previous
-            else:
-                # a rank sits lower, under its badge and stat card
-                safe = kinds.RANK_SAFE if spec.kind == "rank" else SAFE
-                frame = compose.segment_frame([shape_of(atlas.places[c]) for c in seg.codes], spec.camera.zoom,
-                                              safe=safe)
+            frame = choose_frame(spec, [shape_of(atlas.places[c]) for c in seg.codes], previous)
             # a versus is drawn in its panels; its full-screen union frame is only where the next segment flies from
             frames[seg.id] = frame.to_dict()
             if spec.kind == "versus":

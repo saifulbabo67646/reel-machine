@@ -54,6 +54,15 @@ def segment_frame(shapes: list[Shape], zoom: float, safe: tuple[float, float, fl
     return frame_for(union, zoom=zoom, safe=safe)
 
 
+def inside(frame: Frame, shape: Shape, safe: tuple[float, float, float, float], tol_px: float = 1.0) -> bool:
+    """Whether the shape's main cluster, in the world copy nearest the frame, lies inside `safe` on screen."""
+    x0, y0, x1, y1 = shape.main
+    shift = _shift(frame, shape)
+    (left, top), (right, bottom) = to_screen(frame, np.array([[x0 + shift, y0], [x1 + shift, y1]]))
+    return (left >= safe[0] * WIDTH - tol_px and top >= safe[1] * HEIGHT - tol_px
+            and right <= safe[2] * WIDTH + tol_px and bottom <= safe[3] * HEIGHT + tol_px)
+
+
 def _shift(frame: Frame, shape: Shape) -> int:
     """One world-copy shift for the whole shape, from its main cluster, so no part is torn away."""
     return round(frame.x - (shape.main[0] + shape.main[2]) / 2)

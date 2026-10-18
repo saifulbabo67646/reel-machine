@@ -351,3 +351,75 @@ def test_the_reel_credits_blue_marble_only_on_the_satellite_look(look, blue_marb
     credits = stages.credits(inputs)
     assert geodata.NATURAL_EARTH.attribution in credits
     assert (geodata.BLUE_MARBLE.attribution in credits) is blue_marble
+
+
+# -- a held camera: a rank keeps its badge clear, and a versus has no frame to hold --------------------------
+
+
+def _screen_box(frame, shape):
+    """The shape's main cluster on screen (px), in the world copy nearest the frame."""
+    from reelmachine.recipes.mapreel.geometry import HEIGHT, WIDTH
+
+    x0, y0, x1, y1 = shape.main
+    shift = round(frame.x - (x0 + x1) / 2)
+    return ((x0 + shift - frame.x) * frame.s + WIDTH / 2, (y0 - frame.y) * frame.s + HEIGHT / 2,
+            (x1 + shift - frame.x) * frame.s + WIDTH / 2, (y1 - frame.y) * frame.s + HEIGHT / 2)
+
+
+def _inside(box, safe):
+    from reelmachine.recipes.mapreel.geometry import HEIGHT, WIDTH
+
+    tol = 1.0
+    return (box[0] >= safe[0] * WIDTH - tol and box[1] >= safe[1] * HEIGHT - tol
+            and box[2] <= safe[2] * WIDTH + tol and box[3] <= safe[3] * HEIGHT + tol)
+
+
+def _held(prev_countries, code):
+    inputs = MapReelInputs.model_validate({"segments": [
+        {"kind": "highlight", "countries": prev_countries, "narration": "These."},
+        {"kind": "rank", "rank": 1, "country": code, "narration": "Number one.", "camera": {"hold": True}}]})
+    return inputs.segments
+
+
+def test_a_held_rank_reframes_inside_rank_safe_when_the_held_frame_would_put_it_under_the_badge():
+    from reelmachine.recipes.mapreel import compose, kinds
+    from reelmachine.recipes.mapreel.geometry import shape_of
+    from reelmachine.recipes.mapreel.places import Atlas
+
+    atlas = Atlas.load(FIXTURE)
+    first, rank = _held(["NOR", "ZAF"], "NOR")
+    previous = stages.choose_frame(first, [shape_of(atlas.places[c]) for c in ("NOR", "ZAF")], None)
+    nor = shape_of(atlas.places["NOR"])
+    assert not _inside(_screen_box(previous, nor), kinds.RANK_SAFE)  # Norway's top is under the badge
+    frame = stages.choose_frame(rank, [nor], previous)
+    assert frame != previous
+    assert _inside(_screen_box(frame, nor), kinds.RANK_SAFE)
+    assert frame == compose.segment_frame([nor], rank.camera.zoom, safe=kinds.RANK_SAFE)
+
+
+def test_a_held_rank_that_is_already_clear_of_the_badge_keeps_the_held_frame():
+    from reelmachine.recipes.mapreel import kinds
+    from reelmachine.recipes.mapreel.geometry import shape_of
+    from reelmachine.recipes.mapreel.places import Atlas
+
+    atlas = Atlas.load(FIXTURE)
+    first, rank = _held(["NOR", "ZAF"], "ITA")
+    previous = stages.choose_frame(first, [shape_of(atlas.places[c]) for c in ("NOR", "ZAF")], None)
+    ita = shape_of(atlas.places["ITA"])
+    assert _inside(_screen_box(previous, ita), kinds.RANK_SAFE)
+    assert stages.choose_frame(rank, [ita], previous) == previous
+
+
+def test_hold_right_after_a_versus_is_refused_at_its_path():
+    from reelmachine.core.errors import InvalidInput
+    from reelmachine.recipes.mapreel.places import Atlas
+
+    inputs = MapReelInputs.model_validate({"segments": [
+        {"kind": "versus", "countries": ["ITA", "FRA"], "narration": "Italy versus France.",
+         "stats": [{"value": "1"}, {"value": "2"}]},
+        {"kind": "country", "country": "ITA", "narration": "Italy has Gucci.", "items": [{"name": "Gucci"}],
+         "camera": {"hold": True}}]})
+    with pytest.raises(InvalidInput) as caught:
+        stages.resolve_segments(inputs, Atlas.load(FIXTURE))
+    assert caught.value.details["path"] == "segments[1].camera.hold"
+    assert caught.value.hint == "a versus has no single frame to hold; drop hold"

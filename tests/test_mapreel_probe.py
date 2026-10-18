@@ -258,3 +258,12 @@ def test_the_brands_example_still_probes_with_no_lint_error(tmp_path):
     report = _strict(tmp_path, brands)
     assert report.ok, report.checks
     assert not [f for f in report.details["lint"] if f["severity"] == "error"]
+
+
+def test_hold_after_a_versus_fails_probe_with_its_path(tmp_path):
+    segs = [{"kind": "versus", "countries": ["ITA", "FRA"], "narration": "Italy versus France.",
+             "stats": [{"value": "1"}, {"value": "2"}]},
+            {**ITALY[0], "camera": {"hold": True}}]
+    report = MapReelRecipe().probe(MapReelInputs.model_validate({"segments": segs, "lint": "warn"}), _ctx(tmp_path))
+    assert not report.ok and report.details["error"]["path"] == "segments[1].camera.hold"
+    assert report.details["error"]["hint"] == "a versus has no single frame to hold; drop hold"
