@@ -191,3 +191,14 @@ def test_a_stale_or_damaged_regions_index_is_rebuilt(tmp_path):
         assert tools.find_places(None, "united states")["places"][0].get("regions") is True
         assert json.loads(index.read_text())["USA"] == 5
         assert not [p for p in root.iterdir() if p.name.startswith("regions-index") and p != index]
+
+
+def test_a_read_only_cache_still_answers_the_regions_flag(tmp_path, monkeypatch):
+    import tempfile
+
+    def refuse(*args, **kwargs):
+        raise PermissionError("read-only cache")
+
+    with _tools(tmp_path, regions=True) as tools:
+        monkeypatch.setattr(tempfile, "mkstemp", refuse)
+        assert tools.find_places(None, "united states")["places"][0].get("regions") is True

@@ -155,7 +155,10 @@ def region_counts(root: Path) -> dict[str, int] | None:
         counts = dict(sorted(Counter(RegionAtlas.load(source).parents.values()).items()))
     except (OSError, ValueError, KeyError, TypeError):
         return None  # a damaged admin-1 file: no flags, and nothing fetched for a plain country search
-    fd, name = tempfile.mkstemp(dir=root, prefix=INDEX_NAME + ".", suffix=".partial")
+    try:
+        fd, name = tempfile.mkstemp(dir=root, prefix=INDEX_NAME + ".", suffix=".partial")
+    except OSError:
+        return counts  # a read-only cache: the counts still answer, the index is just not kept
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(counts, handle, separators=(",", ":"))
