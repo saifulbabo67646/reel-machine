@@ -47,3 +47,6 @@ def test_the_example_renders_as_a_real_reel(tmp_path):
     first, second = (_frame_at(reel, line["meaningMs"] + 300) for line in data["lines"][:2])
     assert first.std() > 20  # a drawn scene, not a blank canvas
     assert np.abs(first[:960] - second[:960]).mean() > 1  # the text in the top half changed
+    report = json.loads(Path(job.result.manifest).read_text(encoding="utf-8"))["verification"]
+    assert {c["name"] for c in report["checks"]} == {"format", "duration", "audio", "silence", "text", "renderer"}
+    assert report["ok"], report["checks"]

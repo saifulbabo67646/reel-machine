@@ -16,6 +16,7 @@ from .ruby import parse_ruby, plain_text
 from .schedule import estimate
 from .stages import (ComposeStage, NarrationStage, PreviewStage, RenderStage, ScriptStage, check_voices,
                      lint_blocks, lint_findings)
+from .verify import verify_dialoguereel
 
 # the reference dialogue (spec §8): the kid offers to help, Mom hands out three chores, the kid agrees
 EXAMPLE: dict[str, Any] = {
@@ -126,5 +127,5 @@ class DialogueReelRecipe:
                                       else f"every voice is served by {bound!r}"))
         return ProbeReport(ok=all(c.ok for c in checks), checks=checks, details=details)
 
-    def verify(self, ctx: StageContext, result: dict[str, Any]) -> VerificationReport | None:
-        return None
+    def verify(self, ctx: StageContext, result: dict[str, Any]) -> VerificationReport:
+        return verify_dialoguereel(ctx, result)

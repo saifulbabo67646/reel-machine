@@ -375,7 +375,7 @@ class RenderStage:
         outdir.mkdir(parents=True, exist_ok=True)
         name = inputs.name or ctx.job.id
 
-        cached = _caller_cache(ctx) / "reels" / composed.key[:2] / f"{composed.key}.mp4"
+        cached = _caller_cache(ctx) / "reels" / renderer.name / composed.key[:2] / f"{composed.key}.mp4"
         if not cached.is_file():
             partial = cached.with_name(f"{composed.key}.partial.mp4")
             partial.parent.mkdir(parents=True, exist_ok=True)
