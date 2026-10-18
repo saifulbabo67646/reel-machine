@@ -29,7 +29,7 @@ The plan also folds in the Plan 1 and Plan 2 follow-ups that reach the viewer.
 - **The default suite** (`uv run pytest -q`) uses no network and no Chrome. Anything touching the network, ffmpeg, Node or HyperFrames is `@pytest.mark.slow`; real network tests are additionally skipped unless `REEL_NET_TESTS=1`.
 - **Map tests** use the fixtures in `tests/fixtures/mapreel/`, seeded into a temp geo cache (see `_seed` in `tests/test_mapreel_engine.py`).
 - **Commons:**
-  - Every request sends the User-Agent `reel-machine/mapreel (https://github.com/; contact via repo)`, through `geodata.USER_AGENT` extended.
+  - Every request sends the User-Agent `reel-machine/mapreel (https://github.com/saifulbabo67646/reel-machine)`.
   - Use the MediaWiki API at `https://commons.wikimedia.org/w/api.php`.
   - At most one request at a time, and no request loop without a limit.
 - **An image problem is a warning and a text badge, never a failed job.**
@@ -73,7 +73,7 @@ The plan also folds in the Plan 1 and Plan 2 follow-ups that reach the viewer.
   - `permitted: bool`;
   - `restrictions: str | None`, e.g. "trademarked".
 - `commons.search(query: str, *, kind: Literal["any","logo","photo","flag"]="any", limit: int = 12, include_nonfree: bool = False, fetch=_http_json) -> list[ImageHit]`.
-- `commons.info(file_id: str, *, fetch=_http_json) -> ImageHit`. It raises `InvalidInput` for a missing file.
+- `commons.info(file_id: str, *, width: int = 1024, fetch=_http_json) -> ImageHit`. The thumb is requested at `width`. It raises `InvalidInput` for a missing file.
 - `commons.FREE` is a regex of permitted short licence names. It is case-insensitive and covers:
   - `^(cc0|cc[- ]by(-sa)?( \d\.\d)?|public domain|pd\b.*|attribution|gfdl|fal|copyrighted free use)`.
 
