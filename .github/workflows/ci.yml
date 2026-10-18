@@ -5,6 +5,10 @@ on:
     branches: ["**"]
   pull_request:
 
+env:
+  # shared runners render HyperFrames shots well past the 120 s default floor
+  REEL_HYPERFRAMES_TIMEOUT_S: "600"
+
 jobs:
   full:
     name: full (extras installed)

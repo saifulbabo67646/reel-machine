@@ -101,6 +101,19 @@ def test_timeout_kills_the_process_and_unregisters_it(tmp_path, fake_npx, monkey
     assert not token._processes
 
 
+def test_the_timeout_floor_can_be_raised_from_the_environment(tmp_path, fake_npx, monkeypatch):
+    monkeypatch.setenv("HF_SLEEP", "2")
+    project = tmp_path / "shot"
+    project.mkdir()
+    renderer = _renderer(tmp_path)
+    renderer.timeout_floor_s = 1
+    monkeypatch.setenv("REEL_HYPERFRAMES_TIMEOUT_S", "30")
+    assert renderer.render(project, tmp_path / "out.mp4", seconds=0.01).read_text() == "mp4"
+    monkeypatch.setenv("REEL_HYPERFRAMES_TIMEOUT_S", "soon")  # not a number: the renderer's own floor
+    with pytest.raises(ShotRenderFailed, match="timed out"):
+        renderer.render(project, tmp_path / "out2.mp4", seconds=0.01)
+
+
 def test_missing_reports_instead_of_raising(tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", str(tmp_path))  # nothing on PATH
     settings = dataclasses.replace(get_settings(), ffmpeg="ffmpeg", ffprobe="ffprobe")  # ignore REEL_FFPROBE
