@@ -41,10 +41,9 @@ def simplify(points: Sequence[Sequence[float]], tolerance: float) -> np.ndarray:
 
 WIDTH, HEIGHT = 1080, 1920
 MAX_LAT = 85.05112878
-#: px per Mercator unit: the world fills the screen's height (no sky or floor above and below it)
-#: unless the places need more width; then never narrower than the screen. Never closer than
+#: px per Mercator unit: never out past the world filling the screen's width (frame_for keeps it filling the
+#: height, no sky or floor above and below, unless the places need more width). Never closer than
 #: 6° of longitude across it (the 21600-px texture would upscale past 3×)
-MIN_S_FILL = float(HEIGHT)
 MIN_S = float(WIDTH)
 MAX_S = WIDTH / (6.0 / 360.0)
 #: where a framed place sits on screen: clear of the legend at the top and captions below
@@ -146,7 +145,7 @@ def frame_for(bbox: tuple[float, float, float, float], *, zoom: float = 1.0,
     w = max(x1 - x0, 1e-9)
     h = max(y1 - y0, 1e-9)
     s = min((sx1 - sx0) * view_w / w, (sy1 - sy0) * view_h / h) * zoom
-    # the floors scale with the view: MIN_S_FILL and MIN_S for the full screen
+    # the floor scales with the view: the world fills its height, or at least its width when the bbox needs it
     fits_filled = w * view_h <= (sx1 - sx0) * view_w
     s = float(min(MAX_S, max(float(view_h) if fits_filled else float(view_w), s)))
     # centre the bbox on the safe area's centre, not the view's

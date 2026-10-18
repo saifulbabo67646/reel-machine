@@ -454,7 +454,7 @@ class McpTools:
         else:
             found = atlas.search(query, limit=limit)
             cached = (geodata.geo_cache(settings) / geodata.FILES["regions"][0]).is_file()
-            if re.fullmatch(r"[A-Za-z]{2}-[A-Za-z0-9]{0,3}", (query or "").strip()):  # 'US-TX', 'JP-'
+            if re.fullmatch(r"[A-Za-z]{2}-[A-Za-z0-9]{1,3}", (query or "").strip()):  # 'US-TX', 'JP-1'
                 found += region_atlas_for(settings).search_all(query, limit - len(found))
             elif cached:  # never a download for a plain country search
                 with_regions = region_atlas_for(settings).countries()

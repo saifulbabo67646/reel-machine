@@ -54,9 +54,10 @@ export function popState(atMs, ms) {
 }
 
 // A stat's text part way through its count-up (p in 0..1, eased out): the number grows from zero with
-// its decimals and comma grouping, inside its prefix and suffix. No number (`count` null): the raw value.
+// its decimals and comma grouping, inside its prefix and suffix. No number (`count` null) or a finished count:
+// the raw value, exactly as the script wrote it.
 export function countText(count, p, raw = "") {
-  if (!count) return raw;
+  if (!count || p >= 1) return raw;
   const t = 1 - Math.pow(1 - clamp01(p), 3);
   let [whole, fraction] = (count.number * t).toFixed(count.decimals).split(".");
   if (count.comma) whole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");

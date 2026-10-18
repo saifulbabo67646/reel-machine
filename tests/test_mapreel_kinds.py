@@ -23,9 +23,19 @@ def atlas():
     ("$1,200.50 bn", {"prefix": "$", "number": 1200.5, "decimals": 2, "comma": True, "suffix": " bn"}),
     ("No. 1", {"prefix": "No. ", "number": 1.0, "decimals": 0, "comma": False, "suffix": ""}),
     ("Most", None),
+    ("1,000,000", {"prefix": "", "number": 1000000.0, "decimals": 0, "comma": True, "suffix": ""}),
+    # a comma that is not a thousands separator: shown as written, never counted
+    ("10,5%", None),
+    ("1,00,000", None),
+    ("12,34", None),
 ])
 def test_count_spec(value, spec):
     assert kinds.count_spec(value) == spec
+
+
+def test_count_spec_keeps_a_trailing_comma_in_the_suffix():
+    assert kinds.count_spec("$1,200,") == {"prefix": "$", "number": 1200.0, "decimals": 0, "comma": True,
+                                           "suffix": ","}
 
 
 def _said(text, step=400):
@@ -71,6 +81,13 @@ def test_a_stat_not_heard_pops_after_the_fill(atlas):
     assert late.extras["stat"]["atMs"] == 1000
 
 
+def test_an_unheard_rank_stat_is_warned(atlas):
+    built = _rank(atlas, stat={"value": "70%"}, narration="Italy makes most of it.")
+    assert any("70%" in w and "not heard in the narration" in w for w in built.warnings)
+    heard = _rank(atlas, stat={"value": "70%"}, narration="Italy makes 70% of it.")
+    assert not heard.warnings
+
+
 def test_rank_cues_ding_and_thud_and_items_pop(atlas):
     built = _rank(atlas, stat={"value": "70%"}, narration="Italy makes 70% with Gucci and Prada.",
                   items=["Gucci", "Prada"])
@@ -95,7 +112,8 @@ def test_panel_rects_stack_full_width_rows():
     assert kinds.panel_rects(3) == [(0, 0, 1080, 640), (0, 640, 1080, 640), (0, 1280, 1080, 640)]
 
 
-def _versus(atlas, narration, stats=("125M", "335M"), countries=("JPN", "USA"), speech_start=1000, last_ms=7700):
+def _versus(atlas, narration, layers, stats=("125M", "335M"), countries=("JPN", "USA"), speech_start=1000,
+            last_ms=7700):
     from reelmachine.recipes.mapreel.geometry import frame_for
 
     spec = MapReelInputs.model_validate({"segments": [{
@@ -109,7 +127,7 @@ def _versus(atlas, narration, stats=("125M", "335M"), countries=("JPN", "USA"), 
     panels = []
     for k, (code, rect) in enumerate(zip(codes, rects)):
         frame = frame_for(shape_of(atlas.places[code]).main, view=(rect[2], rect[3]), safe=kinds.PANEL_SAFE)
-        panels.append({"frame": frame.to_dict(), "layer": f"/tmp/panel-{k}.jpg", "bbox": [0, 0, 1, 1],
+        panels.append({"frame": frame.to_dict(), "layer": str(layers / f"panel-{k}.jpg"), "bbox": [0, 0, 1, 1],
                        "rect": list(rect)})
     union = compose.segment_frame([shape_of(atlas.places[c]) for c in codes], 1.0)
     ctx = kinds.KindContext(atlas=atlas, landed=union, fly_ms=0, speech_start=speech_start, speech_end=5000,
@@ -117,8 +135,8 @@ def _versus(atlas, narration, stats=("125M", "335M"), countries=("JPN", "USA"), 
     return kinds.build(seg, spec, ctx)
 
 
-def test_a_versus_stat_pops_when_its_value_is_heard(atlas):
-    built = _versus(atlas, "Japan has 125M people and America has 335M people")
+def test_a_versus_stat_pops_when_its_value_is_heard(atlas, tmp_path):
+    built = _versus(atlas, "Japan has 125M people and America has 335M people", tmp_path)
     panels = built.extras["panels"]
     assert [p["stat"]["atMs"] for p in panels] == [1000 + 2 * 400, 1000 + 7 * 400]
     assert [p["stat"]["value"] for p in panels] == ["125M", "335M"]
@@ -126,7 +144,7 @@ def test_a_versus_stat_pops_when_its_value_is_heard(atlas):
     assert [p["enterMs"] for p in panels] == [0, 120]
     assert [p["rect"] for p in panels] == [[0, 0, 1080, 960], [0, 960, 1080, 960]]
     assert panels[1]["layers"] == [{"url": "layers/panel-1.jpg", "bbox": [0, 0, 1, 1]}]
-    assert built.links == {"layers/panel-0.jpg": Path("/tmp/panel-0.jpg"), "layers/panel-1.jpg": Path("/tmp/panel-1.jpg")}
+    assert built.links == {"layers/panel-0.jpg": tmp_path / "panel-0.jpg", "layers/panel-1.jpg": tmp_path / "panel-1.jpg"}
     assert panels[0]["name"] == "Japan" and panels[0]["place"]["code"] == "JPN" and panels[0]["place"]["rings"]
     assert built.places == [] and built.items == []
     assert built.extras["vs"] == {"atMs": 250}
@@ -134,16 +152,16 @@ def test_a_versus_stat_pops_when_its_value_is_heard(atlas):
     assert [p["stat"]["atMs"] for p in built.resolved["panels"]] == [1800, 3800]
 
 
-def test_a_versus_stat_pops_on_its_country_name_when_its_value_is_not_said(atlas):
-    built = _versus(atlas, "Japan is small but the United States of America is huge")
+def test_a_versus_stat_pops_on_its_country_name_when_its_value_is_not_said(atlas, tmp_path):
+    built = _versus(atlas, "Japan is small but the United States of America is huge", tmp_path)
     assert [p["stat"]["atMs"] for p in built.extras["panels"]] == [1000, 1000 + 5 * 400]
 
 
-def test_an_unheard_versus_stat_is_spread_and_clamped(atlas):
-    built = _versus(atlas, "One of these is bigger than the other one")
+def test_an_unheard_versus_stat_is_spread_and_clamped(atlas, tmp_path):
+    built = _versus(atlas, "One of these is bigger than the other one", tmp_path)
     times = [p["stat"]["atMs"] for p in built.extras["panels"]]
     assert times[0] < times[1] <= 7700
-    late = _versus(atlas, "One of these is bigger than the other one", last_ms=900)
+    late = _versus(atlas, "One of these is bigger than the other one", tmp_path, last_ms=900)
     assert all(p["stat"]["atMs"] <= 900 for p in late.extras["panels"])
 
 

@@ -205,3 +205,15 @@ test("the third versus panel's name drops above its stat card, well clear of the
   assert.equal(panelNameY([0, 0, 1080, 640], 72, -Infinity, band, 452), 0.12 * 640);
   assert.equal(panelNameY([0, 640, 1080, 640], 72, 640 + 95 + 14, band, 1092), 640 + 95 + 14 + 36);
 });
+
+test("a finished count shows the value exactly as written", () => {
+  // what a count spec might make of these: the end of the count is always the raw text
+  const odd = { prefix: "", number: 105, decimals: 0, comma: false, suffix: "%" };
+  assert.equal(countText(odd, 1, "10,5%"), "10,5%");
+  const indian = { prefix: "", number: 100000, decimals: 0, comma: true, suffix: "" };
+  assert.equal(countText(indian, 1, "1,00,000"), "1,00,000");
+  const trailing = { prefix: "$", number: 1200, decimals: 0, comma: true, suffix: "" };
+  assert.equal(countText(trailing, 1, "$1,200,"), "$1,200,");
+  assert.equal(countText(trailing, 2, "$1,200,"), "$1,200,");
+  assert.equal(countText(trailing, 0.5, "$1,200,"), "$1,050");
+});

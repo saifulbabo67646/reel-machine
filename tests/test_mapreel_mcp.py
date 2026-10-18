@@ -80,3 +80,17 @@ def test_a_country_search_never_touches_the_regions_file(tmp_path, monkeypatch):
     with _tools(tmp_path) as tools:  # no regions file in the cache at all
         found = tools.find_places(None, "italy")
     assert found["places"][0]["code"] == "ITA"
+
+
+def test_a_bare_country_prefix_with_a_dash_is_not_a_region_code(tmp_path, monkeypatch):
+    """'ab-' is no region code: it must not open (and so maybe download) the 40 MB regions file."""
+    from reelmachine.recipes.mapreel import regions
+
+    def boom(*args, **kwargs):
+        raise AssertionError("the regions file was opened")
+
+    monkeypatch.setattr(regions, "region_atlas_for", boom)
+    monkeypatch.setattr(regions.RegionAtlas, "load", boom)
+    with _tools(tmp_path) as tools:
+        tools.find_places(None, "ab-")
+        tools.find_places(None, "JP-")

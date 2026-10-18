@@ -18,11 +18,6 @@ from .timing import match, match_any, pop_times
 
 #: a rank segment's country and items sit below the badge (top left) and the stat card (top centre)
 RANK_SAFE = (0.08, 0.24, 0.92, 0.80)
-def fill_ms(fly_ms: int) -> int:
-    """When a segment's country fills: just before the flight lands, or at once when the camera does not fly."""
-    return max(300, fly_ms - 200)
-
-
 RANK_AFTER_FILL_MS = 150   # the badge lands just after the country fills ...
 STAT_AFTER_FILL_MS = 600   # ... and an unheard stat a beat after that
 #: a versus panel's country sits between its name (top) and its stat card (bottom), as fractions of the panel
@@ -31,6 +26,11 @@ PANEL_ENTER_MS = 120       # panel k slides in at k * this
 VS_AT_MS = 250             # the VS disc slams down once the first panel is in
 COUNTRY_FAINT = 0.25       # a regions segment's country under its states (runtime/draw.mjs)
 REGION_ITEM_MAX, REGION_ITEM_MIN = 220, 120  # a state's items are smaller than a country's: they share it
+
+
+def fill_ms(fly_ms: int) -> int:
+    """When a segment's country fills: just before the flight lands, or at once when the camera does not fly."""
+    return max(300, fly_ms - 200)
 
 
 def panel_rects(n: int) -> list[tuple[int, int, int, int]]:
@@ -128,10 +128,16 @@ def build_highlight(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:
                  extras={"legend": spec.legend})
 
 
+#: a number a stat can count up to: thousands grouped in threes ("1,200,000.5"), or no commas at all
+_COUNTABLE = re.compile(r"\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?")
+
+
 def count_spec(value: str) -> dict[str, Any] | None:
-    """How a stat counts up: its first number, with the text around it kept as is ("$1,200.50 bn")."""
-    found = re.search(r"\d[\d,]*(?:\.\d+)?", value)
-    if found is None:
+    """How a stat counts up: its first number, with the text around it kept as is ("$1,200.50 bn"). None (shown
+    as written, no count) when its commas are not thousands in threes ("10,5%", "1,00,000"): a count would end
+    on a different number."""
+    found = re.search(r"\d+(?:,\d+)*(?:\.\d+)?", value)
+    if found is None or not _COUNTABLE.fullmatch(found.group()):
         return None
     digits = found.group()
     whole, _, fraction = digits.partition(".")
@@ -152,6 +158,9 @@ def build_rank(seg: ResolvedSegment, spec: Any, ctx: KindContext) -> Built:
         (heard,) = match_any([[spec.stat.value]], ctx.spoken)
         # a value said before the badge lands waits for it: the number belongs to the rank
         at = fill + STAT_AFTER_FILL_MS if heard is None else max(ctx.speech_start + heard, rank["atMs"])
+        if heard is None:
+            built.warnings.append(f"{seg.id} stat {spec.stat.value}: not heard in the narration; it pops just "
+                                  "after the badge (put the value in the narration exactly as the stat writes it)")
         stat = {"value": spec.stat.value, "label": spec.stat.label, "atMs": min(at, ctx.last_ms),
                 "count": count_spec(spec.stat.value)}
         built.extras["stat"] = built.resolved["stat"] = stat
