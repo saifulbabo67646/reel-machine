@@ -78,6 +78,16 @@ def credits(script: ScriptOutput) -> list[str]:
     return [f"Voice of {c.name}: {c.voice}" for c in script.cast.characters]
 
 
+def _one_line(text: str) -> str:
+    """Newlines (and so blank lines, which end an SRT cue) collapsed to single spaces."""
+    return " ".join(text.split())
+
+
+def caption_text(text: str, meaning: str) -> str:
+    """A line's caption: its plain text over its meaning, each on exactly one line."""
+    return _one_line(plain_text(parse_ruby(text)[0])) + "\n" + _one_line(meaning)
+
+
 def _caller_cache(ctx: StageContext) -> Path:
     """Rendered reels are kept per caller (beside its casts), so a re-run reuses one."""
     return casts.caller_root(ctx) / "cache" / "dialoguereel"
@@ -93,12 +103,10 @@ class ScriptStage:
         inputs = DialogueReelInputs.model_validate(payload)
         root = casts.caller_root(ctx)
         try:
-            if isinstance(inputs.cast, str):
-                spec = casts.load(root, inputs.cast)
-            else:
-                spec = inputs.cast
-                casts.save(root, spec)  # an inline cast becomes reusable by its id
+            spec = casts.load(root, inputs.cast) if isinstance(inputs.cast, str) else inputs.cast
             resolved = casts.resolve(spec)
+            if not isinstance(inputs.cast, str):
+                casts.save(root, spec)  # a checked inline cast becomes reusable by its id
         except InvalidInput as exc:
             exc.stage = self.id
             raise
@@ -289,7 +297,7 @@ class RenderStage:
         video = mux(cached, audio, outdir / f"{name}.mp4", total_ms=total_ms, settings=settings, cancel=ctx.cancel)
 
         captions = [Caption(start_ms=w.start_ms, end_ms=w.end_ms,
-                            text=plain_text(parse_ruby(line.text)[0]) + "\n" + line.meaning,
+                            text=caption_text(line.text, line.meaning),
                             lang=inputs.language, style_ref="dialoguereel.caption",
                             meta={"speaker": line.speaker})
                     for line, w in zip(inputs.lines, narration.lines, strict=True)]

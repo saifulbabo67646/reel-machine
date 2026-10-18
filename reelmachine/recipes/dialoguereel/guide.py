@@ -78,7 +78,10 @@ GUIDE: dict[str, Any] = {
             "Each id is used once. Ids are prefixed per character when inlined, so both characters may use the same ids.",
         ],
         "refused": [
-            "<!DOCTYPE> and <!ENTITY> declarations, and processing instructions.",
+            "Anything starting <! or <?: comments, CDATA, <!DOCTYPE>/<!ENTITY> declarations, processing "
+            "instructions and the <?xml ...?> line. Strip editor comments before passing the SVG.",
+            "Two attributes on one element whose names differ only in case (id and ID), or href with xlink:href.",
+            "Child elements inside <title> or <desc> (text only).",
             "The elements script, foreignObject, iframe, object, embed, audio, video, animate, animateTransform, "
             "animateMotion, set, and <style>: use inline style=\"...\" attributes instead (a <style> element would "
             "restyle the whole page). Motion belongs to the runtime, so no SVG or CSS animation.",
@@ -124,5 +127,8 @@ GUIDE: dict[str, Any] = {
         "advice": "Give the two characters different voice ids of that provider, so they sound like two people "
                   "(for example macos:Kyoko and macos:Reed (Japanese (Japan)) for Japanese; `say -v '?'` lists "
                   "the macOS voices). A voice that cannot speak the reel's language mumbles or skips it.",
+        "recasting": "Voices are not part of the castId (only how the characters look and are named): calling "
+                     "make_cast again with the same characters but other voices keeps the same castId and replaces "
+                     "the saved voices, so every later reel that passes that castId speaks with the new voices.",
     },
 }

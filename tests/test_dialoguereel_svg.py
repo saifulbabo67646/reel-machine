@@ -5,7 +5,7 @@ import pytest
 
 from reelmachine.core.errors import InvalidInput
 from reelmachine.recipes.dialoguereel.library import builtin_names, load_builtin
-from reelmachine.recipes.dialoguereel.svg import MAX_BYTES, OPTIONAL, REQUIRED, check_svg, recolour, scope_ids
+from reelmachine.recipes.dialoguereel.svg import MAX_BYTES, OPTIONAL, REQUIRED, check_svg, inline_svg, part_id, recolour
 
 PATH = "cast.characters[0].source.svg"
 
@@ -132,19 +132,28 @@ def test_fragment_refs_and_gradient_urls_are_allowed():
     assert check_svg(minimal_svg(extra=extra), path=PATH) == []
 
 
-def test_scope_ids_keeps_two_characters_apart():
-    a, b = scope_ids(load_builtin("cupcake", {}), "kid"), scope_ids(load_builtin("mug", {}), "mom")
+def test_inline_svg_keeps_two_characters_apart():
+    a, b = inline_svg(load_builtin("cupcake", {}), "kid"), inline_svg(load_builtin("mug", {}), "mom")
     ids = re.findall(r'id="([^"]+)"', a + b)
-    assert len(ids) == len(set(ids)) and 'id="kid-mouth-open"' in a
-    assert all(ref.startswith("kid-") for ref in re.findall(r"url\(#([^)]+)\)", a))
+    assert len(ids) == len(set(ids)) and 'id="c_kid.mouth-open"' in a
+    assert all(ref.startswith("c_kid.") for ref in re.findall(r"url\(#([^)]+)\)", a))
+    assert all(ref.startswith("#c_kid.") for ref in re.findall(r'href="([^"]+)"', a))
 
 
-def test_scope_ids_rewrites_hrefs():
-    svg = '<svg><g id="a"/><use href="#a"/><use xlink:href="#a"/></svg>'
-    assert scope_ids(svg, "p") == '<svg><g id="p-a"/><use href="#p-a"/><use xlink:href="#p-a"/></svg>'
+def test_inline_svg_rewrites_hrefs_and_drops_the_xlink_prefix():
+    svg = minimal_svg(extra='<g id="a"/><use href="#a"/><use xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="#a"/>')
+    out = inline_svg(svg, "p")
+    assert '<g id="c_p.a" />' in out and out.count('<use href="#c_p.a" />') == 2
+    assert "xlink" not in out and "ns0" not in out and out.startswith('<svg xmlns="http://www.w3.org/2000/svg" ')
 
 
-def test_scope_ids_handles_an_agent_svg_with_spaced_and_uppercase_attributes():
+def test_inline_svg_scopes_entity_encoded_fragment_refs():
+    svg = minimal_svg(extra='<use href="&#35;body"/><g fill="url(&#35;body)"/>')
+    out = inline_svg(svg, "mom")
+    assert 'href="#c_mom.body"' in out and 'fill="url(#c_mom.body)"' in out and "&#35;" not in out
+
+
+def test_inline_svg_handles_an_agent_svg_with_spaced_and_uppercase_attributes():
     svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">'
            '<defs><linearGradient id = "g"><stop offset="0"/></linearGradient></defs>'
            "<g id ='body' fill = 'URL( #g )'/><g ID=\"eyes-open\"/><g id=\"eyes-closed\"/>"
@@ -152,12 +161,57 @@ def test_scope_ids_handles_an_agent_svg_with_spaced_and_uppercase_attributes():
            '<use href = "#body"/><use xlink:href= \'#body\' xmlns:xlink="http://www.w3.org/1999/xlink"/>'
            '<g data-id="keep"/></svg>')
     check_svg(svg, path=PATH)
-    a, b = scope_ids(svg, "kid"), scope_ids(svg, "mom")
-    assert 'id = "kid-g"' in a and "id ='kid-body'" in a and 'ID="kid-eyes-open"' in a
-    assert "URL( #kid-g )" in a and 'href = "#kid-body"' in a and "xlink:href= '#kid-body'" in a
+    a, b = inline_svg(svg, "kid"), inline_svg(svg, "mom")
+    assert 'id="c_kid.g"' in a and 'id="c_kid.body"' in a and 'ID="c_kid.eyes-open"' in a
+    assert "URL( #c_kid.g )" in a and a.count('href="#c_kid.body"') == 2
     assert 'data-id="keep"' in a
     ids = re.findall(r"""(?<![\w-])id\s*=\s*["']([^"']+)""", a + b, flags=re.IGNORECASE)
     assert len(ids) == 12 and len(set(ids)) == 12
+
+
+def test_inline_svg_escapes_what_the_html_parser_would_read_as_markup():
+    svg = minimal_svg(extra='<g data-x="&lt;img src=x onerror=alert(1)&gt;"/>'
+                            '<text>&lt;/svg&gt;&lt;img src=x onerror=alert(1)&gt;</text>'
+                            '<title>&lt;/title&gt;&lt;img onerror=alert(1)&gt;</title>')
+    out = inline_svg(svg, "kid")
+    assert "<img" not in out and "</svg>" == out[-6:] and out.count("<svg") == 1
+    assert 'data-x="&lt;img src=x onerror=alert(1)&gt;"' in out
+
+
+@pytest.mark.parametrize("bad", [
+    '<!--><img src="x" onerror="document.title=1">-->',  # an empty comment for HTML, a comment for XML
+    "<!-- an editor note -->", "<![CDATA[<img src=x onerror=alert(1)>]]>", '<?xml-stylesheet href="x"?>',
+])
+def test_comments_cdata_and_processing_instructions_are_refused(bad):
+    with pytest.raises(InvalidInput) as err:
+        check_svg(minimal_svg(extra=bad), path=PATH)
+    assert err.value.details["path"] == PATH and err.value.details["element"] in ("<!", "<?")
+    with pytest.raises(InvalidInput):
+        check_svg('<?xml version="1.0"?>' + minimal_svg(), path=PATH)
+
+
+@pytest.mark.parametrize("extra", ['<g id="x" ID="y"/>', '<g fill="red" FILL="blue"/>',
+                                   '<use href="#body" xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="#body"/>'])
+def test_attributes_differing_only_in_case_or_namespace_are_refused(extra):
+    with pytest.raises(InvalidInput) as err:
+        check_svg(minimal_svg(extra=extra), path=PATH)
+    assert "two" in err.value.message
+
+
+def test_title_and_desc_hold_text_only():
+    with pytest.raises(InvalidInput) as err:
+        check_svg(minimal_svg(extra="<desc><a href='#body'><circle r='1'/></a></desc>"), path=PATH)
+    assert err.value.details["element"] == "desc"
+    assert check_svg(minimal_svg(extra="<title>a cupcake</title><desc>sweet</desc>"), path=PATH) == []
+
+
+@pytest.mark.parametrize("a, b", [("kid", "mom"), ("a-b", "a"), ("a_b", "a"), ("a", "a__b"), ("char", "c")])
+def test_part_ids_never_collide_across_characters_or_with_page_ids(a, b):
+    page = {"root", "reel-data", f"char-{a}", f"char-{b}"}
+    names = ["body", "b.x", "x", "b__x", "_b.x", "-x", "char-kid", "reel-data"]
+    scoped_a = {part_id(a, n) for n in names}
+    scoped_b = {part_id(b, n) for n in names}
+    assert not scoped_a & scoped_b and not (scoped_a | scoped_b) & page
 
 
 def test_recolour_extends_a_spaced_or_uppercase_root_style():

@@ -3,7 +3,7 @@
 // HyperFrames seeks to (pure.mjs decides; this file only applies). HyperFrames waits on
 // window.__hf.buildReady (set inline in index.html) before capturing. Opened directly in a browser,
 // index.html?t=3.2 shows the frame at 3.2 s.
-import { activeLine, dropIn, hop, mouthOpen, blinking, litChars, fade, history, progress, bob, seedOf, fitFont, flag, clamp01, DROP_MS } from "./pure.mjs";
+import { activeLine, dropIn, hop, mouthOpen, blinking, litChars, fade, history, progress, bob, seedOf, fitFont, flag, clamp01, DROP_MS, partId } from "./pure.mjs";
 
 const done = () => window.__reelResolve && window.__reelResolve();
 const DROP_DELAY = { left: 150, right: 300 };
@@ -40,7 +40,7 @@ const lerp = (a, b, p) => a + (b - a) * p;
 function buildCharacter(root, char, index) {
   const box = document.getElementById(`char-${char.id}`);
   if (!box) throw new Error(`dialoguereel: character ${char.id} is missing from the page`);
-  const part = (name) => document.getElementById(`${char.id}-${name}`);
+  const part = (name) => document.getElementById(partId(char.id, name));
   const arm = (name) => {
     const node = part(name);
     if (!node) return null;

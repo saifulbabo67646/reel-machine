@@ -19,7 +19,7 @@ from .cast import ResolvedCast
 from .models import DialogueReelInputs
 from .ruby import parse_ruby
 from .schedule import Schedule
-from .svg import scope_ids
+from .svg import inline_svg
 
 HERE = Path(__file__).resolve().parent
 RUNTIME_DIR = HERE / "runtime"
@@ -100,9 +100,11 @@ def _runtime_paths() -> list[Path]:
 
 
 def _character_html(cast: ResolvedCast) -> str:
+    """Each character re-checked and serialized from its parsed tree: the page never gets the source text."""
     return "\n".join(
-        f'<div class="char {escape(c.side)}" id="char-{escape(c.id)}">{scope_ids(c.svg, c.id)}</div>'
-        for c in cast.characters
+        f'<div class="char {escape(c.side)}" id="char-{escape(c.id)}">'
+        f'{inline_svg(c.svg, c.id, path=f"cast.characters[{i}].source.svg")}</div>'
+        for i, c in enumerate(cast.characters)
     )
 
 
@@ -128,7 +130,7 @@ def project_key(doc: dict[str, Any], cast: ResolvedCast) -> str:
     digest = hashlib.sha256(json.dumps(doc, sort_keys=True, ensure_ascii=False, allow_nan=False).encode("utf-8"))
     for char in cast.characters:
         digest.update(f"\0{char.id}\0{char.side}\0".encode())
-        digest.update(char.svg.encode("utf-8"))
+        digest.update(inline_svg(char.svg, char.id).encode("utf-8"))
     for path in _runtime_paths():
         digest.update(f"\0{path.name}\0".encode())
         digest.update(path.read_bytes())

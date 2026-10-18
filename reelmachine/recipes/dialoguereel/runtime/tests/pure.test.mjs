@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { activeLine, dropIn, hop, mouthOpen, blinking, litChars, fade, history, progress, bob, seedOf, fitFont, flag } from "../pure.mjs";
+import { activeLine, dropIn, hop, mouthOpen, blinking, litChars, fade, history, progress, bob, seedOf, fitFont, flag, partId } from "../pure.mjs";
 
 test("a line is active from its start until the next starts", () => {
   const lines = [{ startMs: 1500 }, { startMs: 2850 }];
@@ -103,4 +103,10 @@ test("short lines are big, long lines shrink or wrap but stay legible", () => {
 test("a language gets its flag", () => {
   assert.equal(flag("ja"), "🇯🇵");
   assert.equal(flag("xx"), "");
+});
+
+test("part ids are the scoped ids compose writes, and never a page id", () => {
+  assert.equal(partId("kid", "mouth-open"), "c_kid.mouth-open");
+  assert.equal(partId("a-b", "x"), "c_a-b.x");
+  for (const id of ["root", "reel-data", "char-kid"]) assert.ok(!partId("kid", "x").startsWith(id));
 });

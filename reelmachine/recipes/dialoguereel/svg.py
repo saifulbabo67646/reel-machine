@@ -1,13 +1,19 @@
 """The SVG character contract: what a character must contain, and what it may never contain.
 
 Characters are inlined into the page a headless browser renders, and agents write their
-own, so `check_svg` is a security boundary. It refuses DOCTYPE/ENTITY textually before
-parsing (so stdlib ElementTree never expands an entity), then walks every element: no
-scripting or embedding elements, no animation (the runtime owns motion), no event-handler
-attributes, no reference that leaves the document. Tag and attribute names
-are compared case-insensitively because the HTML parser lowercases them when the SVG is
-inlined, and every attribute value is checked as CSS because presentation attributes
-(fill, filter, mask, clip-path, ...) are CSS values.
+own, so `check_svg` is a security boundary. It refuses every `<!` (comments, CDATA, DOCTYPE,
+ENTITY) and `<?` textually before parsing: stdlib ElementTree never expands an entity, and
+nothing survives that the XML parser drops but the HTML parser reads differently (`<!-->`
+closes a comment for HTML, not for XML). Then it walks every element: no scripting or
+embedding elements, no animation (the runtime owns motion), no event-handler attributes,
+no reference that leaves the document, no two attributes whose names differ only in case.
+Tag and attribute names are compared case-insensitively because the HTML parser lowercases
+them when the SVG is inlined, and every attribute value is checked as CSS because
+presentation attributes (fill, filter, mask, clip-path, ...) are CSS values.
+
+The page never receives the source text: `inline_svg` re-checks it, scopes the ids on the
+parsed tree and serializes that tree, so every byte the HTML parser reads was written by
+ElementTree (text and attribute values escaped, names from the checked tree).
 """
 
 from __future__ import annotations
@@ -15,6 +21,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from xml.etree import ElementTree
+from xml.etree.ElementTree import Element
 
 from reelmachine.core.errors import InvalidInput
 
@@ -50,11 +57,13 @@ _ALLOWED = {
     "feTurbulence",
 }
 _DATA_IMAGE = re.compile(r"^data:image/(png|jpeg);base64,[A-Za-z0-9+/=\s]*$")
-_DECL = re.compile(r"<!\s*(doctype|entity)", re.IGNORECASE)
-_PI = re.compile(r"<\?(?!xml\s)", re.IGNORECASE)
+_MARKUP_DECL = re.compile(r"<\s*[!?]")
 _EXTERNAL_URL = re.compile(r"url\(\s*(?![\"']?\s*#)", re.IGNORECASE)
 _CSS_FORBIDDEN = re.compile(r"@import|@font-face|@namespace|javascript:|image-set\(|image\(|\\", re.IGNORECASE)
 _JAVASCRIPT = re.compile(r"javascript\s*:", re.IGNORECASE)
+_XML_NS = "http://www.w3.org/XML/1998/namespace"
+# HTML integration points: the HTML parser reads their children as HTML, so they hold text only
+_TEXT_ONLY = {"title", "desc"}
 _HINT = "characters are plain SVG shapes; see the SVG character contract in the guide"
 
 
@@ -76,15 +85,16 @@ def _check_css(text: str, element: str, path: str) -> None:
                       element, path)
 
 
-def check_svg(svg: str, *, path: str) -> list[str]:
-    """Check a character against the contract; return the optional group ids it has."""
+def _parse(svg: str, path: str) -> tuple[Element, set[str]]:
+    """The checked tree and its ids, or InvalidInput naming what broke the contract."""
     if len(svg.encode("utf-8")) > MAX_BYTES:
         raise _refuse(f"the SVG is over {MAX_BYTES:,} bytes", "svg", path,
                       hint="simplify paths or drop embedded images")
-    if match := _DECL.search(svg):
-        raise _refuse("DOCTYPE and ENTITY declarations are not allowed", match.group(1).upper(), path)
-    if _PI.search(svg):
-        raise _refuse("processing instructions are not allowed", "?", path)
+    if match := _MARKUP_DECL.search(svg):
+        kind = "processing instructions" if match.group(0).endswith("?") else \
+            "comments, CDATA sections and DOCTYPE/ENTITY declarations"
+        raise _refuse(f"{kind} are not allowed in a character", "<" + match.group(0)[-1], path,
+                      hint="drop editor comments and the <?xml ...?> line; " + _HINT)
     try:
         root = ElementTree.fromstring(svg)
     except ElementTree.ParseError as exc:
@@ -96,17 +106,22 @@ def check_svg(svg: str, *, path: str) -> list[str]:
 
     ids: set[str] = set()
     for node in root.iter():
-        if not isinstance(node.tag, str):
-            continue
         ns, tag = _local(node.tag)
         if tag.lower() in _FORBIDDEN:
             raise _refuse(f"<{tag}> is not allowed in a character", tag, path)
         if ns not in ("", _SVG_NS) or tag not in _ALLOWED:
             raise _refuse(f"<{tag}> is not an allowed SVG element", tag, path)
+        if tag in _TEXT_ONLY and len(node):
+            raise _refuse(f"<{tag}> may only hold text", tag, path)
+        seen: set[str] = set()
         for raw, value in node.attrib.items():
             attr_ns, attr = _local(raw)
             name = attr.lower()
             shown = "xlink:href" if attr_ns == _XLINK_NS and name == "href" else attr
+            if name in seen:
+                raise _refuse(f"<{tag}> has two {name} attributes", attr, path,
+                              hint="give each attribute once, in one spelling")
+            seen.add(name)
             if name.startswith("on"):
                 raise _refuse(f"event handler {attr} on <{tag}> is not allowed", attr, path)
             if name == "href" and not value.startswith("#"):
@@ -119,7 +134,12 @@ def check_svg(svg: str, *, path: str) -> list[str]:
                 if value in ids:
                     raise _refuse(f'id "{value}" is used twice', tag, path, hint="give every id one element")
                 ids.add(value)
+    return root, ids
 
+
+def check_svg(svg: str, *, path: str) -> list[str]:
+    """Check a character against the contract; return the optional group ids it has."""
+    _, ids = _parse(svg, path)
     missing = [name for name in REQUIRED if name not in ids]
     if missing:
         raise _refuse(f"the SVG is missing required group(s): {', '.join(missing)}", "svg", path,
@@ -127,35 +147,65 @@ def check_svg(svg: str, *, path: str) -> list[str]:
     return [name for name in OPTIONAL if name in ids]
 
 
-_ID = re.compile(r"""(?<![\w:.-])(id\s*=\s*)(["'])""", re.IGNORECASE)
+def _clean(node: Element) -> Element:
+    """A copy without namespaces: SVG tags by local name, xlink:href as href, xml:space/xml:lang kept,
+    attributes of any other namespace (editor metadata) dropped."""
+    out = Element(_local(node.tag)[1])
+    for raw, value in node.attrib.items():
+        ns, attr = _local(raw)
+        if ns == _XLINK_NS and attr.lower() == "href":
+            out.set("href", value)
+        elif ns == _XML_NS and attr in ("space", "lang"):
+            out.set(f"xml:{attr}", value)
+        elif not ns:
+            out.set(attr, value)
+    out.text, out.tail = node.text, node.tail
+    out.extend(_clean(child) for child in node)
+    return out
+
+
+def _serialize(root: Element) -> str:
+    root = _clean(root)
+    root.attrib = {"xmlns": _SVG_NS, **{k: v for k, v in root.attrib.items() if k != "xmlns"}}
+    return ElementTree.tostring(root, encoding="unicode", short_empty_elements=True)
+
+
+def part_id(char_id: str, name: str) -> str:
+    """A character's element id on the page. Character ids have no '.', so the first '.' ends the
+    character id and two characters (or a character and the page's own ids) never share one."""
+    return f"c_{char_id}.{name}"
+
+
 _URL_REF = re.compile(r"""(url\(\s*["']?\s*)#""", re.IGNORECASE)
-_HREF_REF = re.compile(r"""(?<![\w:.-])((?:[\w.-]+:)?href\s*=\s*)(["'])#""", re.IGNORECASE)
 
 
-def scope_ids(svg: str, prefix: str) -> str:
-    """Prefix every id and every in-document reference, so two characters share one page."""
-    svg = _ID.sub(lambda m: f"{m.group(1)}{m.group(2)}{prefix}-", svg)
-    svg = _URL_REF.sub(lambda m: f"{m.group(1)}#{prefix}-", svg)
-    return _HREF_REF.sub(lambda m: f"{m.group(1)}{m.group(2)}#{prefix}-", svg)
+def inline_svg(svg: str, char_id: str, *, path: str = "svg") -> str:
+    """The character as the page receives it: re-checked, every id and in-document reference
+    scoped with `part_id`, and serialized from the tree."""
+    root, _ = _parse(svg, path)
+    prefix = part_id(char_id, "")
+    for node in root.iter():
+        for raw, value in list(node.attrib.items()):
+            name = _local(raw)[1].lower()
+            if name == "id" and not _local(raw)[0]:
+                value = prefix + value
+            elif name == "href" and value.startswith("#"):
+                value = "#" + prefix + value[1:]
+            node.set(raw, _URL_REF.sub(lambda m: f"{m.group(1)}#{prefix}", value))
+    return _serialize(root)
 
 
 _COLOUR = re.compile(r"^#[0-9a-fA-F]{6}$")
-_ROOT_TAG = re.compile(r"""<svg\b(?:[^>"']|"[^"]*"|'[^']*')*>""")
-_STYLE_ATTR = re.compile(r"""(\sstyle\s*=\s*)(["'])(.*?)\2""", re.DOTALL | re.IGNORECASE)
 
 
 def recolour(svg: str, colors: Mapping[str, str]) -> str:
-    """Set the --primary/--secondary/--accent CSS variables on the root element."""
+    """Set the --primary/--secondary/--accent CSS variables on the root element (on the parsed tree)."""
     decls = ";".join(f"--{key}:{colors[key]}" for key in ("primary", "secondary", "accent")
                      if key in colors and _COLOUR.match(colors[key]))
-    match = _ROOT_TAG.search(svg)
-    if not decls or match is None:
+    if not decls:
         return svg
-    tag = match.group(0)
-    if style := _STYLE_ATTR.search(tag):
-        existing = style.group(3).strip().rstrip(";")
-        joined = f"{existing};{decls}" if existing else decls
-        new_tag = tag[: style.start()] + f"{style.group(1)}{style.group(2)}{joined}{style.group(2)}" + tag[style.end():]
-    else:
-        new_tag = f'<svg style="{decls}"' + tag[4:]
-    return svg[: match.start()] + new_tag + svg[match.end():]
+    root, _ = _parse(svg, "svg")
+    key = next((k for k in root.attrib if _local(k) == ("", k) and k.lower() == "style"), "style")
+    existing = (root.get(key) or "").strip().rstrip(";")
+    root.set(key, f"{existing};{decls}" if existing else decls)
+    return _serialize(root)

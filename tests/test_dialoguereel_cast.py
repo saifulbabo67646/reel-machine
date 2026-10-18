@@ -80,3 +80,22 @@ def test_caller_root_follows_the_job_workdir(tmp_path):
     assert caller_root(ctx) == tmp_path / "alice"
     ctx.config.workdir = tmp_path / "other"
     assert caller_root(ctx) == tmp_path / "c"
+
+
+def test_the_script_stage_saves_an_inline_cast_only_once_it_resolves(tmp_path):
+    from types import SimpleNamespace
+
+    from reelmachine.core.errors import InvalidInput
+    from reelmachine.recipes.dialoguereel.stages import ScriptStage
+    ctx = SimpleNamespace(job=SimpleNamespace(id="j1"),
+                          config=SimpleNamespace(workdir=tmp_path / "alice" / "j1", cache_dir=tmp_path / "c"))
+    bad = {"characters": [
+        {"id": "kid", "name": "K", "side": "left", "source": {"kind": "svg", "svg": '<svg viewBox="0 0 400 400"/>'}},
+        {"id": "mom", "name": "M", "side": "right", "source": {"kind": "builtin", "name": "mug"}}]}
+    with pytest.raises(InvalidInput) as err:
+        ScriptStage().run(ctx, {"cast": bad, "lines": [], "mode": "cast"})
+    assert err.value.stage == "script" and not (tmp_path / "alice" / "casts").exists()
+    good = {"characters": [{**bad["characters"][0], "source": {"kind": "builtin", "name": "cupcake"}},
+                           bad["characters"][1]]}
+    out = ScriptStage().run(ctx, {"cast": good, "lines": [], "mode": "cast"})
+    assert (tmp_path / "alice" / "casts" / f"{out.cast.id}.json").is_file()

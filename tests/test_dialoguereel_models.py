@@ -42,3 +42,14 @@ def test_colours_must_be_hex():
 def test_the_recipe_is_registered():
     from reelmachine.core.registry import Registry
     assert Registry().find_recipe("dialoguereel") is not None
+
+
+@pytest.mark.parametrize("name", ["my-reel", "Reel_01.v2", "a", "x" * 80])
+def test_a_safe_output_name_is_accepted(name):
+    assert DialogueReelInputs.model_validate({**SCRIPT, "name": name}).name == name
+
+
+@pytest.mark.parametrize("name", ["../escape", "a/b", "", ".hidden", "-flag", "x" * 81, "a b", "a\\b", "名前"])
+def test_an_output_name_that_is_not_a_plain_file_stem_is_refused(name):
+    with pytest.raises(ValidationError):
+        DialogueReelInputs.model_validate({**SCRIPT, "name": name})

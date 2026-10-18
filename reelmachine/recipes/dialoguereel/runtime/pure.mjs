@@ -18,6 +18,9 @@ export function activeLine(lines, ms) {
   return index;
 }
 
+// a character's element id on the page; must match svg.part_id (character ids have no ".")
+export const partId = (charId, name) => `c_${charId}.${name}`;
+
 export const DROP_MS = 450;
 export const DROP_PX = 500;
 

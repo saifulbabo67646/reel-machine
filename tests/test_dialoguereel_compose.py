@@ -59,7 +59,7 @@ def test_the_cast_document_is_two_seconds_of_the_characters():
 def test_the_project_inlines_both_characters_with_their_own_ids(tmp_path):
     project = write_project(reel_document(INPUTS, CAST, PLAN, WORDS), CAST, tmp_path / "p")
     html = (project / "index.html").read_text(encoding="utf-8")
-    assert 'id="kid-mouth-open"' in html and 'id="mom-mouth-open"' in html
+    assert 'id="c_kid.mouth-open"' in html and 'id="c_mom.mouth-open"' in html
     assert 'id="char-kid"' in html and 'class="char right"' in html
     assert "<\\/" not in html.split("reel-data")[0]
     assert 'data-composition-id=' in html and 'data-duration="' in html and "buildReady" in html
@@ -141,3 +141,102 @@ def test_the_hook_prompt_follows_the_meaning_language():
 def test_other_meaning_languages_have_no_prompt():
     inputs = INPUTS.model_copy(update={"meaning_language": "fr"})
     assert reel_document(inputs, CAST, PLAN, WORDS)["prompt"] is None
+
+
+# ------------------------------------------------- the page only ever gets SVG from the checked tree
+
+POC = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"><!--><img src="x" '
+       'onerror="document.title=\'PWNED\'">--><g id="body"/><g id="eyes-open"/><g id="eyes-closed"/>'
+       '<g id="mouth-closed"/><g id="mouth-open"/></svg>')
+AGENT = ('<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 400 400">'
+         '<title>&lt;/title&gt;&lt;img src=x onerror=alert(1)&gt;</title>'
+         '<defs><radialGradient id="g"><stop offset="0" stop-color="#fff"/></radialGradient></defs>'
+         '<g id="body" data-note="&lt;/svg&gt;&lt;img src=x onerror=alert(1)&gt;" fill="url(&#35;g)">'
+         '<circle cx="200" cy="200" r="120"/></g>'
+         '<g id="eyes-open"><text>&lt;script&gt;alert(1)&lt;/script&gt;</text></g><g id="eyes-closed"/>'
+         '<g id="mouth-closed"><use xlink:href="&#35;body"/></g><g id="mouth-open"/></svg>')
+
+
+def _cast_with(svg: str):
+    from reelmachine.recipes.dialoguereel.models import ResolvedCast, ResolvedCharacter
+    from reelmachine.recipes.dialoguereel.svg import check_svg
+    mug = CAST.characters[1]
+    # built directly, past resolve(): the composer must re-check what it inlines
+    kid = ResolvedCharacter(id="kid", name="K", voice="fake:default", side="left", svg=svg, parts=[])
+    return ResolvedCast(id="cast_000000000000", characters=[kid, mug]), check_svg
+
+
+class _Characters(HTMLParser):
+    """Every element (tag, attrs) the HTML parser puts inside a `div.char`."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.depth, self.found = 0, []
+
+    def handle_starttag(self, tag, attrs):
+        if self.depth:
+            self.found.append((tag, attrs))
+            self.depth += 1
+        elif tag == "div" and "char" in (dict(attrs).get("class") or "").split():
+            self.depth = 1
+
+    def handle_startendtag(self, tag, attrs):
+        if self.depth:
+            self.found.append((tag, attrs))
+
+    def handle_endtag(self, tag):
+        if self.depth:
+            self.depth -= 1
+
+    def handle_comment(self, data):
+        if self.depth:
+            self.found.append(("#comment", [("data", data)]))
+
+
+def _inside_characters(project):
+    parser = _Characters()
+    parser.feed((project / "index.html").read_text(encoding="utf-8"))
+    return parser.found
+
+
+def test_the_mxss_proof_of_concept_never_reaches_the_page(tmp_path):
+    import pytest
+
+    from reelmachine.core.errors import InvalidInput
+    cast, check_svg = _cast_with(POC)
+    with pytest.raises(InvalidInput):
+        check_svg(POC, path="x")
+    with pytest.raises(InvalidInput) as err:
+        write_project(cast_document(cast), cast, tmp_path / "p")
+    assert err.value.details["path"] == "cast.characters[0].source.svg"
+    with pytest.raises(InvalidInput):
+        resolve(CastSpec.model_validate({"characters": [
+            {"id": "kid", "name": "K", "side": "left", "source": {"kind": "svg", "svg": POC}},
+            SPEC.characters[1].model_dump()]}))
+
+
+def test_an_agent_svg_reaches_the_page_as_svg_elements_only(tmp_path):
+    from reelmachine.recipes.dialoguereel.svg import _ALLOWED
+    cast, check_svg = _cast_with(AGENT)
+    check_svg(AGENT, path="x")
+    project = write_project(cast_document(cast), cast, tmp_path / "p")
+    found = _inside_characters(project)
+    svg_tags = {name.lower() for name in _ALLOWED}
+    assert found and {tag for tag, _ in found} <= svg_tags, {tag for tag, _ in found} - svg_tags
+    assert not [(tag, a) for tag, attrs in found for a, _ in attrs if a.lower().startswith("on")]
+    html = (project / "index.html").read_text(encoding="utf-8")
+    assert 'href="#c_kid.body"' in html and 'fill="url(#c_kid.g)"' in html and "xlink" not in html.split("reel-data")[0]
+    # the built-ins too
+    builtins = _inside_characters(write_project(cast_document(CAST), CAST, tmp_path / "b"))
+    assert {tag for tag, _ in builtins} <= svg_tags
+
+
+def test_newlines_in_a_line_cannot_forge_srt_cues(tmp_path):
+    from reelmachine.core.timeline import Caption
+    from reelmachine.recipes.dialoguereel.stages import caption_text
+    from reelmachine.render.captions import write_srt
+    forged = "ok\n\n2\n00:00:00,000 --> 00:00:09,000\nFORGED"
+    text = caption_text("手伝{てつだ}い\r\nます", forged)
+    assert text == "手伝い ます\nok 2 00:00:00,000 --> 00:00:09,000 FORGED"
+    srt = write_srt([Caption(start_ms=0, end_ms=1000, text=text, lang="ja")], tmp_path / "c.srt").read_text()
+    assert srt.count("-->") == 2 and "\n\n2\n" not in srt  # one cue: its timing line and the text's arrow

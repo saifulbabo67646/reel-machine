@@ -94,7 +94,7 @@ class DialogueReelInputs(BaseModel):
     mode: Mode = "storyboard"
     lint: Literal["strict", "warn"] = "strict"
     music: str | None = None
-    name: str | None = None
+    name: str | None = Field(None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")  # the output file's stem
     outdir: str | None = None
     lines: list[Line] = Field(default_factory=list, max_length=30)
 
@@ -106,7 +106,7 @@ class ResolvedCharacter(BaseModel):
     name: str
     voice: str
     side: str
-    svg: str                      # recoloured, not yet scoped
+    svg: str                      # recoloured source, checked; compose re-checks, scopes and serializes it
     parts: list[str]
 
 
