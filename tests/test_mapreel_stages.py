@@ -73,7 +73,13 @@ def test_a_hostile_content_type_never_picks_the_path(tmp_path, monkeypatch):
 
 
 def test_a_download_is_named_by_content_inside_the_images_dir_with_a_stable_mtime(tmp_path, monkeypatch):
-    monkeypatch.setattr(stages.httpx, "stream", _fake_stream("image/PNG; charset=binary", b"\x89PNG" * 10))
+    import io
+
+    from PIL import Image
+
+    png = io.BytesIO()
+    Image.new("RGB", (8, 8), "red").save(png, format="PNG")
+    monkeypatch.setattr(stages.httpx, "stream", _fake_stream("image/PNG; charset=binary", png.getvalue()))
     first = Path(_run(tmp_path / "a", ["https://example.com/a"]).images["seg-1/0"])
     second = Path(_run(tmp_path / "b", ["https://example.com/a"]).images["seg-1/0"])
     assert first.parent == tmp_path / "a" / "stage" / "images" and first.suffix == ".png"

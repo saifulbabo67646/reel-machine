@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import math
 import os
@@ -29,7 +30,7 @@ from ..explainer3d.music import synth_music
 from ..explainer3d.stages import speak_line
 from ..explainer3d.timing import ShotWindow, estimate_speech_ms, fit_windows, shot_windows
 from ..explainer3d.video import join_shots, mux
-from . import basemap, compose, geodata, kinds, lint, palette
+from . import basemap, commons, compose, geodata, kinds, lint, palette
 from .geometry import SAFE, Frame, frame_for, shape_of, visible_bbox
 from .models import (
     ComposeOutput, GeoOutput, ImagesOutput, MapReelInputs, NarrationOutput, PrepOutput, RenderOutput,
@@ -40,7 +41,10 @@ from .regions import RegionAtlas, region_atlas_for
 from .timing import FLY_MS, MIN_SEGMENT_MS
 
 IMAGE_MAX_BYTES = 8 * 1024 * 1024
-IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
+IMAGE_MAX_SIDE = 1024  # every item image is normalised to a PNG no longer than this on its longest side
+COMMONS_ORIGINAL_MAX = 2048  # a Commons original wider than this is fetched as its 1024 px thumb instead
+SVG_REFUSED = "SVG is not drawn; give a PNG or JPEG, or a Commons id (its PNG render is used)"
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 #: the only content types a downloaded image may have, and the suffix each one is saved with
 IMAGE_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/gif": ".gif",
                "image/svg+xml": ".svg"}
@@ -225,74 +229,164 @@ class GeoStage:
         return out
 
 
-def _download(ref: str, dest_dir: Path) -> Path:
-    """An http(s) image, streamed and capped at 8 MB, saved under a name made from its content."""
-    with httpx.stream("GET", ref, timeout=30, follow_redirects=True,
-                      headers={"User-Agent": geodata.USER_AGENT}) as response:
+class _TooLarge(ValueError):
+    pass
+
+
+def _download(ref: str, *, user_agent: str = geodata.USER_AGENT) -> tuple[bytes, str]:
+    """An http(s) image, streamed and capped at 8 MB: its bytes and content type."""
+    with httpx.stream("GET", ref, timeout=30, follow_redirects=True, headers={"User-Agent": user_agent}) as response:
         response.raise_for_status()
         kind = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-        suffix = IMAGE_TYPES.get(kind)
-        if suffix is None:
+        if kind not in IMAGE_TYPES:
             raise ValueError(f"not an image ({kind or 'no content type'})")
         chunks, size = [], 0
         for chunk in response.iter_bytes():
             size += len(chunk)
             if size > IMAGE_MAX_BYTES:
-                raise ValueError("larger than 8 MB")
+                raise _TooLarge("larger than 8 MB")
             chunks.append(chunk)
-    body = b"".join(chunks)
-    path = dest_dir / (hashlib.sha256(body).hexdigest()[:16] + suffix)
+    return b"".join(chunks), kind
+
+
+def _is_svg(data: bytes) -> bool:
+    head = data[:512].lstrip().lower()
+    return head.startswith(b"<svg") or (head.startswith(b"<?xml") and b"<svg" in data[:4096].lower())
+
+
+def _normalise(data: bytes) -> bytes:
+    """Any raster image as an RGBA PNG whose longest side is at most IMAGE_MAX_SIDE, alpha kept."""
+    if _is_svg(data):
+        raise ValueError(SVG_REFUSED)
+    try:
+        from PIL import Image, ImageOps
+    except ImportError as exc:  # pragma: no cover - Pillow ships with the dev group and the extras
+        raise ValueError("Pillow is not installed, so images cannot be read (pip install Pillow)") from exc
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            img.load()
+            img = ImageOps.exif_transpose(img).convert("RGBA")
+    except (OSError, SyntaxError, ValueError, Image.DecompressionBombError) as exc:
+        raise ValueError(f"not a readable image ({exc})") from exc
+    img.thumbnail((IMAGE_MAX_SIDE, IMAGE_MAX_SIDE), Image.LANCZOS)
+    out = io.BytesIO()
+    img.save(out, format="PNG")
+    return out.getvalue()
+
+
+def _write_stable(path: Path, data: bytes) -> Path:
+    """Write a content-named file once, atomically, with a fixed mtime so project keys stay stable."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     if not path.is_file():
-        path.write_bytes(body)
-        os.utime(path, (STABLE_MTIME, STABLE_MTIME))
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        tmp.write_bytes(data)
+        os.replace(tmp, path)
+    os.utime(path, (STABLE_MTIME, STABLE_MTIME))
     return path
+
+
+def _place(png: bytes, dest_dir: Path) -> Path:
+    return _write_stable(dest_dir / (hashlib.sha256(png).hexdigest()[:16] + ".png"), png)
 
 
 def _fetch_image(ref: str, dest_dir: Path) -> Path:
-    """A local file or an http(s) URL, copied into the job; raises on anything unusable."""
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    """A local file or an http(s) URL, normalised to a PNG in the job; raises on anything unusable."""
     if ref.startswith(("http://", "https://")):
-        return _download(ref, dest_dir)
-    src = Path(ref).expanduser()
-    if not src.is_file():
-        raise FileNotFoundError(f"no file at {src}")
-    if src.suffix.lower() not in IMAGE_SUFFIXES:
-        raise ValueError(f"{src.suffix or 'no extension'} is not an image type the renderer draws")
-    # named by its path; copy2 carries the source's mtime, so an unchanged file keeps its project key
-    name = hashlib.sha256(str(src.resolve()).encode()).hexdigest()[:16] + src.suffix.lower()
-    path = dest_dir / name
-    shutil.copy2(src, path)
-    return path
+        data, kind = _download(ref)
+        if kind == "image/svg+xml":
+            raise ValueError(SVG_REFUSED)
+    else:
+        src = Path(ref).expanduser()
+        if not src.is_file():
+            raise FileNotFoundError(f"no file at {src}")
+        if src.suffix.lower() == ".svg":
+            raise ValueError(SVG_REFUSED)
+        if src.suffix.lower() not in IMAGE_SUFFIXES:
+            raise ValueError(f"{src.suffix or 'no extension'} is not an image type the renderer draws")
+        data = src.read_bytes()
+    return _place(_normalise(data), dest_dir)
+
+
+def _commons_key(ref: str) -> str:
+    name = ref.removeprefix("commons:").removeprefix("File:").strip().replace("_", " ")
+    return hashlib.sha256(name.encode("utf-8")).hexdigest()[:16]
+
+
+def _fetch_commons(ref: str, item_name: str, dest_dir: Path, cache: Path) -> tuple[Path, dict]:
+    """A Commons file by id: refused unless its licence is free, cached as a normalised PNG under the shared
+    cache so a second reel neither asks Commons nor downloads it again."""
+    key = _commons_key(ref)
+    png_path, meta_path = cache / f"{key}.png", cache / f"{key}.json"
+    if png_path.is_file() and meta_path.is_file():
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            return _place(png_path.read_bytes(), dest_dir), {"name": item_name, **meta}
+        except (OSError, ValueError):
+            pass  # a damaged cache entry is fetched again
+    hit = commons.info(ref, width=IMAGE_MAX_SIDE)
+    if not hit.permitted:
+        raise ValueError(f"{hit.title} is not free to use (licence {hit.licence or 'unknown'})")
+    if hit.mime == "image/svg+xml" or hit.width > COMMONS_ORIGINAL_MAX:
+        data, _ = _download(hit.thumb_url, user_agent=commons.USER_AGENT)  # a PNG rendered at 1024 px
+    else:
+        try:
+            data, _ = _download(hit.url, user_agent=commons.USER_AGENT)
+        except _TooLarge:
+            data, _ = _download(hit.thumb_url, user_agent=commons.USER_AGENT)
+    png = _normalise(data)
+    meta = {"source": "commons", "id_or_path": hit.id, "licence": hit.licence, "licence_url": hit.licence_url,
+            "attribution": hit.attribution, "restrictions": hit.restrictions}
+    _write_stable(png_path, png)
+    tmp = meta_path.with_name(f".{meta_path.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, meta_path)
+    return _place(png, dest_dir), {"name": item_name, **meta}
+
+
+def _image_cache(ctx: StageContext) -> Path:
+    settings = getattr(ctx, "config", None)
+    if settings is None:  # outside the engine: keep it with the job
+        return ctx.workdir / "commons"
+    return geodata.geo_cache(settings) / "images"
 
 
 class ImagesStage:
-    """Caller-supplied images (paths, URLs). Anything that fails becomes a text badge."""
+    """Item images: Wikimedia Commons ids, URLs and paths, each normalised to a PNG of at most 1024 px and
+    credited. Anything that fails becomes a text badge and a warning, never a failed job."""
 
     id = "images"
-    revision = 1
+    revision = 2
     cacheable = False
     output_model = ImagesOutput
 
     def run(self, ctx: StageContext, payload: GeoOutput) -> ImagesOutput:
         images: dict[str, str | None] = {}
+        credits: dict[str, dict] = {}
         warnings: list[str] = []
+        dest = ctx.workdir / "images"
         for seg, spec in zip(payload.segments, payload.inputs.segments):
             for j, item in enumerate(getattr(spec, "items", [])):
                 key = f"{seg.id}/{j}"
                 images[key] = None
                 if not item.image:
                     continue
-                if item.image.startswith("commons:"):
-                    warnings.append(f"{seg.id} {item.name}: Commons images arrive with find_images; shown as a badge")
-                    continue
                 ctx.cancel.raise_if_cancelled()
                 try:
-                    images[key] = str(_fetch_image(item.image, ctx.workdir / "images"))
+                    if item.image.startswith("commons:"):
+                        path, credit = _fetch_commons(item.image, item.name, dest, _image_cache(ctx))
+                    else:
+                        path = _fetch_image(item.image, dest)
+                        credit = {"name": item.name, "source": "caller", "id_or_path": item.image,
+                                  "licence": "caller-supplied", "licence_url": None,
+                                  "attribution": "supplied by the script author", "restrictions": None}
                 except JobCancelled:
                     raise
                 except Exception as exc:  # an unusable image is a badge, never a failed job
                     warnings.append(f"{seg.id} {item.name}: image not usable ({exc}); shown as a badge")
-        return ImagesOutput(**payload.model_dump(), images=images, warnings=warnings)
+                    continue
+                images[key] = str(path)
+                credits[key] = credit
+        return ImagesOutput(**payload.model_dump(), images=images, image_credits=credits, warnings=warnings)
 
 
 class NarrationStage:

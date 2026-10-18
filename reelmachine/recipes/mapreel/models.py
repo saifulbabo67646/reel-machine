@@ -195,7 +195,10 @@ class GeoOutput(ScriptOutput):
 
 
 class ImagesOutput(GeoOutput):
-    images: dict[str, str | None]          # "<segment id>/<item index>" -> local file, or None for a badge
+    images: dict[str, str | None]          # "<segment id>/<item index>" -> local PNG, or None for a badge
+    # keyed like images, one per image shown: {name, source: commons|caller, id_or_path, licence, licence_url,
+    # attribution, restrictions}
+    image_credits: dict[str, dict] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
 
 

@@ -216,3 +216,33 @@ def test_a_regions_segment_fills_its_states(tmp_path):
     fills = [r["fillMs"] for r in seg["regions"]]
     assert all(0 < t < duration for t in fills) and fills[0] < fills[1]
     assert [it["name"] for it in seg["items"]] == ["BBQ", "Avocado"] and seg["items"][1]["image"]
+
+
+def test_a_commons_image_reaches_the_segment_and_its_credit(tmp_path, monkeypatch):
+    import io
+
+    from PIL import Image
+
+    from reelmachine.recipes.mapreel import commons, stages
+
+    png = io.BytesIO()
+    Image.new("RGBA", (300, 120), (0, 0, 0, 255)).save(png, format="PNG")
+    hit = commons.ImageHit(
+        id="commons:File:Gucci logo.png", title="Gucci logo.png", thumb_url="https://upload.wikimedia.org/t.png",
+        url="https://upload.wikimedia.org/Gucci_logo.png", width=300, height=120, mime="image/png",
+        licence="Public domain", licence_url=None, attribution="Gucci", permitted=True, restrictions="trademarked")
+    monkeypatch.setattr(commons, "info", lambda file_id, **kwargs: hit)
+    monkeypatch.setattr(stages, "_download", lambda ref, **kwargs: (png.getvalue(), "image/png"))
+    script = {"mode": "storyboard", "segments": [
+        {"kind": "country", "country": "Italy", "narration": "Italy has Gucci.",
+         "items": [{"name": "Gucci", "image": "commons:File:Gucci logo.png"}]}]}
+    job = _run(tmp_path, script)
+    assert job.state == JobState.SUCCEEDED, job.error
+    resolved = json.loads(_artifacts(job)["script.resolved.json"].read_text())
+    (seg,) = resolved["segments"]
+    image = seg["items"][0]["image"]
+    assert image.startswith("images/") and image.endswith(".png")
+    assert not any("badge" in w for w in resolved["warnings"]), resolved["warnings"]  # an image, not a badge
+    project = next((tmp_path / "work").rglob(f"projects/{seg['id']}"))
+    with Image.open(project / image) as img:
+        assert img.format == "PNG" and img.size == (300, 120)
