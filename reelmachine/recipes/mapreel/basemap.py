@@ -1,16 +1,20 @@
 # reelmachine/recipes/mapreel/basemap.py
-"""Satellite layers in Mercator: one low-res world for flights, one sharp crop per segment.
+"""Map layers in Mercator: one low-res world for flights, one sharp crop per segment.
 
-The source texture is equirectangular, so Mercator is a row remap: each output row is one
-latitude. ffmpeg crops and scales the columns; numpy picks the rows."""
+The satellite look reprojects NASA's Blue Marble. Its texture is equirectangular, so Mercator is a row
+remap: each output row is one latitude. ffmpeg crops and scales the columns; numpy picks the rows.
+The flat and dark looks draw Natural Earth's countries instead (Pillow, no texture), at the same pixel
+geometry, so the runtime draws every look's layers the same way."""
 
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import os
 import shutil
 import tempfile
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -18,10 +22,25 @@ import numpy as np
 from ... import ffmpeg
 from ...config import Settings
 from . import geodata
-from .geometry import lat_of
+from .geometry import MAX_LAT, WIDTH, lat_of, merc
 
 WORLD_PX = 2048
 DETAIL_MAX_PX = 2160
+#: the detail texture's width (blue-marble-21600): a drawn crop has the size the satellite crop would
+DETAIL_NATIVE_PX = 21600
+
+#: the drawn looks' colours (runtime/pure.mjs lookStyle holds the same sea and land for the canvas)
+VECTOR_LOOKS: dict[str, dict[str, str]] = {
+    "flat": {"sea": "#a8d8f0", "land": "#f3efe4", "border": "#9a948a"},
+    "dark": {"sea": "#070b14", "land": "#1a2233", "border": "#34425e"},
+}
+#: bumped when the drawing changes, so cached drawn layers are redrawn
+VECTOR_REV = 1
+#: borders are this many px wide on a 1024-px-wide world, and the same on screen in a detail crop
+BORDER_PX = 2.0
+#: a detail crop spans the screen's width plus a quarter (stages: visible_bbox(frame, margin=0.25))
+DETAIL_SPAN_PX = WIDTH * 1.25
+SUPERSAMPLE = 2  # drawn at twice the size and scaled down: smooth coasts
 
 
 def _raw(settings: Settings, src: Path, *, x: int, y: int, w: int, h: int, out_w: int, out: Path) -> np.ndarray:
@@ -91,10 +110,22 @@ def _mercator(settings: Settings, src: Path, lon0: float, lon1: float, y0: float
     return (strip[lo] * (1 - t) + strip[hi] * t).astype(np.uint8)
 
 
-def world_layer(settings: Settings, root: Path) -> Path:
-    dest = Path(root) / "layers" / f"world-{WORLD_PX}.jpg"
+def layer_name(look: str, bbox: tuple[float, float, float, float] | None) -> str:
+    """A layer's file name in the cache: the world (bbox None) or a crop, per look. The satellite names are
+    the ones every cache already holds; a drawn look's carry the look and VECTOR_REV."""
+    if bbox is None:
+        return f"world-{WORLD_PX}.jpg" if look == "satellite" else f"world-{look}-v{VECTOR_REV}-{WORLD_PX}.jpg"
+    rounded = tuple(round(v, 5) for v in bbox)
+    keyed = rounded if look == "satellite" else (look, VECTOR_REV, *rounded)
+    return f"detail-{hashlib.sha256(repr(keyed).encode()).hexdigest()[:16]}.jpg"
+
+
+def world_layer(settings: Settings, root: Path, look: str = "satellite") -> Path:
+    dest = Path(root) / "layers" / layer_name(look, None)
     if dest.is_file():
         return dest
+    if look != "satellite":
+        return _vector_layer(root, look, 0.0, 0.0, 1.0, 1.0, WORLD_PX, WORLD_PX, dest)
     src = geodata.ensure(root, "world")
     scratch = _scratch(root)
     try:
@@ -104,26 +135,142 @@ def world_layer(settings: Settings, root: Path) -> Path:
         shutil.rmtree(scratch, ignore_errors=True)
 
 
-def detail_layer(settings: Settings, root: Path,
-                 bbox: tuple[float, float, float, float]) -> tuple[Path, tuple[float, float, float, float]]:
+def _detail_size(native_w: float, x0: float, y0: float, x1: float, y1: float) -> tuple[int, int]:
+    aspect = (y1 - y0) / (x1 - x0)
+    out_w = int(min(native_w, DETAIL_MAX_PX if aspect <= 1 else DETAIL_MAX_PX / aspect))
+    out_w = max(64, out_w)
+    return out_w, max(64, int(round(out_w * aspect)))
+
+
+def detail_layer(settings: Settings, root: Path, bbox: tuple[float, float, float, float],
+                 look: str = "satellite") -> tuple[Path, tuple[float, float, float, float]]:
     x0, y0, x1, y1 = bbox
     y0, y1 = max(0.0, y0), min(1.0, y1)
-    key = hashlib.sha256(repr(tuple(round(v, 5) for v in (x0, y0, x1, y1))).encode()).hexdigest()[:16]
-    dest = Path(root) / "layers" / f"detail-{key}.jpg"
+    dest = Path(root) / "layers" / layer_name(look, (x0, y0, x1, y1))
     actual = (x0, y0, x1, y1)
     if dest.is_file():
         return dest, actual
+    if look != "satellite":
+        out_w, out_h = _detail_size((x1 - x0) * DETAIL_NATIVE_PX, x0, y0, x1, y1)
+        return _vector_layer(root, look, x0, y0, x1, y1, out_w, out_h, dest), actual
     src = geodata.ensure(root, "detail")
     info = ffmpeg.probe(src)
-    native_w = (x1 - x0) * info.width  # source px across the crop
-    long_side = DETAIL_MAX_PX
-    aspect = (y1 - y0) / (x1 - x0)
-    out_w = int(min(native_w, long_side if aspect <= 1 else long_side / aspect))
-    out_w = max(64, out_w)
-    out_h = max(64, int(round(out_w * aspect)))
+    out_w, out_h = _detail_size((x1 - x0) * info.width, x0, y0, x1, y1)  # source px across the crop
     scratch = _scratch(root)
     try:
         rgb = _mercator(settings, src, x0 * 360 - 180, x1 * 360 - 180, y0, y1, out_w, out_h, scratch)
         return _encode(settings, rgb, dest, scratch), actual
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
+
+
+# -- the drawn looks ------------------------------------------------------------------------------------
+
+
+_CUT = 180.0 - 1e-6  # Natural Earth splits a country at ±180: those edges are cuts, not borders
+_POLE = MAX_LAT - 1e-6  # Antarctica closes along the pole, which Mercator clips to the map's bottom edge
+
+
+@lru_cache(maxsize=2)
+def _rings(path: str, _mtime: int) -> tuple[tuple[np.ndarray, np.ndarray, np.ndarray, bool], ...]:
+    """Every admin-0 ring in Mercator: (points (n, 2), which edges to stroke (n - 1), x extent, outer?).
+    A ring that jumps across the antimeridian (Natural Earth splits its countries there, so only other data
+    would) is unwrapped into one piece east of it; the drawing repeats it a world either side."""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    out = []
+    for feature in data["features"]:
+        geometry = feature.get("geometry")
+        if not geometry:
+            continue
+        polys = geometry["coordinates"] if geometry["type"] == "MultiPolygon" else [geometry["coordinates"]]
+        for poly in polys:
+            for k, ring in enumerate(poly):
+                arr = np.asarray([p[:2] for p in ring], dtype=float)
+                if len(arr) < 3:
+                    continue
+                lon, lat = arr[:, 0], arr[:, 1]
+                polar = np.abs(lat) >= _POLE
+                jumps = (np.abs(np.diff(lon)) > 180) & ~(polar[:-1] & polar[1:])
+                if jumps.any():
+                    lon = np.unwrap(lon, period=360.0)
+                cut = np.abs(arr[:, 0]) >= _CUT
+                stroke = ~((cut[:-1] & cut[1:]) | (polar[:-1] & polar[1:]))
+                x, y = merc(lon, lat)
+                pts = np.column_stack([x, y])
+                out.append((pts, stroke, (float(x.min()), float(x.max())), k == 0))
+    return tuple(out)
+
+
+def _runs(px: np.ndarray, stroke: np.ndarray) -> list[list[tuple[float, float]]]:
+    """The ring's strokeable edges as polylines."""
+    runs, current = [], []
+    for i, keep in enumerate(stroke):
+        if keep:
+            if not current:
+                current = [tuple(px[i])]
+            current.append(tuple(px[i + 1]))
+        elif current:
+            runs.append(current)
+            current = []
+    if current:
+        runs.append(current)
+    return runs
+
+
+def _vector_layer(root: Path, look: str, x0: float, y0: float, x1: float, y1: float,
+                  out_w: int, out_h: int, dest: Path | None = None) -> Path:
+    """Natural Earth's countries over the look's sea, in Mercator [x0, x1] × [y0, y1] at out_w × out_h px: the
+    pixel geometry of the satellite layer of that box. Holes (Lesotho in South Africa) are other countries, so
+    every outer ring is land and every ring is a border."""
+    from PIL import Image, ImageDraw
+
+    colours = VECTOR_LOOKS[look]
+    countries = geodata.ensure(root, "countries")
+    rings = _rings(str(countries), countries.stat().st_mtime_ns)
+    ss = SUPERSAMPLE
+    w, h = out_w * ss, out_h * ss
+    kx, ky = w / (x1 - x0), h / (y1 - y0)
+    # px per screen px: the world as if 1024 px wide; a crop as stretched over DETAIL_SPAN_PX of screen
+    ref = kx / ss / 1024 if x1 - x0 >= 1 else out_w / DETAIL_SPAN_PX
+    width = max(1, int(round(BORDER_PX * ref * ss)))
+    land = Image.new("L", (w, h), 0)
+    lines = Image.new("L", (w, h), 0)
+    fill, edge = ImageDraw.Draw(land), ImageDraw.Draw(lines)
+    pad = width / kx  # a border just outside the box still reaches into it
+    for pts, stroke, (rx0, rx1), outer in rings:
+        for shift in (-1.0, 0.0, 1.0):  # the world repeats east and west; a crop may run past ±180
+            if rx1 + shift < x0 - pad or rx0 + shift > x1 + pad:
+                continue
+            px = np.column_stack([(pts[:, 0] + shift - x0) * kx, (pts[:, 1] - y0) * ky])
+            if px[:, 1].max() < -width or px[:, 1].min() > h + width:
+                continue
+            # one point per supersampled px: a 10m coast has far more vertices than a layer has px
+            snapped = np.round(px)
+            keep = np.ones(len(px), dtype=bool)
+            keep[1:] = (snapped[1:] != snapped[:-1]).any(axis=1)
+            idx = np.flatnonzero(keep)
+            if len(idx) < 2:
+                continue
+            slim = snapped[idx]
+            # an edge between kept points is a border unless every original edge it stands for is a cut
+            slim_stroke = np.array([stroke[a:b].any() for a, b in zip(idx[:-1], idx[1:])], dtype=bool)
+            if outer and len(slim) >= 3:
+                fill.polygon([tuple(p) for p in slim], fill=255)
+            for run in _runs(slim, slim_stroke):
+                edge.line(run, fill=255, width=width, joint="curve")
+    image = Image.new("RGB", (w, h), colours["sea"])
+    image.paste(Image.new("RGB", (w, h), colours["land"]), mask=land)
+    image.paste(Image.new("RGB", (w, h), colours["border"]), mask=lines)
+    image = image.resize((out_w, out_h), Image.LANCZOS)
+    if dest is None:
+        dest = Path(root) / "layers" / layer_name(look, (x0, y0, x1, y1))
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(dir=dest.parent, prefix=dest.stem + ".", suffix=".partial.jpg")
+    os.close(fd)
+    partial = Path(name)
+    try:
+        image.save(partial, "JPEG", quality=92, subsampling=0)
+        os.replace(partial, dest)
+    finally:
+        partial.unlink(missing_ok=True)
+    return dest

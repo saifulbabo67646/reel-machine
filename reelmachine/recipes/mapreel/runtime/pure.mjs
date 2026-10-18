@@ -241,3 +241,49 @@ export function readableOnWhite(hex) {
   }
   return DARK_TEXT;
 }
+
+// Each look's numbers: the sea under the layers (and the bands past ±85°, deepening to `bandFar`), the land and
+// border colours its layers are drawn in (basemap.VECTOR_LOOKS; px at a 1024-px-wide world), a place's fill alpha,
+// its inner glow ({colour: a colour, or null for the place's own fill; alpha; blur px; stroke: the glow line's
+// alpha; outer: a halo outside the border too, and a white core line inside: neon}, its ghosted name's fill
+// and the colour of a regions segment's state lines. The satellite look keeps the numbers it was always drawn with.
+const LOOKS = {
+  satellite: {
+    sea: "#0b2236", bandFar: "#040b14", land: null, border: null, borderPx: 0, fillAlpha: 0.8,
+    glow: { colour: "#ffffff", alpha: 0.9, blur: 28, stroke: 0.55 }, ghost: "rgba(255,255,255,0.22)",
+    lines: "rgba(255,255,255,0.55)",
+  },
+  flat: {
+    sea: "#a8d8f0", bandFar: "#8ec9e6", land: "#f3efe4", border: "#9a948a", borderPx: 2, fillAlpha: 0.92,
+    glow: { colour: "#ffffff", alpha: 0.35, blur: 28, stroke: 0.2 }, ghost: "rgba(0,0,0,0.18)",
+    lines: "rgba(110,102,92,0.7)", // a regions segment's state lines: white would vanish on cream land
+  },
+  dark: {
+    sea: "#070b14", bandFar: "#03050a", land: "#1a2233", border: "#34425e", borderPx: 2, fillAlpha: 0.85,
+    glow: { colour: null, alpha: 0.9, blur: 28, stroke: 0.55, outer: true }, ghost: "rgba(255,255,255,0.14)",
+    lines: "rgba(255,255,255,0.55)",
+  },
+};
+export function lookStyle(look) {
+  return LOOKS[look] || LOOKS.satellite;
+}
+
+// "#rrggbb" (or "#rgb") at `alpha` as an rgba() string.
+export function rgba(hex, alpha) {
+  let h = String(hex).replace("#", "");
+  if (h.length === 3) h = [...h].map((c) => c + c).join("");
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// A look's glow at `alpha`: its own colour, or the place's fill (`fill`) when the look's is null (dark: neon).
+export function glowColour(glow, fill, alpha) {
+  return rgba(glow.colour || fill, alpha);
+}
+
+// "rgba(r,g,b,a)" -> {colour: "rgb(r,g,b)", alpha: a}; any other colour is opaque.
+export function splitAlpha(colour) {
+  const m = /^rgba\(\s*([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)$/.exec(String(colour).trim());
+  if (!m) return { colour, alpha: 1 };
+  return { colour: `rgb(${m[1].trim()},${m[2].trim()},${m[3].trim()})`, alpha: Number(m[4]) };
+}

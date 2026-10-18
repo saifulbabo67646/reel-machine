@@ -1,4 +1,4 @@
-"""The mapreel recipe: a script of map segments becomes a narrated satellite-map reel."""
+"""The mapreel recipe: a script of map segments becomes a narrated world-map reel (satellite, flat or dark)."""
 
 from __future__ import annotations
 
@@ -64,7 +64,8 @@ class MapReelRecipe:
         id="mapreel",
         title="Map reel",
         summary=(
-            "A script of map segments becomes a narrated vertical reel on a satellite world map: "
+            "A script of map segments becomes a narrated vertical reel on a world map "
+            "(`look`: satellite, flat or dark): "
             "the camera flies to each country, fills it and pops in what the voice names. "
             "`storyboard` renders one still per segment."
         ),

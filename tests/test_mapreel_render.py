@@ -1,6 +1,7 @@
 # tests/test_mapreel_render.py
 import dataclasses
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -80,3 +81,22 @@ def test_every_segment_kind_renders_a_real_still(tmp_path):
     versus = tiles[kinds.index("versus")]
     top, bottom = versus[:TILE_H // 2], versus[TILE_H // 2:]
     assert np.abs(top - bottom).mean() > 10  # two maps, not one picture twice
+
+
+@pytest.mark.parametrize("look", ["flat", "dark"])
+def test_the_food_storyboard_renders_in_the_drawn_looks(tmp_path, look):
+    inputs = json.loads(FOOD.read_text(encoding="utf-8"))
+    inputs.update(mode="storyboard", look=look)
+    kinds = [s["kind"] for s in inputs["segments"]]
+    job = _build(tmp_path, inputs)
+    assert job.state == JobState.SUCCEEDED, job.error
+    arts = {a.name: Path(a.path) for a in job.result.artifacts}
+    sheet = arts["storyboard.jpg"]
+    assert sheet.is_file()
+    for index, (kind, tile) in enumerate(zip(kinds, _tiles(sheet, len(kinds)))):
+        assert tile.std() > 10, f"{look}: still {index + 1} ({kind}) is blank"
+    assert "Blue Marble" not in arts["sources.md"].read_text(encoding="utf-8")
+    keep = os.environ.get("REEL_TEST_LOOKS_OUT")  # a folder to keep the sheets in, for a person to look at
+    if keep:
+        Path(keep).mkdir(parents=True, exist_ok=True)
+        (Path(keep) / f"food-{look}.jpg").write_bytes(sheet.read_bytes())

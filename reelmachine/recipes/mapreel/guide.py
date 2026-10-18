@@ -36,6 +36,14 @@ GUIDE: dict[str, Any] = {
         "regions: `country` and 1-12 `regions` {region, say, items (up to 6), colour}. A country's states or "
         "prefectures fill one by one as the voice names them (`say` or the name), each with its own items.",
     ],
+    "looks": [
+        "satellite (the default): NASA Blue Marble imagery; vivid fills with a white glow. The most cinematic.",
+        "flat: a clean atlas, pale sea and cream land with grey borders; fills nearly opaque, a dark ghost name. "
+        "Reads best for dense or data-heavy reels.",
+        "dark: a night map, navy land on near-black sea; fills glow neon in their own colour. Good for "
+        "dramatic or 'shocking' topics.",
+        "Set `look` on the script; every segment uses it. flat and dark need no satellite download.",
+    ],
     "hooks": [
         "Curiosity gap: hold back the answer. 'Number five might shock you.' / 'Only one country eats this "
         "for breakfast.'",

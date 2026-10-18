@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, luminance, textOn, readableOnWhite, contrast, slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_Y, LEGEND_H, LEGEND_AIR, badgeLayout, panelNameY } from "../pure.mjs";
+import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, luminance, textOn, readableOnWhite, contrast, slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_Y, LEGEND_H, LEGEND_AIR, badgeLayout, panelNameY, lookStyle, glowColour, splitAlpha, rgba } from "../pure.mjs";
 
 const A = { x: 0.2, y: 0.4, s: 1080 };
 const B = { x: 0.55, y: 0.35, s: 20000 };
@@ -245,4 +245,46 @@ test("a stat value on the white card is darkened until it reads", () => {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(gold.slice(i, i + 2), 16));
   assert.ok(r > g && g > b && Math.abs(r / g - 255 / 204) < 0.05);
   assert.equal(readableOnWhite(null), "#111111");
+});
+
+test("each look has its own sea, land, borders, fill, glow and ghost name", () => {
+  const flat = lookStyle("flat");
+  assert.equal(flat.sea, "#a8d8f0");
+  assert.equal(flat.land, "#f3efe4");
+  assert.equal(flat.border, "#9a948a");
+  assert.equal(flat.borderPx, 2);
+  assert.equal(flat.fillAlpha, 0.92);
+  assert.deepEqual([flat.glow.colour, flat.glow.alpha], ["#ffffff", 0.35]); // soft white
+  assert.equal(flat.ghost, "rgba(0,0,0,0.18)");
+  const dark = lookStyle("dark");
+  assert.equal(dark.sea, "#070b14");
+  assert.equal(dark.land, "#1a2233");
+  assert.equal(dark.border, "#34425e");
+  assert.equal(dark.borderPx, 2);
+  assert.equal(dark.fillAlpha, 0.85);
+  assert.deepEqual([dark.glow.colour, dark.glow.alpha, dark.glow.blur], [null, 0.9, 28]); // neon: the fill colour
+  assert.equal(dark.ghost, "rgba(255,255,255,0.14)");
+});
+
+test("the satellite look keeps the numbers it always drew with, and is the default", () => {
+  const sat = lookStyle("satellite");
+  assert.equal(sat.sea, "#0b2236");
+  assert.equal(sat.fillAlpha, 0.8);
+  assert.deepEqual(sat.glow, { colour: "#ffffff", alpha: 0.9, blur: 28, stroke: 0.55 });
+  assert.equal(sat.ghost, "rgba(255,255,255,0.22)");
+  assert.deepEqual(lookStyle(undefined), sat);
+  assert.deepEqual(lookStyle("no-such-look"), sat);
+});
+
+test("a glow colour is the look's, or the place's own fill when the look says null", () => {
+  assert.equal(glowColour(lookStyle("satellite").glow, "#e0201b", 0.9), "rgba(255,255,255,0.9)");
+  assert.equal(glowColour(lookStyle("dark").glow, "#e0201b", 0.9), "rgba(224,32,27,0.9)");
+});
+
+test("a look's rgba colour splits into an opaque colour and its alpha", () => {
+  assert.deepEqual(splitAlpha("rgba(255,255,255,0.22)"), { colour: "rgb(255,255,255)", alpha: 0.22 });
+  assert.deepEqual(splitAlpha("rgba(0, 0, 0, 0.18)"), { colour: "rgb(0,0,0)", alpha: 0.18 });
+  assert.deepEqual(splitAlpha("#ffffff"), { colour: "#ffffff", alpha: 1 });
+  assert.equal(rgba("#0b2236", 0.55), "rgba(11,34,54,0.55)");
+  assert.equal(rgba("#fff", 1), "rgba(255,255,255,1)");
 });

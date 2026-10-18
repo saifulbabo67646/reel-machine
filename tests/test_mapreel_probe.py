@@ -190,6 +190,11 @@ def test_the_guide_has_every_section_an_agent_needs():
     assert all(any(line.startswith(rule) for line in GUIDE["lint"]) for rule in rules)
     assert any('lint: "warn"' in line for line in GUIDE["lint"])
     assert any("source" in tip for tip in GUIDE["tips"])
+    from typing import get_args
+
+    looks = get_args(MapReelInputs.model_fields["look"].annotation)
+    assert set(looks) == {"satellite", "flat", "dark"}
+    assert all(any(line.startswith(look) for line in GUIDE["looks"]) for look in looks)
 
 
 def test_every_hook_example_in_the_guide_passes_the_weak_opener_rule():

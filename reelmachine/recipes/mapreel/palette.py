@@ -1,5 +1,5 @@
 # reelmachine/recipes/mapreel/palette.py
-"""Vivid fills that read on a satellite map: no two alike on screen or across a cut."""
+"""Vivid fills that read on every look (satellite, flat, dark): no two alike on screen or across a cut."""
 
 from __future__ import annotations
 

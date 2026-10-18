@@ -2,6 +2,7 @@
 import dataclasses
 import shutil
 import subprocess
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -10,7 +11,7 @@ from reelmachine.config import get_settings
 from reelmachine.recipes.mapreel import basemap, geodata, palette
 from reelmachine.recipes.mapreel.palette import PALETTE
 
-pytestmark = pytest.mark.slow
+FIXTURE = Path(__file__).parent / "fixtures" / "mapreel" / "countries.geojson"
 
 
 def _settings(tmp_path):
@@ -37,6 +38,7 @@ def _rgb(settings, path):
     return np.frombuffer(out, dtype=np.uint8).reshape(h, w, 3)
 
 
+@pytest.mark.slow
 def test_world_layer_is_square_mercator_with_west_red_and_east_blue(tmp_path):
     settings = _settings(tmp_path)
     root = tmp_path / "geo"
@@ -52,6 +54,7 @@ def test_world_layer_is_square_mercator_with_west_red_and_east_blue(tmp_path):
     assert abs(boundary - 230) <= 5
 
 
+@pytest.mark.slow
 def test_detail_layer_crops_and_caches(tmp_path):
     settings = _settings(tmp_path)
     root = tmp_path / "geo"
@@ -66,6 +69,7 @@ def test_detail_layer_crops_and_caches(tmp_path):
     assert img[img.shape[0] // 2, split - 10, 0] > 150 and img[img.shape[0] // 2, split + 10, 2] > 150
 
 
+@pytest.mark.slow
 def test_detail_layer_wraps_across_the_antimeridian(tmp_path):
     settings = _settings(tmp_path)
     root = tmp_path / "geo"
@@ -76,6 +80,7 @@ def test_detail_layer_wraps_across_the_antimeridian(tmp_path):
     assert img[mid, 5, 2] > 150 and img[mid, -5, 0] > 150  # east (blue) on the left, west (red) on the right
 
 
+@pytest.mark.slow
 def test_two_threads_building_different_layers_at_once_each_get_their_own(tmp_path):
     """Jobs run in threads of one process and share the geo cache: no scratch file may be shared."""
     from concurrent.futures import ThreadPoolExecutor
@@ -125,3 +130,136 @@ def test_sixty_countries_get_sixty_colours():
     colours = palette.assign([codes])
     assert len(set(colours.values())) == 60
     assert all(c.startswith("#") and len(c) == 7 for c in colours.values())
+
+
+# -- the flat and dark looks: drawn from Natural Earth, no texture (and no ffmpeg) --------------------------
+
+
+def _countries(root):
+    """The fixture's countries as the cached admin-0 file; no satellite texture anywhere."""
+    root.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(FIXTURE, root / geodata.FILES["countries"][0])
+    return root
+
+
+def _pixels(path):
+    from PIL import Image
+
+    return np.asarray(Image.open(path).convert("RGB")).astype(int)
+
+
+def _hex(colour):
+    return np.array([int(colour[i:i + 2], 16) for i in (1, 3, 5)])
+
+
+def _at(img, lon, lat, x0=0.0, y0=0.0, x1=1.0, y1=1.0):
+    from reelmachine.recipes.mapreel.geometry import merc
+
+    x, y = merc(lon, lat)
+    h, w = img.shape[:2]
+    return img[int((float(y) - y0) / (y1 - y0) * h), int((float(x) - x0) / (x1 - x0) * w)]
+
+
+def _near(pixel, colour, tol=12):
+    return int(np.abs(pixel - _hex(colour)).max()) <= tol
+
+
+@pytest.mark.parametrize("look, sea, land", [("flat", "#a8d8f0", "#f3efe4"), ("dark", "#070b14", "#1a2233")])
+def test_flat_world_layer_colours_land_and_sea(tmp_path, look, sea, land):
+    root = _countries(tmp_path / "geo")
+    path = basemap.world_layer(None, root, look=look)
+    img = _pixels(path)
+    assert img.shape == (basemap.WORLD_PX, basemap.WORLD_PX, 3)  # the satellite world's pixel geometry
+    # the fixture has no Sahara: South Africa's Karoo is its desert; the mid-Pacific is open sea
+    assert _near(_at(img, 22.0, -31.0), land), _at(img, 22.0, -31.0)
+    assert _near(_at(img, 45.0, 60.0), land)  # Russia west of the Urals
+    assert _near(_at(img, -150.0, 0.0), sea), _at(img, -150.0, 0.0)
+    assert _near(img[0, 1000], sea) and _near(img[-1, 1000], sea)  # the polar rows: no country in the fixture
+    assert not (root / geodata.FILES["world"][0]).exists()  # no Blue Marble fetched
+
+
+def test_flat_borders_are_drawn_between_neighbours(tmp_path):
+    root = _countries(tmp_path / "geo")
+    img = _pixels(basemap.world_layer(None, root, look="flat"))
+    from reelmachine.recipes.mapreel.geometry import merc
+
+    # along the Norway-Sweden border's latitude, a border-coloured pixel separates the two lands
+    x0, y = (float(v) for v in merc(10.0, 63.0))
+    x1, _ = (float(v) for v in merc(16.0, 63.0))
+    row = img[int(y * img.shape[0]), int(x0 * img.shape[1]):int(x1 * img.shape[1])]
+    border, land = _hex("#9a948a"), _hex("#f3efe4")
+    assert (np.abs(row - border).max(axis=1) < 30).any()
+    assert (np.abs(row - land).max(axis=1) < 12).sum() > len(row) // 2
+
+
+def test_vector_layer_has_no_antimeridian_streak(tmp_path):
+    root = _countries(tmp_path / "geo")
+    img = _pixels(basemap.world_layer(None, root, look="flat"))
+    from reelmachine.recipes.mapreel.geometry import merc
+
+    sea = _hex("#a8d8f0")
+    for lat in (-16.5, -17.0, -18.0):  # Fiji's latitude: its islands sit both sides of 180°
+        _, y = merc(0.0, lat)
+        row = img[int(float(y) * img.shape[0])]
+        west, east = (int(float(merc(lon, 0)[0]) * img.shape[1]) for lon in (-175.0, 175.0))
+        away = row[west:east]  # every column at least 5° from Fiji
+        assert (np.abs(away - sea).max(axis=1) <= 12).all(), lat
+        assert not (np.abs(row - sea).max(axis=1) <= 12).all()  # Fiji itself is drawn
+    # Russia's far east (Chukotka) runs past 180°: land either side of the seam, with no border drawn down
+    # the cut, and sea over the Atlantic on the same row
+    _, y = merc(0.0, 67.0)
+    row = img[int(float(y) * img.shape[0])]
+    assert _near(_at(img, -177.0, 67.0), "#f3efe4") and _near(_at(img, 175.0, 67.0), "#f3efe4")
+    assert _near(row[1], "#f3efe4") and _near(row[-2], "#f3efe4")
+    assert _near(_at(img, -30.0, 67.0), "#a8d8f0")
+
+
+def test_a_ring_that_jumps_the_antimeridian_is_drawn_both_sides_with_no_streak(tmp_path):
+    import json
+
+    root = tmp_path / "geo"
+    root.mkdir()
+    ring = [[170, -40], [-170, -40], [-170, -45], [170, -45], [170, -40]]  # 20° wide across 180°
+    data = {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"ADM0_A3": "XXX"},
+            "geometry": {"type": "Polygon", "coordinates": [ring]}}]}
+    (root / geodata.FILES["countries"][0]).write_text(json.dumps(data))
+    img = _pixels(basemap.world_layer(None, root, look="dark"))
+    assert _near(_at(img, 175.0, -42.5), "#1a2233") and _near(_at(img, -175.0, -42.5), "#1a2233")
+    assert _near(_at(img, 0.0, -42.5), "#070b14") and _near(_at(img, -100.0, -42.5), "#070b14")
+
+
+def test_a_vector_detail_layer_has_the_satellite_geometry_and_wraps(tmp_path):
+    root = _countries(tmp_path / "geo")
+    bbox = (0.40, 0.30, 0.55, 0.45)
+    path, actual = basemap.detail_layer(None, root, bbox, look="flat")
+    assert actual == pytest.approx(bbox)
+    img = _pixels(path)
+    # what the satellite crop of the 21600-px texture would be: 0.15 × 21600 = 3240 px, capped at 2160
+    assert img.shape == (basemap.DETAIL_MAX_PX, basemap.DETAIL_MAX_PX, 3)
+    # Fiji straddles 180°: a crop across it has Fiji's land either side of the seam
+    from reelmachine.recipes.mapreel.geometry import merc
+
+    _, fy = merc(0.0, -17.8)
+    box = (0.995, float(fy) - 0.004, 1.005, float(fy) + 0.004)
+    path, _ = basemap.detail_layer(None, root, box, look="flat")
+    img = _pixels(path)
+    land = (np.abs(img - _hex("#f3efe4")).max(axis=2) <= 12)
+    half = img.shape[1] // 2
+    assert land[:, :half].any() and land[:, half:].any()
+
+
+def test_look_is_part_of_the_layer_cache_key(tmp_path):
+    root = _countries(tmp_path / "geo")
+    bbox = (0.40, 0.30, 0.55, 0.45)
+    flat, _ = basemap.detail_layer(None, root, bbox, look="flat")
+    dark, _ = basemap.detail_layer(None, root, bbox, look="dark")
+    assert flat != dark and flat.is_file() and dark.is_file()
+    assert basemap.world_layer(None, root, look="flat") != basemap.world_layer(None, root, look="dark")
+    # the satellite names are the ones already in every cache: unchanged
+    assert basemap.layer_name("satellite", None) == f"world-{basemap.WORLD_PX}.jpg"
+    assert basemap.layer_name("flat", None) != basemap.layer_name("satellite", None)
+    assert basemap.layer_name("satellite", bbox) == basemap.layer_name("satellite", tuple(bbox))
+    names = {look: basemap.layer_name(look, bbox) for look in ("satellite", "flat", "dark")}
+    assert len(set(names.values())) == 3
+    again, _ = basemap.detail_layer(None, root, bbox, look="flat")
+    assert again == flat

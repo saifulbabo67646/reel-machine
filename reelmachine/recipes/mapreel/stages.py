@@ -199,7 +199,8 @@ class GeoStage:
         settings: Settings = ctx.config
         root = geodata.geo_cache(settings)
         atlas = atlas_for(settings)
-        world = basemap.world_layer(settings, root)
+        look = payload.inputs.look
+        world = basemap.world_layer(settings, root, look=look)
         frames, layers, bboxes, panels = {}, {}, {}, {}
         previous = None
         for seg, spec in zip(payload.segments, payload.inputs.segments):
@@ -214,22 +215,23 @@ class GeoStage:
             # a versus is drawn in its panels; its full-screen union frame is only where the next segment flies from
             frames[seg.id] = frame.to_dict()
             if spec.kind == "versus":
-                panels[seg.id] = self._panels(settings, root, atlas, seg.codes, spec.camera.zoom)
+                panels[seg.id] = self._panels(settings, root, atlas, seg.codes, spec.camera.zoom, look)
             else:
-                path, bbox = basemap.detail_layer(settings, root, visible_bbox(frame, margin=0.25))
+                path, bbox = basemap.detail_layer(settings, root, visible_bbox(frame, margin=0.25), look=look)
                 layers[seg.id], bboxes[seg.id] = str(path), list(bbox)
             previous = frame
         return GeoOutput(**payload.model_dump(), world=str(world), layers=layers, detail_bboxes=bboxes,
                          frames=frames, panels=panels)
 
     @staticmethod
-    def _panels(settings: Settings, root: Path, atlas: Atlas, codes: list[str], zoom: float) -> list[dict]:
+    def _panels(settings: Settings, root: Path, atlas: Atlas, codes: list[str], zoom: float,
+                look: str = "satellite") -> list[dict]:
         """One panel per country: its own frame for the panel's view, and a sharp layer of what it shows."""
         out = []
         for code, rect in zip(codes, kinds.panel_rects(len(codes))):
             view = (rect[2], rect[3])
             frame = frame_for(shape_of(atlas.places[code]).main, zoom=zoom, view=view, safe=kinds.PANEL_SAFE)
-            path, bbox = basemap.detail_layer(settings, root, visible_bbox(frame, margin=0.25, view=view))
+            path, bbox = basemap.detail_layer(settings, root, visible_bbox(frame, margin=0.25, view=view), look=look)
             out.append({"frame": frame.to_dict(), "layer": str(path), "bbox": list(bbox), "rect": list(rect)})
         return out
 
@@ -556,7 +558,7 @@ class SegmentsStage:
             doc = compose.segment_document(
                 duration_ms=window.duration_ms, camera=camera, layers=layers, places=places,
                 previous=[_faded(p, wrap) for p in previous_places] if fly else [],
-                items=items, words=words, extras=built.extras)
+                items=items, words=words, extras=built.extras, look=inputs.look)
             links.update(built.links)
             directory = compose.write_project(doc, ctx.workdir / "projects" / seg.id, links)
             projects.append(SegmentProject(segment_id=seg.id, index=i, dir=str(directory),
@@ -661,6 +663,14 @@ class PrepStage:
         return PrepOutput(segments=payload, storyboard=str(sheet), renderer=renderer.name, halt_pipeline=True)
 
 
+def credits(inputs: MapReelInputs) -> list[str]:
+    """The reel's credits: the voice and the map data its look draws from (Blue Marble only on satellite)."""
+    out = [f"Narration: {inputs.voice}", geodata.NATURAL_EARTH.attribution]
+    if inputs.look == "satellite":
+        out.append(geodata.BLUE_MARBLE.attribution)
+    return out
+
+
 class ComposeStage:
     id = "compose"
     revision = 1
@@ -686,8 +696,7 @@ class ComposeStage:
         name = inputs.name or ctx.job.id
         return ComposeOutput(prep=payload, timeline=timeline, render_options={
             "outdir": str(outdir), "reel_name": name, "workdir": str(settings.workdir / "render" / name),
-            "credits": [f"Narration: {inputs.voice}", geodata.NATURAL_EARTH.attribution,
-                        geodata.BLUE_MARBLE.attribution]})
+            "credits": credits(inputs)})
 
 
 class RenderStage:

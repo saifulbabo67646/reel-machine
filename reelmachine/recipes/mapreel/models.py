@@ -152,7 +152,7 @@ class MapReelInputs(BaseModel):
     title: str = Field("", max_length=80)
     language: str = "en"
     voice: str = "fake:default"
-    look: Literal["satellite"] = "satellite"
+    look: Literal["satellite", "flat", "dark"] = "satellite"  # flat and dark: drawn from Natural Earth
     music: str | None = None  # "auto" (a synthesised bed) or a local audio file
     length: int | None = Field(None, ge=15, le=90)
     lint: Literal["strict", "warn"] = "strict"  # strict: a build refuses a weak hook or an unpaid tease

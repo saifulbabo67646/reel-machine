@@ -115,10 +115,11 @@ def drifted_end(camera: dict[str, Any], duration_ms: int) -> dict[str, float]:
 def segment_document(*, duration_ms: int, camera: dict[str, Any], layers: list[dict[str, Any]],
                      places: list[dict[str, Any]], previous: list[dict[str, Any]], items: list[dict[str, Any]],
                      words: list[dict[str, Any]], legend: str | None = None,
-                     extras: dict[str, Any] | None = None) -> dict[str, Any]:
-    """`extras` (a kind's own keys: a legend, a rank badge, a stat card) are merged in last."""
+                     extras: dict[str, Any] | None = None, look: str = "satellite") -> dict[str, Any]:
+    """`extras` (a kind's own keys: a legend, a rank badge, a stat card) are merged in last. `look` picks the
+    runtime's sea, fill, glow and ghost-name styling (pure.mjs lookStyle)."""
     doc = {"width": WIDTH, "height": HEIGHT, "duration": duration_ms / 1000, "camera": camera, "layers": layers,
-           "places": places, "previous": previous, "items": items, "words": words, "legend": legend}
+           "places": places, "previous": previous, "items": items, "words": words, "legend": legend, "look": look}
     return {**doc, **(extras or {})}
 
 

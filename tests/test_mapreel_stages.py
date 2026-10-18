@@ -287,3 +287,67 @@ def test_the_segment_after_a_regions_segment_fades_out_what_was_on_screen(tmp_pa
     # the faint country at its faint share, then every filled state at full: all fading out together
     assert previous == [{"colour": shown["places"][0]["colour"], "rings": shown["places"][0]["rings"], "alpha": 0.25},
                         *({"colour": r["colour"], "rings": r["rings"]} for r in shown["regions"])]
+
+
+@pytest.mark.parametrize("look", ["satellite", "flat", "dark"])
+def test_every_segment_document_carries_the_look(tmp_path, monkeypatch, look):
+    from reelmachine.core.timeline import WordSpan
+    from reelmachine.recipes.mapreel.models import NarrationOutput, Window
+    from reelmachine.recipes.mapreel.places import Atlas
+
+    monkeypatch.setattr(stages, "atlas_for", lambda settings: Atlas.load(FIXTURE))
+    inputs = MapReelInputs.model_validate({"look": look, "segments": [{
+        "kind": "highlight", "countries": ["ITA"], "narration": "Italy leads."}]})
+    seg = ResolvedSegment(id="seg-1", index=0, kind="highlight", codes=["ITA"], names={"ITA": "Italy"},
+                          colours={"ITA": "#8a2be2"})
+    layer = tmp_path / "layer.jpg"
+    layer.write_bytes(b"jpg")
+    spoken = [WordSpan(text="Italy", start_ms=0, end_ms=300)]
+    payload = NarrationOutput(
+        inputs=inputs, segments=[seg], world=str(layer), layers={"seg-1": str(layer)},
+        detail_bboxes={"seg-1": [0, 0, 1, 1]}, frames={"seg-1": {"x": 0.55, "y": 0.35, "s": 4000}},
+        images={}, audio_asset="a.wav", duration_ms=5000,
+        windows=[Window(start_ms=0, duration_ms=5000, speech_offset_ms=1000, speech_ms=2000)],
+        words=[spoken], hot=[[False]], spoken=[spoken], provider="fake")
+    docs = {}
+    write = stages.compose.write_project
+    monkeypatch.setattr(stages.compose, "write_project",
+                        lambda doc, dest, links: docs.setdefault(Path(dest).name, doc) and write(doc, dest, links))
+    stages.SegmentsStage().run(SimpleNamespace(workdir=tmp_path / "stage", config=None), payload)
+    assert docs["seg-1"]["look"] == look
+
+
+def test_the_geo_stage_asks_for_layers_in_the_look(tmp_path, monkeypatch):
+    from reelmachine.recipes.mapreel.models import ScriptOutput
+    from reelmachine.recipes.mapreel.places import Atlas
+
+    monkeypatch.setattr(stages, "atlas_for", lambda settings: Atlas.load(FIXTURE))
+    monkeypatch.setattr(stages.geodata, "geo_cache", lambda settings: tmp_path / "geo")
+    asked = []
+    monkeypatch.setattr(stages.basemap, "world_layer",
+                        lambda settings, root, look="satellite": asked.append(("world", look)) or tmp_path / "w.jpg")
+    monkeypatch.setattr(stages.basemap, "detail_layer",
+                        lambda settings, root, bbox, look="satellite": asked.append(("detail", look))
+                        or (tmp_path / "d.jpg", tuple(bbox)))
+    inputs = MapReelInputs.model_validate({"look": "dark", "segments": [
+        {"kind": "country", "country": "ITA", "narration": "Italy.", "items": [{"name": "Gucci"}]},
+        {"kind": "versus", "countries": ["JPN", "USA"], "narration": "Japan 125M, America 335M.",
+         "stats": [{"value": "125M"}, {"value": "335M"}]}]})
+    segs = [ResolvedSegment(id="seg-1", index=0, kind="country", codes=["ITA"], names={"ITA": "Italy"},
+                            colours={"ITA": "#8a2be2"}),
+            ResolvedSegment(id="seg-2", index=1, kind="versus", codes=["JPN", "USA"],
+                            names={"JPN": "Japan", "USA": "United States of America"},
+                            colours={"JPN": "#8a2be2", "USA": "#e0201b"})]
+    stages.GeoStage().run(SimpleNamespace(config=None, cancel=_Token()), ScriptOutput(inputs=inputs, segments=segs))
+    assert asked == [("world", "dark"), ("detail", "dark"), ("detail", "dark"), ("detail", "dark")]
+
+
+@pytest.mark.parametrize("look, blue_marble", [("satellite", True), ("flat", False), ("dark", False)])
+def test_the_reel_credits_blue_marble_only_on_the_satellite_look(look, blue_marble):
+    from reelmachine.recipes.mapreel import geodata
+
+    inputs = MapReelInputs.model_validate({"look": look, "segments": [
+        {"kind": "highlight", "countries": ["ITA"], "narration": "Italy."}]})
+    credits = stages.credits(inputs)
+    assert geodata.NATURAL_EARTH.attribution in credits
+    assert (geodata.BLUE_MARBLE.attribution in credits) is blue_marble

@@ -3,10 +3,14 @@
 import {
   cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, clamp01, POP_MS, cardLayout,
   slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_H, badgeLayout, panelNameY, textOn, readableOnWhite,
+  lookStyle, glowColour, rgba, splitAlpha,
 } from "./pure.mjs";
 
 const W = 1080, H = 1920;
 const FONT = '"Arial Black", "Helvetica Neue", Arial, sans-serif';
+
+// the look's numbers (pure.mjs lookStyle): set by drawFrame from doc.look for the frame it draws
+let STYLE = lookStyle("satellite");
 
 // `view` is where the camera's centre lands on screen: the screen's centre, or a versus panel's
 const SCREEN = { cx: W / 2, cy: H / 2 };
@@ -27,7 +31,7 @@ function tracePlace(ctx, cam, rings, view = SCREEN) {
 }
 
 function drawLayers(ctx, cam, layers, images, view = SCREEN) {
-  ctx.fillStyle = "#0b2236";
+  ctx.fillStyle = STYLE.sea;
   ctx.fillRect(0, 0, W, H);
   for (const layer of layers) {
     const img = images.get(layer.url);
@@ -43,22 +47,22 @@ function drawLayers(ctx, cam, layers, images, view = SCREEN) {
   }
 }
 
-const BAND_EDGE = "#0b2236", BAND_FAR = "#040b14"; // the band by the map (the base fill), and at the screen edge
-
 // Mercator's square ends at ±85°: a world view shorter than the screen gets a dark band above and below,
 // deepening toward the screen's edge, with a soft edge fading into the map, so the bands read as framing.
+// The band by the map is the look's sea (the base fill); it deepens to the look's bandFar at the screen edge.
 function drawBands(ctx, cam) {
   const b = worldBands(cam);
+  const edge = STYLE.sea;
   const band = (y0, y1, fadeTo) => {
     let g = ctx.createLinearGradient(0, y0, 0, y1); // y0: the screen edge, y1: the map's edge
-    g.addColorStop(0, BAND_FAR);
-    g.addColorStop(1, BAND_EDGE);
+    g.addColorStop(0, STYLE.bandFar);
+    g.addColorStop(1, edge);
     ctx.fillStyle = g;
     ctx.fillRect(0, Math.min(y0, y1), W, Math.abs(y1 - y0));
     g = ctx.createLinearGradient(0, y1, 0, fadeTo);
-    g.addColorStop(0, "rgba(11,34,54,1)");
-    g.addColorStop(0.45, "rgba(11,34,54,0.55)");
-    g.addColorStop(1, "rgba(11,34,54,0)");
+    g.addColorStop(0, rgba(edge, 1));
+    g.addColorStop(0.45, rgba(edge, 0.55));
+    g.addColorStop(1, rgba(edge, 0));
     ctx.fillStyle = g;
     ctx.fillRect(0, Math.min(y1, fadeTo), W, Math.abs(fadeTo - y1));
   };
@@ -76,16 +80,22 @@ function fillPlace(ctx, cam, place, alpha, seconds = 0, view = SCREEN) {
   if (box.w < MARK_BELOW && box.h < MARK_BELOW) markPlace(ctx, box, place.colour, alpha, seconds);
   ctx.save();
   ctx.lineJoin = "round"; // a mitred join on a jagged coast (Brittany, Chesapeake) is a long bright spike
-  ctx.globalAlpha = 0.8 * alpha;
+  const glow = STYLE.glow;
+  ctx.globalAlpha = STYLE.fillAlpha * alpha;
   tracePlace(ctx, cam, place.rings, view);
   ctx.fillStyle = place.colour;
+  if (glow.outer) { // neon: the fill casts a halo of its own colour over the dark map around it
+    ctx.shadowColor = glowColour(glow, place.colour, glow.alpha);
+    ctx.shadowBlur = glow.blur;
+  }
   ctx.fill("evenodd");
   ctx.globalAlpha = alpha;
-  ctx.clip("evenodd"); // inner glow: a soft, bright stroke kept inside the border
-  ctx.shadowColor = "rgba(255,255,255,0.9)";
-  ctx.shadowBlur = 28;
+  ctx.clip("evenodd"); // inner glow: a soft stroke kept inside the border, white or (dark) the fill's own neon
+  ctx.shadowColor = glowColour(glow, place.colour, glow.alpha);
+  ctx.shadowBlur = glow.blur;
   ctx.lineWidth = 10;
-  ctx.strokeStyle = "rgba(255,255,255,0.55)";
+  // a neon tube's core is near white: its own colour on its own fill would not show
+  ctx.strokeStyle = glow.outer ? rgba("#ffffff", glow.stroke * 0.6) : glowColour(glow, place.colour, glow.stroke);
   ctx.stroke();
   ctx.restore();
   ctx.save();
@@ -125,7 +135,7 @@ function borders(ctx, cam, rings, alpha) {
   ctx.lineJoin = "round";
   tracePlace(ctx, cam, rings);
   ctx.lineWidth = 2;
-  ctx.strokeStyle = "rgba(255,255,255,0.55)";
+  ctx.strokeStyle = STYLE.lines;
   ctx.stroke();
   ctx.restore();
 }
@@ -189,12 +199,13 @@ function ghostName(ctx, cam, place, alpha, seconds, duration) {
   const size = fitFontPx(base, ctx.measureText(place.name).width, room);
   ctx.font = `900 ${size}px ${FONT}`;
   const at = ghostCentre(px, py, ctx.measureText(place.name).width, size, GHOST_ANGLE, drift, W, H);
-  ctx.globalAlpha = 0.22 * alpha;
+  const ghost = splitAlpha(STYLE.ghost); // the look's ghost colour, its alpha folded into the fade
+  ctx.globalAlpha = ghost.alpha * alpha;
   ctx.translate(at.x + seconds * GHOST_DRIFT, at.y);
   ctx.rotate(GHOST_ANGLE);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = ghost.colour;
   ctx.fillText(place.name, 0, 0);
   ctx.restore();
 }
@@ -467,6 +478,7 @@ function drawVersus(ctx, doc, images, seconds) {
 }
 
 export function drawFrame(ctx, doc, images, seconds) {
+  STYLE = lookStyle(doc.look);
   if (doc.panels && doc.panels.length) return drawVersus(ctx, doc, images, seconds);
   const ms = seconds * 1000;
   const cam = cameraAt(doc.camera, ms);

@@ -15,6 +15,16 @@ def test_a_country_segment_validates_with_defaults():
     assert inputs.segment_ids() == ["seg-1"]
 
 
+@pytest.mark.parametrize("look", ["satellite", "flat", "dark"])
+def test_every_look_validates(look):
+    assert MapReelInputs.model_validate({**BASE, "look": look}).look == look
+
+
+def test_an_unknown_look_is_refused():
+    with pytest.raises(ValidationError):
+        MapReelInputs.model_validate({**BASE, "look": "neon"})
+
+
 def test_highlight_segment_takes_many_countries_and_a_legend():
     inputs = MapReelInputs.model_validate({"segments": [
         {"kind": "highlight", "countries": ["USA", "Italy", "FRA"], "legend": "Fashion giants",
