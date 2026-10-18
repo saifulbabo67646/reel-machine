@@ -55,8 +55,9 @@ these, plus listening-first and slow-replay options and an end-of-reel quiz.
 |---|---|---|
 | Audience | Learners at beginner–lower-intermediate (JLPT N5–N3 and equivalents) | user |
 | Languages | Any; Japanese gets extra checks from `reelmachine/data/jlpt_vocab.json` | user / me |
-| Characters | AI-generated images | user |
-| Image provider | New provider group `characters`: `openai` (default, `gpt-image-1`, transparent background), `local` (caller-supplied PNGs), `fake` (code-drawn, for tests/offline) | me |
+| Characters | Code-drawn SVG first: a built-in library shipped in the codebase, plus characters the agent writes itself as SVG following a documented contract; AI-generated images kept as an option, not relied on | user (2026-10-18 revision) |
+| Character kinds | `builtin`, `svg` (agent-written), `image` (AI-generated via `openai`, or caller PNGs) | me |
+| Default | `builtin` — free, instant, offline, fully animatable | me |
 | Who writes the dialogue | The MCP-calling agent, guided by `describe_recipe`'s guide and gated by `probe`'s lint | me (matches mapreel) |
 | Cast size | Exactly two characters in v1 | me |
 | Voices | Existing `narration` providers (`elevenlabs`, `cartesia`, `macos`, `fake`), one voice per character, one TTS call per line | me |
@@ -105,45 +106,85 @@ of it; the matcher looks for the key's text or its stem (its text minus a final 
 Japanese verbs/adjectives; a case-insensitive prefix match for Latin scripts). An
 unmatched key is a warning and is shown in the recap but not highlighted in the line.
 
-**Inline cast** (alternative to a cast id): `{"characters": [{"id", "name", "description",
-"voice", "side"}, …]}`. It is resolved through the same path as `make_cast` and cached.
+**Inline cast** (alternative to a cast id): `{"characters": [ <character>, <character> ]}`
+(see §4). It is resolved through the same path as `make_cast`.
 
 ## 4. Characters (the cast)
 
-A character is `{id, name, description, voice, side}` — e.g. `{"id": "kid", "name":
-"Cupcake", "description": "a cheerful cupcake with pink frosting", "voice":
-"elevenlabs:<voice-id>", "side": "left"}`.
+A character is `{id, name, voice, side, source}` where `source` is one of three kinds:
 
-**Generation.** A shared style prompt from the look ("kawaii sticker, thick white outline,
-flat pastel colours, simple face, blush cheeks, full body, centred, transparent
-background") plus each description. For each character we produce four poses:
-`neutral` first, then `talk` (mouth open), `happy`, `surprised` by editing the `neutral`
-image (image-edit endpoint with the neutral as reference) so the character stays the
-same. If a pose fails, the renderer falls back to `neutral` plus code animation and the
-job records a warning.
+```jsonc
+{"kind": "builtin", "name": "cupcake", "colors": {"primary": "#f7a8d8"}}   // shipped library
+{"kind": "svg", "svg": "<svg viewBox=\"0 0 400 400\">…</svg>"}           // agent-written
+{"kind": "image", "provider": "openai", "description": "a cheerful onigiri"} // AI or caller PNGs
+```
 
-**Cache and reuse.** A cast's images are content-hashed by (descriptions, style,
-provider, model, variant) — voices are not in the hash; they live on the cast record — and
-stored **per caller** under `store.root()/<caller>/casts/<cast_id>/` (my call: casts are
-private to the caller who made them, so one caller never pays for or sees another's
-images, including `local` uploads). Any later reel by the same caller can reuse the
-`cast_id`, so a channel keeps the same pair of characters. `variant` (int) regenerates a
-different take of the same descriptions.
+**Why SVG first (user's direction, my reasoning).** Code-drawn characters cost nothing,
+render instantly and offline, look identical every time, and — unlike a flat image — have
+separate parts the renderer can move: real blinks, a mouth that opens and closes with the
+voice, expressions, arm waves. The agent using the MCP server is strong at writing SVG and
+motion graphics, so it can design a new character for a reel on the spot. AI images stay
+as an option for a look SVG can't reach.
 
-**Credits.** Image generation counts against the caller's per-provider monthly quota in
-`CallerPolicy` under the provider name (`openai`); the provider writes to the quota
-ledger and `make_cast` / the `cast` stage check the quota before spending (my call).
+### 4.1 The SVG character contract
 
-**Providers** (`characters` group, registered via entry points like other groups):
-- `openai` — `gpt-image-1`, `background: transparent`, 1024×1024; key from a new
-  setting `REEL_OPENAI_API_KEY`; the image model name configurable.
-- `local` — caller gives PNG paths/URLs per pose (`neutral` required, others optional).
-  Local filesystem paths are accepted only for local (stdio/CLI) runs; over HTTP only
-  URLs are accepted, with mapreel's URL safety checks.
-- `fake` — draws a coloured rounded blob with eyes/mouth per pose in code (Pillow), so
-  tests and storyboards need no network.
+Every `builtin` and `svg` character follows one contract, documented in the guide with a
+complete worked example:
 
-Images are normalised to PNG, trimmed to their alpha bounding box, max 1024 px.
+- Root `<svg viewBox="0 0 400 400">`, character standing on the bottom edge, centred,
+  facing the viewer, ~300–360 px tall inside the box.
+- Required groups (by `id`): `body` (everything static), `eyes-open`, `eyes-closed`,
+  `mouth-closed`, `mouth-open`.
+- Optional groups: `mouth-smile`, `eyes-happy` (^ ^), `eyes-surprised`, `blush`,
+  `arm-left`, `arm-right` (rotated around their `data-pivot="x,y"` for waves), `sweat`,
+  `sparkle`. Missing optional groups fall back (e.g. `happy` without `eyes-happy` → open
+  eyes + `mouth-smile` or `mouth-closed` + a bigger bounce).
+- The renderer animates the whole character (bob, hop, squash-and-stretch, tilt) and
+  toggles/moves the groups: blinks every 2–5 s at random (seeded), mouth flaps on voice
+  timings, emotions swap eye/mouth groups and show `blush`/`sweat`/`sparkle`.
+- House style (guide, not enforced): kawaii sticker look — thick white outer outline
+  (≥10 px) with a dark inner line, flat pastel fills with one soft shade, big head,
+  dot eyes, small mouth, pink blush ovals.
+- Safety (enforced by `probe`, since agent SVG is rendered in a headless browser): ≤ 60 KB;
+  parsed with `defusedxml`; no `<script>`, `<foreignObject>`, `on*` attributes, external
+  `href`/`xlink:href` (only `#…` fragment refs), `<image>` only as `data:image/png|jpeg`;
+  `<style>` allowed but no `@import`/`url(` to anything but `#…`. Violations are errors
+  naming the element.
+- `probe` also checks the required ids, and renders nothing — the storyboard is how the
+  agent sees its character.
+
+### 4.2 The built-in library
+
+Shipped under `reelmachine/recipes/dialoguereel/characters/*.svg`, hand-written to the
+contract, ~10 characters to start: `cupcake`, `mug` (the reference's pair), `onigiri`,
+`dango`, `boba`, `cat`, `shiba`, `penguin`, `bunny`, `kimchi-jar`. Each declares
+recolourable fills via CSS variables (`--primary`, `--secondary`, `--accent`) so
+`colors` can tint it, and has all optional groups. `describe_recipe` lists them with a
+one-line description and a default suggested role.
+
+### 4.3 Image characters (optional)
+
+- `openai` — `gpt-image-1`, `background: transparent`, 1024×1024; key from a new setting
+  `REEL_OPENAI_API_KEY`; model name configurable. Shared style prompt from the look
+  ("kawaii sticker, thick white outline, flat pastel colours, simple face, blush cheeks,
+  full body, centred") plus the description. Poses `neutral` first, then `talk`,
+  `happy`, `surprised` by editing the neutral image so the character stays the same.
+- caller PNGs — `{"kind": "image", "poses": {"neutral": url, "talk": url, …}}`, `neutral`
+  required. Local filesystem paths only for local (stdio/CLI) runs; over HTTP only URLs,
+  with mapreel's URL safety checks.
+- Image characters animate by whole-body motion and pose swaps (talk ↔ neutral for mouth
+  flaps); no blinks. A failed pose falls back to `neutral` with a warning.
+- Images are normalised to PNG, trimmed to their alpha bounding box, max 1024 px.
+
+### 4.4 Casts, caching, credits
+
+`make_cast` turns two characters into a `cast_id` (a content hash of the sources; voices
+are on the cast record but not in the hash). Casts are stored **per caller** under
+`store.root()/<caller>/casts/<cast_id>/` (my call: private to their maker). Any later reel
+by the same caller can reuse the `cast_id`, so a channel keeps its pair. Builtin and SVG
+casts are resolved instantly and never spend credits. Image generation counts against
+the caller's per-provider monthly quota in `CallerPolicy` (`openai`); `make_cast` / the
+`cast` stage check it before spending; `variant` (int) regenerates a different take.
 
 ## 5. What the reel looks like (timeline)
 
@@ -224,9 +265,12 @@ hashtags such as `#learnjapanese #JLPTN5 #日本語`), `cast/` previews.
 The generic tools (`describe_recipe`, `probe`, `start_job`, `get_job`, `get_artifact`)
 run the recipe. One tool is added in `reelmachine/mcp/tools.py` / `server.py`:
 
-- **`make_cast(characters, look="pop", provider=None, variant=0)`** — returns
-  immediately with the deterministic `cast_id` (computed from the hash) and either
-  `cached: true` with the pose image links, or a `job_id`. Generation (8 image calls,
+- **`make_cast(characters, look="pop", variant=0)`** — returns immediately with the
+  deterministic `cast_id` (computed from the hash). For builtin/SVG-only casts it
+  validates them (contract + safety) and returns `ready: true` plus a `job_id` for a
+  short preview job that renders each character's states (neutral, talking, happy,
+  blink) to PNG artifacts. For image casts it returns `cached: true` with the pose links,
+  or a `job_id` for the generation job. Generation (8 image calls,
   possibly minutes) runs as a normal job: `dialoguereel` with `mode: "cast"` runs only the
   `script`-validation of the cast and the `cast` stage, and publishes each pose PNG as a
   job artifact, so `get_job` / `get_artifact` and the existing signed artifact URLs work
@@ -291,7 +335,10 @@ No network or render in the default suite.
 - **Keys and level:** key matching for Japanese verb stems and Latin prefixes; JLPT
   lookups with a small fixture; unrated words.
 - **Lint:** one failing and one passing example per rule; the reference fixture.
-- **Cast:** `fake` and `local` providers; cache hit by hash; `variant` changes the hash;
+- **SVG contract:** each built-in passes the contract and safety checks; a malicious
+  sample (script, `onload`, external href, `foreignObject`, oversize) is refused with the
+  element named; missing optional groups fall back correctly.
+- **Cast:** `fake` image provider and caller PNGs; cache hit by hash; `variant` changes the hash;
   `openai` request shape against a stubbed HTTP client (no network); pose-failure
   fallback.
 - **Timeline:** fake narration with known timings → line windows, meaning-reveal time,
@@ -305,14 +352,15 @@ No network or render in the default suite.
 
 Three plans, each ending in working, committed code:
 
-1. **Foundation** — script model, ruby, cast with `fake`/`local`/`openai` and the cache,
-   `make_cast`, narration and timeline, compose (hook, dialogue with speaker animation,
+1. **Foundation** — script model, ruby, the SVG contract and validator, the first
+   built-ins (`cupcake`, `mug`), casts and `make_cast` for builtin/SVG, narration and timeline, compose (hook, dialogue with speaker animation,
    bubbles, karaoke, history), render, storyboard, `script.resolved.json`. Ends with a
    reference-style reel.
-2. **Learning and retention** — key words and chips, recap, quiz, listen-first, slow
+2. **Learning and retention** — the rest of the built-in library, the character-writing
+   section of the guide (contract, worked example, style rules), key words and chips, recap, quiz, listen-first, slow
    replays, emotion poses, the full lint with the JLPT check, the guide and situation
    bank, SFX.
-3. **Polish** — `pastel` and `night` looks, `post.md`, `captions.srt`, `verify`, docs
+3. **Polish** — image characters (`openai` and caller PNGs) with quota, `pastel` and `night` looks, `post.md`, `captions.srt`, `verify`, docs
    (`docs/DIALOGUEREEL.md`, `docs/MCP.md`, `docs/RECIPES.md`), an example reel in
    Japanese and one in Korean or Spanish.
 
@@ -320,5 +368,5 @@ Three plans, each ending in working, committed code:
 
 Posting directly to TikTok/Instagram/YouTube; an in-engine LLM that writes dialogue;
 automatic furigana/romanization (no tokenizer); more or fewer than two characters;
-background scenes or props; true lip-sync beyond mouth flaps; level checks for languages
+background scenes or props; a visual character editor; true lip-sync beyond mouth flaps; level checks for languages
 other than Japanese.
