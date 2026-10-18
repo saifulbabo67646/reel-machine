@@ -8,6 +8,7 @@ from reelmachine.recipes.dialoguereel.library import builtin_names, load_builtin
 from reelmachine.recipes.dialoguereel.svg import MAX_BYTES, OPTIONAL, REQUIRED, check_svg, inline_svg, part_id, recolour
 
 PATH = "cast.characters[0].source.svg"
+BUILTINS = [entry["name"] for entry in builtin_names()]
 
 
 def minimal_svg(extra: str = "", *, view_box: str = "0 0 400 400", drop: str = "") -> str:
@@ -19,12 +20,12 @@ def test_minimal_svg_is_valid_and_has_no_optional_groups():
     assert check_svg(minimal_svg(), path=PATH) == []
 
 
-@pytest.mark.parametrize("name", ["cupcake", "mug"])
+@pytest.mark.parametrize("name", BUILTINS)
 def test_each_builtin_meets_the_contract_and_has_every_optional_group(name):
     assert set(check_svg(load_builtin(name, {}), path="x")) == set(OPTIONAL)
 
 
-@pytest.mark.parametrize("name", ["cupcake", "mug"])
+@pytest.mark.parametrize("name", BUILTINS)
 def test_each_builtin_rests_neutral_with_alternates_hidden(name):
     svg = load_builtin(name, {})
     for hidden in ["eyes-closed", "mouth-open", "mouth-smile", "eyes-happy", "eyes-surprised", "sweat", "sparkle"]:
@@ -36,7 +37,7 @@ def test_each_builtin_rests_neutral_with_alternates_hidden(name):
 
 @pytest.mark.parametrize("arm", ["arm-left", "arm-right"])
 def test_builtin_arms_carry_a_pivot(arm):
-    for name in ["cupcake", "mug"]:
+    for name in BUILTINS:
         assert re.search(rf'<g id="{arm}"[^>]*data-pivot="\d+,\d+"', load_builtin(name, {}))
 
 
@@ -241,8 +242,29 @@ def test_recolour_ignores_unknown_keys_and_bad_values():
 
 def test_builtin_names_lists_the_library():
     names = {entry["name"]: entry for entry in builtin_names()}
-    assert {"cupcake", "mug"} <= set(names)
+    assert len(builtin_names()) == 10 and set(names) == {
+        "cupcake", "mug", "onigiri", "dango", "boba", "cat", "shiba", "penguin", "bunny", "kimchi-jar"}
     assert all(entry["description"] and entry["role"] for entry in names.values())
+    assert {entry["role"] for entry in names.values()} <= {"kid", "parent", "friend", "teacher", "shopkeeper", "pet"}
+
+
+@pytest.mark.parametrize("name", BUILTINS)
+def test_each_builtin_recoloured_with_all_three_colours_still_passes(name):
+    coloured = load_builtin(name, {"primary": "#123456", "secondary": "#abcdef", "accent": "#fedcba"})
+    assert "--primary:#123456;--secondary:#abcdef;--accent:#fedcba" in coloured
+    assert set(check_svg(coloured, path="x")) == set(OPTIONAL)
+
+
+def test_every_pair_of_builtins_inlines_with_distinct_ids():
+    inlined = {name: inline_svg(load_builtin(name, {}), f"c{i}") for i, name in enumerate(BUILTINS)}
+    ids = {name: set(re.findall(r'\sid="([^"]+)"', svg)) for name, svg in inlined.items()}
+    for a in BUILTINS:
+        for b in BUILTINS:
+            if a < b:
+                assert not ids[a] & ids[b], (a, b)
+    for name, svg in inlined.items():
+        refs = set(re.findall(r'href="#([^"]+)"', svg)) | set(re.findall(r'url\(#([^)]+)\)', svg))
+        assert refs <= ids[name], name
 
 
 def test_unknown_builtin_lists_the_names():
