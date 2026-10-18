@@ -211,3 +211,27 @@ def test_whole_badges_never_touch(code, items):
     for i, a in enumerate(anchors):
         for b in anchors[i + 1:]:
             assert abs(a[0] - b[0]) >= 2 * hw or abs(a[1] - b[1]) >= 2 * hh, (code, a, b, size)
+
+
+# -- main-landmass framing per country: the camera frames the body a viewer knows as the country -------------
+
+#: each country's main body (lon0, lat0, lon1, lat1): what its frame must hold whole
+MAIN_BODY = {
+    "IDN": (95.0, -11.0, 141.0, 6.0),     # Sumatra to New Guinea's west half, the archipelago as one
+    "PHL": (117.0, 5.0, 127.0, 19.0),     # Luzon to Mindanao, Palawan included
+    "GRC": (19.5, 36.4, 26.6, 41.7),      # the mainland and the Peloponnese
+    "NOR": (4.6, 58.0, 31.0, 71.1),       # the mainland: Svalbard (77-80° N) is not the body
+}
+
+
+@pytest.mark.parametrize("code", sorted(MAIN_BODY))
+def test_a_country_frame_holds_its_main_body_and_fills_the_view(code):
+    from reelmachine.recipes.mapreel import compose
+
+    frame = compose.segment_frame([g.shape_of(ATLAS.resolve(code))], 1.0)
+    lon0, lat0, lon1, lat1 = MAIN_BODY[code]
+    x, y = g.merc(np.array([lon0, lon1]), np.array([lat1, lat0]))  # top left, bottom right
+    (left, top), (right, bottom) = g.to_screen(frame, np.column_stack([x, y]))
+    assert left >= 0 and top >= 0 and right <= g.WIDTH and bottom <= g.HEIGHT, (left, top, right, bottom)
+    short = min(g.WIDTH, g.HEIGHT)
+    assert max(right - left, bottom - top) >= 0.35 * short, (right - left, bottom - top)
