@@ -210,13 +210,78 @@ def test_remote_caller_refuses_a_host_resolving_privately(monkeypatch):
         images.read_pose("https://example.com/a.png", allow_local=False, path="p")
 
 
-def test_a_downloaded_pose_is_normalised(monkeypatch):
-    monkeypatch.setattr(images, "_download", lambda ref: (_png((40, 40), box=(0, 0, 10, 20)), "image/png"))
-    with Image.open(io.BytesIO(images.read_pose("https://8.8.8.8/a.png", allow_local=False, path="p"))) as img:
+def _remote(monkeypatch, routes, resolve):
+    """Serve `routes[(host header, path)]` and resolve hostnames via `resolve`; returns (requests, lookups)."""
+    seen, lookups = [], []
+
+    def handler(request):
+        seen.append(request)
+        return routes[(request.headers["host"], request.url.path)]
+
+    def getaddrinfo(host, port, *args, **kwargs):
+        lookups.append(host)
+        return [(2, 1, 6, "", (resolve[host], port))]
+
+    monkeypatch.setattr(images.socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(images, "_fetch_client", lambda: httpx.Client(transport=httpx.MockTransport(handler),
+                                                                      follow_redirects=False, trust_env=False))
+    return seen, lookups
+
+
+def _png_response(data):
+    return httpx.Response(200, content=data, headers={"content-type": "image/png"})
+
+
+def _redirect(to):
+    return httpx.Response(302, headers={"location": to})
+
+
+def test_a_downloaded_pose_is_pinned_and_normalised(monkeypatch):
+    seen, lookups = _remote(monkeypatch, {
+        ("a.example", "/a.png"): _redirect("https://b.example/b.png"),
+        ("b.example", "/b.png"): _png_response(_png((40, 40), box=(0, 0, 10, 20)))},
+        {"a.example": "93.184.216.34", "b.example": "93.184.216.35"})
+    data = images.read_pose("https://a.example/a.png", allow_local=False, path="p")
+    with Image.open(io.BytesIO(data)) as img:
         assert img.size == (10, 20)
-    monkeypatch.setattr(images, "_download", lambda ref: (b"<svg/>", "image/svg+xml"))
-    with pytest.raises(InvalidInput):
-        images.read_pose("https://8.8.8.8/a.svg", allow_local=False, path="p")
+    assert [r.url.host for r in seen] == ["93.184.216.34", "93.184.216.35"]
+    assert [r.headers["host"] for r in seen] == ["a.example", "b.example"]
+    assert seen[0].extensions["sni_hostname"] == "a.example" and lookups == ["a.example", "b.example"]
+
+
+@pytest.mark.parametrize("target, reason", [
+    ("http://10.0.0.1/x.png", "not a public address"),
+    ("http://inside.example/x.png", "not a public address"),
+    ("file:///etc/passwd", "not an http(s) URL"),
+    ("ftp://a.example/x.png", "not an http(s) URL")])
+def test_a_redirect_is_checked_on_every_hop(monkeypatch, target, reason):
+    seen, _ = _remote(monkeypatch, {("a.example", "/a.png"): _redirect(target)},
+                      {"a.example": "93.184.216.34", "inside.example": "192.168.1.9", "10.0.0.1": "10.0.0.1"})
+    with pytest.raises(InvalidInput) as exc:
+        images.read_pose("https://a.example/a.png", allow_local=False, path="p")
+    assert exc.value.message == f"could not fetch the pose image ({reason})" and len(seen) == 1
+
+
+def test_too_many_redirects(monkeypatch):
+    routes = {("a.example", f"/{i}"): _redirect(f"/{i + 1}") for i in range(5)}
+    seen, lookups = _remote(monkeypatch, routes, {"a.example": "93.184.216.34"})
+    with pytest.raises(InvalidInput) as exc:
+        images.read_pose("https://a.example/0", allow_local=False, path="p")
+    assert exc.value.message == "could not fetch the pose image (too many redirects)"
+    assert len(seen) == 4 and len(lookups) == 4
+
+
+@pytest.mark.parametrize("response, reason", [
+    (httpx.Response(404, text="secret.example/x"), "HTTP 404"),
+    (httpx.Response(200, text="<html>", headers={"content-type": "text/html"}), "not an image"),
+    (httpx.Response(200, content=b"<svg/>", headers={"content-type": "image/svg+xml"}), None)])
+def test_remote_errors_are_fixed_text(monkeypatch, response, reason):
+    _remote(monkeypatch, {("a.example", "/a"): response}, {"a.example": "93.184.216.34"})
+    with pytest.raises(InvalidInput) as exc:
+        images.read_pose("https://a.example/a", allow_local=False, path="p")
+    if reason:
+        assert exc.value.message == f"could not fetch the pose image ({reason})"
+    assert "a.example" not in exc.value.message and exc.value.details == {"path": "p"}
 
 
 def test_local_caller_reads_a_png(tmp_path):
@@ -229,3 +294,48 @@ def test_local_caller_reads_a_png(tmp_path):
         with pytest.raises(InvalidInput) as exc:
             images.read_pose(str(tmp_path / name), allow_local=True, path="p")
         assert exc.value.details["path"] == "p"
+
+
+def test_a_missing_key_is_an_error_even_when_neutral_exists(tmp_path):
+    folder = tmp_path / "c"
+    folder.mkdir()
+    (folder / "neutral.png").write_bytes(PNG)
+    src = ImageSource(kind="image", provider="openai", description="x")
+    with pytest.raises(ProviderUnavailable) as exc:
+        images.make_poses(src, folder, settings=Settings(openai_api_key=""), allow_local=True, ledger=None, path="p")
+    assert "REEL_OPENAI_API_KEY" in exc.value.hint
+
+
+def test_edits_start_from_the_untrimmed_neutral_and_the_generator_is_closed(tmp_path, monkeypatch):
+    class Recording(_Counting):
+        closed = 0
+        sizes = []
+
+        def edit(self, image, prompt):
+            with Image.open(io.BytesIO(image)) as img:
+                self.sizes.append(img.size)
+            return super().edit(image, prompt)
+
+        def close(self):
+            self.closed += 1
+
+    gen = Recording()
+    monkeypatch.setattr(images, "generator_for", lambda provider, settings: gen)
+    src = ImageSource(kind="image", provider="openai", description="x")
+    folder = tmp_path / "c"
+    images.make_poses(src, folder, settings=Settings(), allow_local=True, ledger=None, path="p")
+    (folder / "talk.png").unlink()
+    images.make_poses(src, folder, settings=Settings(), allow_local=True, ledger=None, path="p")
+    assert gen.sizes == [(512, 512)] * 4 and gen.closed == 2
+    with Image.open(folder / "neutral.png") as img:
+        assert img.size != (512, 512)
+
+
+def test_openai_closes_only_its_own_client():
+    client = httpx.Client(transport=_transport([]))
+    with images.OpenAIImages("sk-test", client=client):
+        pass
+    assert not client.is_closed
+    own = images.OpenAIImages("sk-test")
+    own.close()
+    assert own.client.is_closed
