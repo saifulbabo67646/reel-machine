@@ -192,6 +192,25 @@ export function badgeLayout(size, fontPx, lines, emoji) {
   return { emojiY: top + emojiH / 2, plateY, plateH, lineYs, halfH: total / 2 };
 }
 
+// An item with an image, as a framed photo card about its anchor (0, 0): the picture fitted into `size` x PHOTO_W
+// by `size` x PHOTO_H (its aspect kept), a white frame PHOTO_FRAME x `size` thick around it, and the name on a
+// pill (font `fontPx`) whose bottom sits on the card's bottom edge, inside it. A photo alone reads as "some
+// food"; the name says which. Inside the card, the label adds no height: a photo never takes more room than a
+// text badge with an emoji, so one photo in a segment does not push the other badges apart. Returns the picture's and card's boxes, the pill's top y and height, each line's centre y and the
+// half height. geometry.badge_extent mirrors it at the largest picture the box allows.
+export const PHOTO_W = 1.2, PHOTO_H = 0.9, PHOTO_FRAME = 0.04, PHOTO_FONT = 0.17, PHOTO_OVERLAP = 1;
+export function photoLayout(size, imgW, imgH, fontPx, lines) {
+  const k = Math.min((PHOTO_W * size) / imgW, (PHOTO_H * size) / imgH);
+  const w = imgW * k, h = imgH * k, f = PHOTO_FRAME * size;
+  const cardW = w + 2 * f, cardH = h + 2 * f;
+  const plateH = lines * LINE_STEP * fontPx + 2 * PLATE_PAD * fontPx;
+  const total = cardH + plateH * (1 - PHOTO_OVERLAP);
+  const top = -total / 2, plateY = top + cardH - plateH * PHOTO_OVERLAP;
+  const lineYs = Array.from({ length: lines }, (_, i) => plateY + PLATE_PAD * fontPx + (i + 0.5) * LINE_STEP * fontPx);
+  return { imgX: -w / 2, imgY: top + f, imgW: w, imgH: h, cardX: -cardW / 2, cardY: top, cardW, cardH,
+           radius: 2.5 * f, plateY, plateH, lineYs, halfH: total / 2 };
+}
+
 // A versus panel's name: across the panel's top, never above `minY` (clear of the VS disc). When that would touch
 // the caption `band` ({y0, y1}) by less than `air` px, it drops to sit just above the panel's stat card (`cardTop`),
 // well below the caption, so the caption word never reads as part of the name.

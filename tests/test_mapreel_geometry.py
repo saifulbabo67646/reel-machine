@@ -188,7 +188,12 @@ def test_a_badge_extent_is_its_emoji_over_its_plate():
     assert g.badge_extent([two], 200)[1] == pytest.approx(99.8)
     assert g.badge_extent([{"name": "Natto", "emoji": "🫘"}], 200)[1] == pytest.approx(74.6)
     assert g.badge_extent([{"name": "Natto"}], 200)[1] == pytest.approx(37.2)
-    assert g.badge_extent([{"name": "x", "image": "a.png"}], 200) == pytest.approx((100, 62))
+    # a photo card: 240 x 180 at most in an 8 px frame, its name pill inside the bottom edge (pure.mjs photoLayout)
+    assert g.badge_extent([{"name": "x", "image": "a.png"}], 200) == pytest.approx((128, 98))
+    assert g.badge_extent([{"name": "Casu martzu", "image": "a.png"}], 200)[1] == pytest.approx(98)  # two lines
+    # never taller than a two-line text badge with an emoji: one photo does not spread a segment's badges
+    assert g.badge_extent([{"name": "x", "image": "a.png"}], 200)[1] < g.badge_extent(
+        [{"name": "Dried fish", "emoji": "🐟"}], 200)[1]
     # the widest name sets the width; a long name is capped where the runtime shrinks its font
     hw, _ = g.badge_extent([{"name": "Dried fish"}, {"name": "Natto"}], 200)  # "Dried" over "fish"
     assert hw == pytest.approx((0.8 * 48 * 5 + 0.9 * 48) / 2)

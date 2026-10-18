@@ -207,7 +207,9 @@ BADGE_RISE = 30.0
 FONT_K, EMOJI_EM, EMOJI_TALL, EMOJI_OVERLAP = 0.24, 0.34, 1.2, 0.1
 LINE_STEP, PLATE_PAD, PLATE_SIDE, TEXT_MAX = 1.05, 0.25, 0.9, 1.1
 LETTER_EM = 0.8  # Arial Black runs about 0.8 em a letter
-IMAGE_HALF_W, IMAGE_HALF_H = 0.5, 0.31  # an image fits size x 0.62 size (draw.mjs drawItem)
+#: an item with an image, as runtime/pure.mjs photoLayout draws it: the picture within PHOTO_W x PHOTO_H of the
+#: size in a PHOTO_FRAME white frame, the name on a pill (font PHOTO_FONT x size) inside its bottom edge
+PHOTO_W, PHOTO_H, PHOTO_FRAME, PHOTO_FONT, PHOTO_OVERLAP = 1.2, 0.9, 0.04, 0.17, 1.0
 BADGE_AIR = 8.0  # px kept clear around each laid-out badge: two plates never touch edge to edge
 #: the caption band (runtime/draw.mjs CAPTION_Y, CAPTION_HALF): 60 px words at 71 % of the height, stroke and air
 CAPTION_BAND = (HEIGHT * 0.71 - 43, HEIGHT * 0.71 + 43)
@@ -232,8 +234,13 @@ def badge_extent(items: Sequence[dict], size: float) -> tuple[float, float]:
     one of them is laid out and spaced by."""
     hw = hh = 0.0
     for item in items:
-        if item.get("image"):
-            w, h = IMAGE_HALF_W * size, IMAGE_HALF_H * size
+        if item.get("image"):  # the largest picture the box allows: the real one is never bigger
+            frame, f = PHOTO_FRAME * size, PHOTO_FONT * size
+            lines = badge_lines(item.get("name", ""))
+            text = min(PHOTO_W * size, LETTER_EM * f * max(len(line) for line in lines))
+            plate_h = len(lines) * LINE_STEP * f + 2 * PLATE_PAD * f
+            w = max(PHOTO_W * size + 2 * frame, text + PLATE_SIDE * f) / 2
+            h = (PHOTO_H * size + 2 * frame + (1 - PHOTO_OVERLAP) * plate_h) / 2
         else:
             f = FONT_K * size
             lines = badge_lines(item.get("name", ""))

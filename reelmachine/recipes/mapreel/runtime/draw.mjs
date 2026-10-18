@@ -3,7 +3,7 @@
 import {
   cameraAt, fillAlpha, popState, activeWord, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, clamp01, POP_MS, cardLayout,
   slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_H, badgeLayout, panelNameY, textOn, readableOnWhite,
-  lookStyle, glowColour, rgba, splitAlpha,
+  lookStyle, glowColour, rgba, splitAlpha, photoLayout, PHOTO_W, PHOTO_FONT,
 } from "./pure.mjs";
 
 const W = 1080, H = 1920;
@@ -210,6 +210,45 @@ function ghostName(ctx, cam, place, alpha, seconds, duration) {
   ctx.restore();
 }
 
+// an item's image as a white-framed photo card with its name on a pill over the bottom edge (pure.mjs photoLayout)
+function drawPhoto(ctx, item, img) {
+  const lines = badgeLines(item.name);
+  const widest = () => Math.max(...lines.map((line) => ctx.measureText(line).width));
+  let size = Math.round(item.size * PHOTO_FONT);
+  ctx.font = `900 ${size}px ${FONT}`;
+  while (widest() > item.size * PHOTO_W && size > 24) {
+    size -= 4;
+    ctx.font = `900 ${size}px ${FONT}`;
+  }
+  const at = photoLayout(item.size, img.width, img.height, size, lines.length);
+  ctx.beginPath();
+  ctx.roundRect(at.cardX, at.cardY, at.cardW, at.cardH, at.radius);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.save();
+  ctx.shadowColor = "transparent";
+  ctx.beginPath();
+  ctx.roundRect(at.imgX, at.imgY, at.imgW, at.imgH, Math.max(2, at.radius - (at.imgX - at.cardX)));
+  ctx.clip();
+  ctx.drawImage(img, at.imgX, at.imgY, at.imgW, at.imgH);
+  ctx.restore();
+  if (!item.name) return;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const pw = widest() + size * 0.9;
+  const plate = item.plate || "#222222";
+  ctx.beginPath();
+  ctx.roundRect(-pw / 2, at.plateY, pw, at.plateH, at.plateH / 2);
+  ctx.fillStyle = plate;
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "#ffffff";
+  ctx.stroke();
+  ctx.fillStyle = textOn(plate);
+  lines.forEach((line, k) => ctx.fillText(line, 0, at.lineYs[k]));
+}
+
 function drawItem(ctx, item, ms, images) {
   const pop = popState(item.atMs, ms);
   if (!pop.visible) return;
@@ -224,8 +263,7 @@ function drawItem(ctx, item, ms, images) {
   ctx.shadowOffsetY = 6;
   const img = item.image ? images.get(item.image) : null;
   if (img && img.width && img.height) { // an SVG with no intrinsic size has none: draw the badge
-    const k = Math.min(item.size / img.width, (item.size * 0.62) / img.height);
-    ctx.drawImage(img, (-img.width * k) / 2, (-img.height * k) / 2, img.width * k, img.height * k);
+    drawPhoto(ctx, item, img);
   } else {
     const lines = badgeLines(item.name);
     const widest = () => Math.max(...lines.map((line) => ctx.measureText(line).width));

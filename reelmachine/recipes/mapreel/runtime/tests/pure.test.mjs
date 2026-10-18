@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, luminance, textOn, readableOnWhite, contrast, slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_Y, LEGEND_H, LEGEND_AIR, badgeLayout, panelNameY, lookStyle, glowColour, splitAlpha, rgba } from "../pure.mjs";
+import { zoomPath, cameraAt, popState, fillAlpha, activeWord, backOut, fitFontPx, badgeLines, ghostCentre, ringsBox, countText, cardLayout, luminance, textOn, readableOnWhite, contrast, slideOffset, tagCentre, leaderLine, worldBands, legendY, LEGEND_Y, LEGEND_H, LEGEND_AIR, badgeLayout, photoLayout, panelNameY, lookStyle, glowColour, splitAlpha, rgba } from "../pure.mjs";
 
 const A = { x: 0.2, y: 0.4, s: 1080 };
 const B = { x: 0.55, y: 0.35, s: 20000 };
@@ -287,4 +287,20 @@ test("a look's rgba colour splits into an opaque colour and its alpha", () => {
   assert.deepEqual(splitAlpha("#ffffff"), { colour: "#ffffff", alpha: 1 });
   assert.equal(rgba("#0b2236", 0.55), "rgba(11,34,54,0.55)");
   assert.equal(rgba("#fff", 1), "rgba(255,255,255,1)");
+});
+
+test("a photo card frames its picture with the name inside its bottom edge; geometry.py spaces by the box", () => {
+  const close = (a, b) => Math.abs(a - b) < 1e-9;
+  // size 200: a 4:3 picture fills the 240 x 180 box in an 8 px frame; one 34 px line is a 52.7 px pill
+  const wide = photoLayout(200, 400, 300, 34, 1);
+  assert.ok(close(wide.imgW, 240) && close(wide.imgH, 180) && close(wide.cardW, 256) && close(wide.cardH, 196));
+  assert.ok(close(wide.halfH, 98), `${wide.halfH}`); // tests/test_mapreel_geometry.py pins the same
+  assert.ok(close(wide.cardY, -wide.halfH) && close(wide.plateY + wide.plateH, wide.halfH)); // the pill ends on the edge
+  assert.ok(close(photoLayout(200, 400, 300, 34, 2).halfH, 98)); // a second line adds no height
+  assert.ok(close(wide.imgX, -120) && close(wide.imgY, wide.cardY + 8));
+  // a tall picture keeps its aspect: 180 tall, narrower, never past the box
+  const tall = photoLayout(200, 300, 600, 34, 1);
+  assert.ok(close(tall.imgH, 180) && close(tall.imgW, 90) && tall.halfH <= wide.halfH);
+  // a square one is 180 x 180
+  assert.ok(close(photoLayout(200, 50, 50, 34, 2).imgW, 180));
 });

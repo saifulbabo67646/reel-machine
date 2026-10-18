@@ -139,7 +139,8 @@ An item is one thing shown on a place. It pops when the voice says it.
 - `at`: a time in seconds from the start of the segment. It overrides the speech match.
   Use it only when the name never appears in the narration.
 - `image`: `commons:File:<name>` (the `id` from `find_images`), an `https://` URL, or a
-  local file path. With no usable image, the item shows as a bold text badge in the
+  local file path. The image shows as a white-framed photo card with the name on a pill
+  along its bottom edge. With no usable image, the item shows as a bold text badge in the
   country's colour. `emoji` is the light alternative.
 - `source`: the URL of the page that states the fact. `source` can also sit on the
   segment, on a `stat`, or on a rank.
