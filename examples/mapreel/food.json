@@ -43,7 +43,8 @@
       "items": [
         {
           "name": "Marmite",
-          "emoji": "🫙"
+          "emoji": "🫙",
+          "image": "commons:File:Marmite - Feb 2013.jpg"
         },
         {
           "name": "Beer leftovers",
@@ -115,6 +116,7 @@
             {
               "name": "Takoyaki",
               "emoji": "🧆",
+              "image": "commons:File:Takoyaki balls (1).jpg",
               "source": "https://en.wikipedia.org/wiki/Takoyaki"
             },
             {
@@ -151,7 +153,8 @@
       "items": [
         {
           "name": "Lutefisk",
-          "emoji": "🐟"
+          "emoji": "🐟",
+          "image": "commons:File:Lutefisk.jpg"
         },
         {
           "name": "Dried fish",
@@ -177,7 +180,8 @@
       "items": [
         {
           "name": "Natto",
-          "emoji": "🫘"
+          "emoji": "🫘",
+          "image": "commons:File:Natto mixed.jpg"
         }
       ]
     },
@@ -196,7 +200,8 @@
         {
           "name": "Casu martzu",
           "say": "Sardinia's casu",
-          "emoji": "🧀"
+          "emoji": "🧀",
+          "image": "commons:File:Casu Marzu cheese.jpg"
         },
         {
           "name": "Rotten cheese",

@@ -241,6 +241,8 @@ def test_the_food_example_uses_every_shot_with_sources_and_passes_every_lint_rul
     items = [it for s in food["segments"] for it in
              [*s.get("items", []), *(i for r in s.get("regions", []) for i in r.get("items", []))]]
     assert items and all(it.get("emoji") for it in items)
+    images = [it["image"] for it in items if it.get("image")]
+    assert len(images) >= 3 and all(i.startswith("commons:File:") for i in images)  # real Commons photos
     stats = [st for s in food["segments"] for st in [*([s["stat"]] if s.get("stat") else []), *s.get("stats", [])]]
     assert stats and all(st.get("source", "").startswith("https://") for st in stats)
     report = _strict(tmp_path, food)

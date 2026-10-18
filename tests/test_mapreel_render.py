@@ -28,6 +28,38 @@ SCRIPT = {
 }
 
 
+@pytest.fixture(autouse=True)
+def offline_commons(tmp_path, monkeypatch):
+    """food.json names Commons images: CI never asks Commons. Each id is a plain stand-in PNG, cached in
+    the test's own folder (never the shared one), and a real request would fail the test."""
+    import io
+
+    from PIL import Image
+
+    from reelmachine.recipes.mapreel import commons, stages
+
+    def no_network(params):
+        raise AssertionError(f"a render test asked Commons: {params}")
+
+    def info(file_id, *, width=1024, fetch=None):
+        name = file_id.removeprefix("commons:").removeprefix("File:")
+        return commons.ImageHit(id=f"commons:File:{name}", title=name, thumb_url=f"https://test.invalid/{name}",
+                                url=f"https://test.invalid/{name}", width=400, height=300, mime="image/png",
+                                licence="CC0", licence_url=None, attribution="test", permitted=True,
+                                restrictions=None)
+
+    def download(ref, **kwargs):
+        assert ref.startswith("https://test.invalid/"), ref
+        out = io.BytesIO()
+        Image.new("RGB", (400, 300), (200, 120, 40)).save(out, format="PNG")
+        return out.getvalue(), "image/png"
+
+    monkeypatch.setattr(commons, "_http_json", no_network)
+    monkeypatch.setattr(commons, "info", info)
+    monkeypatch.setattr(stages, "_download", download)
+    monkeypatch.setattr(stages, "_image_cache", lambda ctx: tmp_path / "commons")
+
+
 def _build(tmp_path, inputs):
     settings = dataclasses.replace(SETTINGS, workdir=tmp_path / "work", outdir=tmp_path / "out", tts="fake")
     engine = Engine(settings)  # real map data in the shared cache: downloaded once on first run

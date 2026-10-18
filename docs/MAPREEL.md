@@ -35,8 +35,9 @@ encoder: slower, but light on memory. The first run downloads the map data (see
 [Data and licences](#data-and-licences)).
 
 Two example scripts ship with the repo: `examples/mapreel/food.json` (a ranked countdown,
-a versus, a regions segment) and `examples/mapreel/brands.json` (five countries and their
-brands).
+a versus, a regions segment, five Wikimedia Commons photos) and `examples/mapreel/brands.json`
+(five countries and their brands). [examples/mapreel/README.md](../examples/mapreel/README.md)
+has the commands for the fake, macOS and Cartesia voices.
 
 ## The agent workflow
 
