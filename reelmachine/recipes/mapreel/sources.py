@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from ...core.assets import Licence
 from ..explainer3d.markup import parse_markup, spoken_text
 from .models import MapReelInputs, ResolvedSegment
@@ -11,6 +13,7 @@ NO_SOURCES = "- No sources were given for the claims in this reel."
 NO_IMAGES = "- No images (items are shown as text badges)."
 NATURAL_EARTH_URL = "https://www.naturalearthdata.com/"
 BLUE_MARBLE_URL = "https://visibleearth.nasa.gov/"
+COMMONS_FILE_URL = "https://commons.wikimedia.org/wiki/File:"
 
 
 def _clean(text: object) -> str:
@@ -25,6 +28,14 @@ def _link(ref: str) -> str:
     if line.startswith(("http://", "https://")):
         return line.replace("<", "%3C").replace(">", "%3E")
     return "`" + line.replace("`", "'") + "`"
+
+
+def _image_link(ref: str) -> str:
+    """A Commons id as its file page, which a viewer can open; any other image as _link shows it."""
+    if ref.startswith("commons:"):
+        name = " ".join(ref.removeprefix("commons:").removeprefix("File:").split()).replace(" ", "_")
+        return _link(COMMONS_FILE_URL + quote(name, safe="-_.,~"))
+    return _link(ref)
 
 
 def _name(code_or_query: str, seg: ResolvedSegment | None) -> str:
@@ -108,8 +119,12 @@ def render(inputs: MapReelInputs, segments_ids: list[str], image_credits: dict[s
     images = []
     for key in sorted(image_credits, key=_image_order):
         c = image_credits[key]
-        line = (f"- {_clean(c['name'])}: {_clean(c['licence'])} — "
-                f"{_clean(c.get('attribution') or 'no credit given')} ({_link(c['id_or_path'])})")
+        licence = _clean(c["licence"])
+        if str(c.get("licence_url") or "").startswith(("http://", "https://")):
+            licence += f" ({_link(c['licence_url'])})"
+        where = _image_link(str(c["id_or_path"]))
+        where = f" — {where}" if c.get("source") == "commons" else f" ({where})"
+        line = f"- {_clean(c['name'])}: {licence} — {_clean(c.get('attribution') or 'no credit given')}{where}"
         if c.get("restrictions"):
             line += f" — {_clean(c['restrictions'])}"
         images.append(line)

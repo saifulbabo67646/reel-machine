@@ -159,3 +159,10 @@ def test_free_pattern():
 def test_real_commons_has_a_permitted_nike_logo():
     hits = commons.search("Nike logo", kind="logo")
     assert any(h.permitted for h in hits)
+
+
+def test_attribution_drops_the_wiki_talk_and_contribs_links():
+    """Commons signs some files "Name (talk · contribs)": a credit line names the author, not wiki links."""
+    artist = "<a href='u'>Ennorehling</a> (<a href='t'>talk</a> · <a href='c'>contribs</a>)"
+    hit = commons.search("lutefisk", fetch=_fake(_api(_page(1, "Lutefisk.jpg", mime="image/jpeg", artist=artist))))[0]
+    assert hit.attribution == "Ennorehling"

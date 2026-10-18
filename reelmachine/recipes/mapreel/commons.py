@@ -25,6 +25,8 @@ FREE = re.compile(
 #: a NonCommercial or NoDerivatives element (CC BY-NC 4.0, CC BY-NC-SA, CC BY-ND) makes any licence unfree
 NOT_FREE = re.compile(r"(?:^|[-\s])(?:nc|nd)(?:$|[-\s])|non-?commercial|no-?deriv", re.IGNORECASE)
 THUMB = 320
+#: the wiki links Commons appends to a user's name: "Ennorehling (talk · contribs)"
+TALK = re.compile(r"\s*\(\s*talk\s*[·|]\s*contribs\s*\)", re.IGNORECASE)
 
 Kind = Literal["any", "logo", "photo", "flag"]
 
@@ -102,7 +104,8 @@ def _hit(page: dict[str, Any]) -> ImageHit | None:
     name = title.removeprefix("File:")
     licence = _plain(_meta(info, "LicenseShortName"))
     non_free = _meta(info, "NonFree").strip().lower() == "true"
-    attribution = _plain(_meta(info, "Artist")) or _plain(_meta(info, "Credit")) or "Wikimedia Commons"
+    artist = TALK.sub("", _plain(_meta(info, "Artist"))).strip()
+    attribution = artist or _plain(_meta(info, "Credit")) or "Wikimedia Commons"
     return ImageHit(
         id=f"commons:File:{name}",
         title=name,

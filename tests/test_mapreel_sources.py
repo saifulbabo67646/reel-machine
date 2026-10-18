@@ -43,7 +43,7 @@ def test_sources_md_lists_claims_images_and_credits():
         "- Italy: Gucci — https://x.test/g\n\n"
         "## Images\n"
         "- Hagelslag: caller-supplied — supplied by the script author (`/h.png`)\n"
-        "- Gucci: CC BY-SA 4.0 — Jane Doe (`commons:File:G.png`) — trademarked\n\n"
+        "- Gucci: CC BY-SA 4.0 — Jane Doe — https://commons.wikimedia.org/wiki/File:G.png — trademarked\n\n"
         "## Map data and voice\n"
         "- Natural Earth — Public domain — https://www.naturalearthdata.com/\n"
         "- NASA Blue Marble — Public domain — https://visibleearth.nasa.gov/\n"
@@ -121,3 +121,14 @@ def test_flat_look_omits_the_blue_marble_credit():
     inputs = _inputs([{"kind": "country", "country": "ITA", "narration": "Italy.", "items": [{"name": "Gucci"}]}])
     text = _render(inputs, [{"ITA": "Italy"}], look="flat")
     assert "Blue Marble" not in text and "Natural Earth" in text
+
+
+def test_a_commons_image_links_its_file_page_and_licence():
+    """A video description takes links, not ids: the file page a viewer can open, and the licence's deed."""
+    inputs = _inputs([{"kind": "country", "country": "GBR", "narration": "Marmite.", "items": [{"name": "Marmite"}]}])
+    credits = {"seg-1/0": {"name": "Marmite", "source": "commons", "id_or_path": "commons:File:Marmite - Feb (2013).jpg",
+                           "licence": "CC BY-SA 3.0", "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+                           "attribution": "WestportWiki", "restrictions": None}}
+    text = _render(inputs, [{"GBR": "United Kingdom"}], credits)
+    assert ("- Marmite: CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0) — WestportWiki — "
+            "https://commons.wikimedia.org/wiki/File:Marmite_-_Feb_%282013%29.jpg\n") in text
