@@ -39,7 +39,7 @@ class Plan:
 
 def schedule(beats: Sequence[Beat], speech_ms: Sequence[Sequence[int]]) -> Plan:
     slots: list[BeatSlot] = []
-    for i, (beat, speeches) in enumerate(zip(beats, speech_ms)):
+    for i, (beat, speeches) in enumerate(zip(beats, speech_ms, strict=True)):
         start = 0 if i == 0 else slots[-1].end_ms + TRANSITION_MS[beat.transition]
         t = start
         lines: list[LineSlot] = []
@@ -92,6 +92,7 @@ def exit_ms(
     times: Sequence[Sequence[tuple[int, int]]],
     us: Sequence[Sequence[Unit]],
 ) -> int:
+    """When a visual leaves; an unresolved exit cue falls back like cue_ms (beat/line start)."""
     if exit == "beat":
         return next_start if next_start is not None else beat.end_ms + OUTRO_MS
     return cue_ms(exit, beat, times, us)[0]

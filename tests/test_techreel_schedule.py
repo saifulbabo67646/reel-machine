@@ -1,3 +1,5 @@
+import pytest
+
 from reelmachine.recipes.techreel.markup import units
 from reelmachine.recipes.techreel.models import Beat, Cue, Line, TechReelInputs
 from reelmachine.recipes.techreel.schedule import (
@@ -61,3 +63,15 @@ def test_estimate():
     p = estimate(inp)
     assert p.duration_ms > 0
     assert all(ln.speech_ms >= 400 for b in p.beats for ln in b.lines)
+
+
+def test_schedule_refuses_mismatched_speech_lists():
+    with pytest.raises(ValueError):
+        schedule(_beats(), [[100, 100]])
+    with pytest.raises(ValueError):
+        schedule(_beats(), [[100, 100], [100], [100]])
+
+
+def test_estimate_floors_one_character_say_at_400ms():
+    plan = estimate(TechReelInputs(title="t", beats=[Beat(lines=[Line(say="a")])]))
+    assert plan.beats[0].lines[0].speech_ms == 400

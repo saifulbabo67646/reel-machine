@@ -35,7 +35,7 @@ def test_empty_units():
 def test_equal_counts_starts_non_decreasing():
     spans = [WordSpan(text="a", start_ms=800, end_ms=900), WordSpan(text="b", start_ms=300, end_ms=400)]
     t = unit_times(spans, units("a b", "en"), 1000)
-    assert t[0][0] <= t[1][0] and all(a <= b for a, b in t)
+    assert t == [(800, 900), (800, 800)]
 
 
 def test_span_past_speech_is_clamped():
