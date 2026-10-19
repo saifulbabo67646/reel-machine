@@ -317,7 +317,7 @@ class HeroSpec(_Model):
 class Creator(_Model):
     name: str = Field(max_length=40)
     handle: str = Field(max_length=40)
-    avatar: str | None = None
+    avatar: str | None = Field(None, max_length=500)     # an image source, capped like the others
 
 
 class Beat(_Model):
@@ -346,7 +346,7 @@ class TechReelInputs(_Model):
     sfx: bool = True
     creator: Creator | None = None
     sources: list[Annotated[str, Field(max_length=500)]] = Field(default_factory=list, max_length=20)
-    beats: list[Beat] = Field(default_factory=list, max_length=40)
+    beats: list[Beat] = Field(min_length=1, max_length=40)   # a reel with nothing to say is a schema error
     name: str | None = Field(None, pattern=_NAME)
     outdir: str | None = None
 

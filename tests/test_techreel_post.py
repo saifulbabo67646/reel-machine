@@ -55,7 +55,8 @@ def test_say_with_a_separate_text_never_appears():
 def test_title_hashtags_dedupe_and_filter():
     tags = hashtags("en", "AI tools: Local-LLM 4 you & the Tech")
     assert [t.casefold() for t in tags].count("#ai") == 1 and tags.count("#tech") == 1
-    assert "#tools" in tags and "#you" in tags and "#4" not in tags
+    assert "#tools" in tags and "#localllm" in tags and "#4" not in tags
+    assert "#you" not in tags and "#the" not in tags
     assert all(t[1:].isalnum() for t in tags) and 8 <= len(tags) <= 12
 
 
@@ -84,3 +85,31 @@ def test_every_example_makes_a_well_formed_post(path):
         for line in beat.lines:
             if line.text and line.text.replace("*", "") != line.say:   # a real respelling, not just markup
                 assert line.say not in text
+
+
+def test_title_tags_skip_function_words_and_short_latin_words():
+    inputs = load(next(p for p in EXAMPLES if p.name == "en-what-is-rag.json"))
+    tags = post_markdown(inputs).splitlines()[-1].split()
+    assert "#what" not in tags and "#with" not in tags and "#rag" not in tags
+    assert "#open" in tags and "#book" in tags
+    assert "#this" not in hashtags("en", "This tool, your laptop, from home")
+    assert "#your" not in hashtags("en", "This tool, your laptop, from home")
+    assert "#laptop" in hashtags("en", "This tool, your laptop, from home")
+    assert "#量子化" in hashtags("ja", "量子化 入門")       # the length floor of four is for Latin words only
+    assert "#नया" in hashtags("hi", "नया ऐप")
+
+
+def test_unspaced_languages_join_cta_lines_without_spaces():
+    inputs = reel(language="ja", beats=[
+        {"kind": "hook", "lines": [{"say": "こんにちは。"}]},
+        {"kind": "cta", "lines": [{"say": "コメントしてね。"}, {"say": "フォローもよろしく。"}]},
+    ])
+    assert "コメントしてね。フォローもよろしく。" in post_markdown(inputs).splitlines()
+    ja = load(next(p for p in EXAMPLES if p.name == "ja-tiny-models.json"))
+    assert "。 " not in post_markdown(ja)
+
+
+def test_a_beatless_reel_still_makes_a_post():
+    inputs = TechReelInputs.model_construct(**{**reel().__dict__, "beats": []})
+    text = post_markdown(inputs)
+    assert text.endswith("\n") and text.splitlines()[-1].startswith("#")

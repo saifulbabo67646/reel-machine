@@ -9,7 +9,7 @@ from __future__ import annotations
 import unicodedata
 
 from ..mapreel.sources import _clean, _link
-from .markup import plain
+from .markup import is_unspaced, plain
 from .models import Line, TechReelInputs
 
 MAX_SUMMARY = 5
@@ -20,6 +20,15 @@ BASE_TAGS: dict[str, tuple[str, ...]] = {
     "ja": ("#AI", "#テック", "#生成AI", "#プログラミング", "#オープンソース"),
 }
 FILLER_TAGS = ("#reels", "#shorts", "#technology", "#learnai", "#developer")  # top up a short set to MIN_TAGS
+# English function words a title is full of and nobody searches for
+STOPWORDS = frozenset({"a", "an", "and", "are", "can", "for", "from", "how", "into", "is", "its", "of", "on", "or",
+                       "the", "to", "what", "when", "why", "with", "your", "you", "this", "that"})
+LATIN_MIN = 4               # a Latin-script title word shorter than this is too generic to be a tag ("#old")
+OTHER_MIN = 3               # any other script: Devanagari and kanji words are short
+
+
+def _latin(word: str) -> bool:
+    return all(not ch.isalpha() or "LATIN" in unicodedata.name(ch, "") for ch in word)
 
 
 def _caption(line: Line) -> str:
@@ -27,10 +36,12 @@ def _caption(line: Line) -> str:
 
 
 def _title_tags(title: str) -> list[str]:
-    """Hashtags from the title's words: letters, marks and digits only (any script), at least 3 characters.
-    Marks (category M) stay so Devanagari matras and viramas survive."""
+    """Hashtags from the title's words: letters, marks and digits only (any script); English function words
+    dropped; at least 4 characters for a Latin word, 3 for any other. Marks (category M) stay so Devanagari
+    matras and viramas survive."""
     words = ["".join(ch for ch in raw if unicodedata.category(ch)[0] in "LMN") for raw in title.split()]
-    return [f"#{w.lower()}" for w in words if len(w) >= 3]
+    return [f"#{w.lower()}" for w in words
+            if w.lower() not in STOPWORDS and len(w) >= (LATIN_MIN if _latin(w) else OTHER_MIN)]
 
 
 def hashtags(language: str, title: str) -> list[str]:
@@ -54,14 +65,16 @@ def hashtags(language: str, title: str) -> list[str]:
 
 def post_markdown(inputs: TechReelInputs) -> str:
     beats = inputs.beats
-    out = [_caption(beats[0].lines[0]), ""]
+    join = "" if is_unspaced(inputs.language) else " "     # Japanese sentences run on without a space
+    # the schema needs a beat; a model built around it still gets a post, from the title
+    out = [_caption(beats[0].lines[0]) if beats else _clean(inputs.title), ""]
     middle = [b for b in beats[1:] if b.kind != "cta"]
     out += [f"- {_caption(b.lines[0])}" for b in middle[:MAX_SUMMARY]]
     if middle:
         out.append("")
     for beat in beats[1:]:
         if beat.kind == "cta":
-            out += [" ".join(_caption(line) for line in beat.lines), ""]
+            out += [join.join(_caption(line) for line in beat.lines), ""]
     if inputs.sources:
         out += ["Sources:", *[f"- {_link(s)}" for s in inputs.sources], ""]
     out.append(" ".join(hashtags(inputs.language, inputs.title)))

@@ -49,12 +49,13 @@ def test_extra_fields_forbidden():
 
 
 def test_inputs_defaults_and_patterns():
-    i = TechReelInputs(title="t")
+    one = [Beat(lines=[Line(say="x")])]
+    i = TechReelInputs(title="t", beats=one)
     assert (i.language, i.voice, i.look, i.mode, i.lint, i.sfx) == ("en", "fake:default", "mint", "storyboard", "strict", True)
     for bad in ({"language": "not a lang"}, {"name": "-x"}, {"accent": "red"}, {"look": "neon"}):
         with pytest.raises(ValidationError):
-            TechReelInputs(title="t", **bad)
-    assert TechReelInputs(title="t", language="pt-BR", accent="#00ffaa", name="a.b").language == "pt-BR"
+            TechReelInputs(title="t", beats=one, **bad)
+    assert TechReelInputs(title="t", beats=one, language="pt-BR", accent="#00ffaa", name="a.b").language == "pt-BR"
 
 
 def test_beat_id_pattern_and_limits():
@@ -178,3 +179,42 @@ def test_bars_highlight_within_items():
     for bad in (2, -1):
         with pytest.raises(ValidationError):
             _beat({"kind": "bars", "items": items, "highlight": bad})
+
+
+@pytest.mark.parametrize("over", [{"beats": []}, {}, {"beats": [], "lint": "warn"}])
+def test_a_reel_needs_a_beat(over):
+    with pytest.raises(ValidationError):
+        TechReelInputs.model_validate({"title": "t", **over})
+
+
+@pytest.mark.parametrize("over", [{"beats": []}, {"beats": [], "lint": "warn", "mode": "full"}])
+def test_a_beatless_reel_is_invalid_input_through_the_engine(tmp_path, over):
+    import dataclasses
+
+    from reelmachine.config import get_settings
+    from reelmachine.core.errors import ErrorCode, InvalidInput
+    from reelmachine.core.job import JobRequest
+    from reelmachine.engine import Engine
+
+    settings = dataclasses.replace(get_settings(), workdir=tmp_path / "w", outdir=tmp_path / "out",
+                                   shared_cache=tmp_path / "shared", tts="fake")
+    engine = Engine(settings)
+    try:
+        inputs = {"title": "t", **over}
+        with pytest.raises(InvalidInput) as probed:
+            engine.probe("techreel", inputs)
+        with pytest.raises(InvalidInput) as submitted:
+            engine.submit(JobRequest(recipe="techreel", inputs=inputs))
+    finally:
+        engine.close()
+    for err in (probed.value, submitted.value):
+        assert err.code == ErrorCode.INVALID_INPUT
+        assert any(e["loc"][0] == "beats" for e in err.details["errors"])
+
+
+def test_creator_avatar_is_capped():
+    from reelmachine.recipes.techreel.models import Creator
+
+    assert Creator(name="n", handle="@h", avatar="https://x.test/" + "a" * 480).avatar
+    with pytest.raises(ValidationError):
+        Creator(name="n", handle="@h", avatar="https://x.test/" + "a" * 500)
