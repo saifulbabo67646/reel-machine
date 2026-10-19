@@ -45,6 +45,7 @@ from .models import (
     ScriptOutput,
     TechReelInputs,
 )
+from .post import post_markdown
 from .schedule import BeatSlot, LineSlot, Plan, schedule
 from .words import unit_times
 
@@ -338,6 +339,7 @@ class ComposeStage:
         }
         (_artifacts(ctx) / "script.resolved.json").write_text(
             json.dumps(resolved, indent=2, ensure_ascii=False), encoding="utf-8")
+        (_artifacts(ctx) / "post.md").write_text(post_markdown(payload.script.inputs), encoding="utf-8")
         return ComposeOutput(narration=payload, project=str(project), key=compose.project_key(doc, folder))
 
 

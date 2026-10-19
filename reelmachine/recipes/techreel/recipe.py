@@ -79,7 +79,7 @@ class TechReelRecipe:
         cost=CostNote(unit="tts_characters", estimate="the length of every line's `say`",
                       notes="the fake, macOS and local Supertonic voices are free; cloud voices bill per character",
                       providers=("supertonic", "elevenlabs", "cartesia", "macos", "fake")),
-        artifacts=("reel.mp4", "captions.srt", "reel.json", "storyboard.jpg", "script.resolved.json"),
+        artifacts=("reel.mp4", "captions.srt", "reel.json", "storyboard.jpg", "script.resolved.json", "post.md"),
         render_modes=("hyperframes",),
         example=EXAMPLE,
         guide=GUIDE,

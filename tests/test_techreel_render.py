@@ -54,6 +54,7 @@ def test_the_example_renders_as_a_real_reel(tmp_path):
     arts = {a.name: Path(a.path) for a in job.result.artifacts}
     assert job.result.render_mode == "hyperframes"
     reel, data = arts["reel.mp4"], json.loads(arts["script.resolved.json"].read_text(encoding="utf-8"))
+    assert arts["post.md"].read_text(encoding="utf-8").splitlines()[-1].startswith("#")
     info = ffmpeg.probe(reel)
     assert (info.width, info.height) == (1080, 1920) and info.has_audio
     assert abs(info.duration_s * 1000 - data["durationMs"]) < 100
