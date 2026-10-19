@@ -249,12 +249,14 @@ description and hashtags • the hook • the CTA. The same data is in `story.js
 
 - One film is downloaded once into `REEL_VIDVAULT_DIR` and re-cut for free; a plan job
   followed by a build job reuses the download, the transcript and the concepts.
-- `voice` is `<provider>:<voice-id>` (`fake:default`, `cartesia:…`, `elevenlabs:…`);
+- `voice` is `<provider>:<voice-id>` (`fake:default`, `cartesia:…`, `elevenlabs:…`, `supertonic:…`);
   a voice that the deployment does not serve fails loudly with `VOICE_UNAVAILABLE`.
 - Word-level highlight timings come from the voice provider when it reports them;
   Cartesia's Hindi output currently reports none, so the Hindi captions fall back to
   line-level proportional highlighting (still karaoke, still in sync at the line) and
   the output records `timingsSource: "proportional"`. QA that reel before publishing.
+  A Supertonic server speaks Hindi (`supertonic:<voice>` with `REEL_TTS=supertonic`) and
+  reports estimated word timings, so its captions highlight per word.
 - The film's provenance (TMDB id, source, resolution, audio language) and every asset's
   licence reach the manifest. Subtitle-database files are community uploads: check the
   licence before publishing.

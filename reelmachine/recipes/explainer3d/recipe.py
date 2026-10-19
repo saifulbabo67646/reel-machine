@@ -49,7 +49,7 @@ class Explainer3DRecipe:
         },
         cost=CostNote(unit="tts_characters", estimate="narration length",
                       notes="the fake and macOS voices are free; cloud voices bill per character",
-                      providers=("elevenlabs", "cartesia", "macos", "fake")),
+                      providers=("elevenlabs", "cartesia", "supertonic", "macos", "fake")),
         guide=build_guide(),
         artifacts=("reel.mp4", "captions.srt", "reel.json", "timeline.json", "storyboard.jpg",
                    "script.resolved.json"),

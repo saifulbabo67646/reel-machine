@@ -167,7 +167,7 @@ class Settings:
     outdir: Path = field(default_factory=lambda: PROJECT_ROOT / "out")
     #: Per-caller quota ledger override (a job runs against its caller's ledger).
     ledger_file: Path | None = None
-    #: Which narration provider the doodle recipe binds (fake | elevenlabs | cartesia).
+    #: Which narration provider the doodle recipe binds (fake | elevenlabs | cartesia | supertonic | ...).
     tts: str = "fake"
     #: Which script writer the deployment serves (template | llm).  Empty leaves
     #: the recipe's own default alone, the way an unset REEL_SOURCE does.

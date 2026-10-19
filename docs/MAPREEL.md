@@ -210,7 +210,7 @@ filler card.
 ## Voices
 
 `REEL_TTS` picks the narration provider for the whole deployment: `fake`, `macos`,
-`cartesia` or `elevenlabs`. The script's `voice` names a voice on that provider, as
+`cartesia`, `elevenlabs` or `supertonic`. The script's `voice` names a voice on that provider, as
 `<provider>:<voice>`.
 
 | `REEL_TTS` | `voice` example | cost | key |
@@ -219,8 +219,9 @@ filler card.
 | `macos` | `macos:Samantha` | free | none. Uses the Mac's own voices; macOS only. The best free way to hear a real build |
 | `cartesia` | `cartesia:<voice-id>` | per character | `CARTESIA_API_KEY` |
 | `elevenlabs` | `elevenlabs:<voice-id>` | per character | `ELEVENLABS_API_KEY` |
+| `supertonic` | `supertonic:F1`, `supertonic:<cloned-voice-id>` | free, your own GPU or CPU | `REEL_SUPERTONIC_URL` (default `http://127.0.0.1:8787`); `SUPERTONIC_API_KEY` if the server has one. Word timings are estimated, not aligned |
 
-Use macOS for local tests and Cartesia or ElevenLabs for production. The voice in the
+Use macOS for local tests and Cartesia, ElevenLabs or a Supertonic server for production. The voice in the
 script must match `REEL_TTS`, or the job fails with `VOICE_UNAVAILABLE`.
 
 `probe` reports the cost before you spend it: `details.cost` is

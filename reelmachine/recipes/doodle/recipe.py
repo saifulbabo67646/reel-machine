@@ -79,7 +79,7 @@ class DoodleRecipe:
             unit="tts_characters",
             estimate="narration length",
             notes="the fake voice is free; cloud voices bill per character and are per-caller metered",
-            providers=("elevenlabs", "cartesia", "fake"),
+            providers=("elevenlabs", "cartesia", "supertonic", "fake"),
         ),
         artifacts=("reel.mp4", "captions.ass", "captions.srt", "timeline.json", "manifest.json"),
         render_modes=("stroke", "program"),
