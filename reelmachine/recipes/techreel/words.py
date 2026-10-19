@@ -22,7 +22,12 @@ def unit_times(spans: list[WordSpan], us: list[Unit], speech_ms: int) -> list[tu
         return max(0, min(speech_ms, round(v)))
 
     if len(spans) == len(us):
-        return [(clamp(s.start_ms), max(clamp(s.start_ms), clamp(s.end_ms))) for s in spans]
+        out: list[tuple[int, int]] = []
+        prev = 0
+        for s in spans:
+            prev = max(prev, clamp(s.start_ms))   # monotonic even if the spans are not
+            out.append((prev, max(prev, clamp(s.end_ms))))
+        return out
 
     # Piecewise-linear map: spoken-character position -> time.
     pts: list[tuple[float, float]] = []
