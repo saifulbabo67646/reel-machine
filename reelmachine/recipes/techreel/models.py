@@ -6,6 +6,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from reelmachine.core.stage import StageOutput
+
 Look = Literal["mint", "ember", "violet", "mono"]
 BeatKind = Literal["hook", "pain", "reveal", "explain", "feature", "honest", "cta", "other"]
 Transition = Literal["cut", "slide", "flash", "zoom"]
@@ -182,3 +184,56 @@ class TechReelInputs(_Model):
     beats: list[Beat] = Field(default_factory=list, max_length=40)
     name: str | None = Field(None, pattern=_NAME)
     outdir: str | None = None
+
+
+# ---------------------------------------------------------------- stage outputs
+
+
+class ScriptOutput(StageOutput):
+    inputs: TechReelInputs
+    lint: list[dict] = Field(default_factory=list)       # every finding, with its path
+    warnings: list[str] = Field(default_factory=list)    # the findings that did not stop the build, as text
+
+
+class LineSlotModel(_Model):
+    """`schedule.LineSlot` as stage data."""
+
+    start_ms: int
+    speech_ms: int
+    end_ms: int
+
+
+class BeatSlotModel(_Model):
+    """`schedule.BeatSlot` as stage data."""
+
+    start_ms: int
+    end_ms: int
+    lines: list[LineSlotModel]
+
+
+class NarrationOutput(StageOutput):
+    script: ScriptOutput
+    audio_asset: str
+    duration_ms: int
+    beats: list[BeatSlotModel]
+    times: list[list[list[tuple[int, int]]]]             # per beat, per line, per caption unit; line-relative
+    provider: str = ""
+
+
+class ComposeOutput(StageOutput):
+    narration: NarrationOutput
+    project: str
+    key: str
+
+
+class PreviewOutput(StageOutput):
+    compose: ComposeOutput
+    sheet: str = ""                                      # storyboard.jpg; empty in full mode
+
+
+class RenderOutput(StageOutput):
+    video: str
+    srt: str
+    manifest: str
+    duration_ms: int
+    render_mode: str = "hyperframes"

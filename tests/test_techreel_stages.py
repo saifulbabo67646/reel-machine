@@ -1,0 +1,104 @@
+"""techreel stages without a render: sound-effect cues, terminal typing starts, the script stage's lint gate."""
+
+import dataclasses
+
+import pytest
+
+from reelmachine.config import get_settings
+from reelmachine.core.assets import AssetStore
+from reelmachine.core.errors import InvalidInput
+from reelmachine.core.job import Job, JobRequest
+from reelmachine.core.stage import StageContext, StaticProviders
+from reelmachine.recipes.doodle.narration.fake import FakeNarration
+from reelmachine.recipes.techreel.stages import (
+    MAX_SFX,
+    ScriptStage,
+    sfx_cues,
+    terminal_starts,
+)
+
+
+def _visual(kind, enter, cls="block", **kw):
+    return {"kind": kind, "id": f"{kind}{enter}", "enterMs": enter, "exitMs": enter + 1000, "class": cls, **kw}
+
+
+def _doc(beats, sfx=True):
+    return {"beats": [{"startMs": s, "endMs": s + 900, "visuals": vs} for s, vs in beats], "sfx": sfx}
+
+
+DOC = _doc([
+    (0, [_visual("counter", 300, to=9), _visual("stamp", 700, cls="overlay")]),
+    (1200, [_visual("terminal", 1500, lines=[{"cmd": "ls"}, {"out": "a"}, {"cmd": "cat a"}]),
+            _visual("emoji", 1600, cls="overlay")]),
+    (2400, [_visual("stamp", 2500, cls="overlay"), _visual("title", 2600)]),
+])
+
+
+def _named(cues, name):
+    return [at for at, n in cues if n == name]
+
+
+def test_sfx_cues_follow_the_document():
+    cues = sfx_cues(DOC)
+    assert _named(cues, "whoosh") == [1200, 2400]                 # every beat start but the first
+    assert _named(cues, "thud") == [700, 2500]                    # one per stamp
+    assert _named(cues, "ding") == [300 + 900]                    # the counter finishing
+    assert _named(cues, "pop") == [300, 1500, 2600]               # block visuals only; overlays have their own
+    assert _named(cues, "tick") == terminal_starts(DOC["beats"][1]["visuals"][0])[::2]
+    assert [at for at, _ in cues] == sorted(at for at, _ in cues)
+
+
+def test_no_sfx_when_switched_off():
+    assert sfx_cues({**DOC, "sfx": False}) == []
+
+
+def test_a_crowded_reel_drops_pops_first():
+    beats = [(b * 10_000, [_visual("title", b * 10_000 + 100 + k * 75) for k in range(24)]) for b in range(5)]
+    cues = sfx_cues(_doc(beats))   # 120 pops and 4 whooshes
+    assert MAX_SFX == 80 and len(cues) == 80
+    assert _named(cues, "whoosh") == [10_000, 20_000, 30_000, 40_000]
+    kept = _named(cues, "pop")
+    assert all(b * 10_000 + 100 in kept or b * 10_000 + 175 in kept for b in range(5))   # thinned, not cut off
+
+
+def test_dropped_pops_are_those_closest_to_another_cue():
+    # 81 cues: the one pop sitting on top of a whoosh goes, the lonely ones stay
+    pops = [_visual("title", 100_000 + k * 1000) for k in range(79)]
+    doc = _doc([(0, pops), (5_000_000, [_visual("title", 5_000_010)])])
+    cues = sfx_cues(doc)
+    assert len(cues) == 80
+    assert (5_000_010, "pop") not in cues and (5_000_000, "whoosh") in cues
+
+
+def test_terminal_starts_mirror_the_runtime():
+    # the same visual as runtime/tests/pure.test.mjs: 1000 + 2 chars at 28 cps, + 250 ms, + 5 chars
+    v = {"enterMs": 1000, "lines": [{"cmd": "ls"}, {"out": "a b"}, {"out": "c"}, {"cmd": "cat a"}, {"out": "hi"}]}
+    assert terminal_starts(v) == [1000, 1071, 1071, 1321, 1500]
+    assert terminal_starts({"enterMs": 400, "lines": [{"out": "booting"}, {"cmd": "x"}]}) == [400, 400]
+    assert terminal_starts({"enterMs": 0, "lines": [{"cmd": "😀😀"}, {"out": "y"}]}) == [0, 71]   # code points
+
+
+def _ctx(tmp_path):
+    settings = dataclasses.replace(get_settings(), workdir=tmp_path / "w", shared_cache=tmp_path / "shared")
+    return StageContext(job=Job(id="t", recipe="techreel", request=JobRequest(recipe="techreel")),
+                        workdir=tmp_path, assets=AssetStore(tmp_path / "assets"), config=settings,
+                        providers=StaticProviders({"narration": FakeNarration(settings)}))
+
+
+SCRIPT = {"title": "t", "beats": [{"lines": [{"say": "GPT-4o is here", "text": "GPT-4o is here"}]}]}
+
+
+def test_a_strict_full_build_stops_on_a_digit_in_say(tmp_path):
+    with pytest.raises(InvalidInput) as exc:
+        ScriptStage().run(_ctx(tmp_path), SCRIPT | {"mode": "full"})
+    assert exc.value.details == {"path": "beats[0].lines[0].say", "rule": "digit-in-say"}
+    assert exc.value.stage == "script"
+
+
+def test_a_storyboard_only_warns(tmp_path):
+    out = ScriptStage().run(_ctx(tmp_path), SCRIPT)
+    assert [f["rule"] for f in out.lint] == ["digit-in-say"]
+    assert out.lint[0]["path"] == "beats[0].lines[0].say" and out.lint[0]["severity"] == "error"
+    assert out.warnings and out.warnings[0].startswith("digit-in-say: ")
+    full_warn = ScriptStage().run(_ctx(tmp_path), SCRIPT | {"mode": "full", "lint": "warn"})
+    assert [f["rule"] for f in full_warn.lint] == ["digit-in-say"]
