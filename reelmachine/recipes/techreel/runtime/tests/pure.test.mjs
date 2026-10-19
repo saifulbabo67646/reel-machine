@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   ENTER_MS, EXIT_MS, GLIDE_MS, COUNTER_MS, HERO_MOVE_MS, TYPE_CPS, STAGE, STACK_GAP, MIN_SCALE, HERO_STACKING,
   backOut, clamp01, enterP, exitP, alive, stackLayout, counterValue, typed, terminalStarts, captionAt, wordPhase,
-  heroAt, beatAt, transitionP, progress, blob, seedOf,
+  heroAt, heroSpan, beatAt, transitionP, progress, blob, seedOf, CAPTION_HOLD_MS,
 } from "../pure.mjs";
 
 const block = (id, enterMs, exitMs = 99999, place = "stack") => ({ id, kind: "title", class: "block", enterMs, exitMs, place });
@@ -71,6 +71,48 @@ test("a left/right pair shares one row, side by side", () => {
   assert.equal(layout.get("l").x, 540 - (832 / 2));
   assert.equal(layout.get("r").x, 540 - 832 / 2 + 432);
   assert.equal(layout.get("l").y, 440 + (940 - 300) / 2, "the row is as tall as its taller block");
+});
+
+test("a row wider than the stage shrinks the stack until it fits between the margins", () => {
+  const blocks = [block("l", 0, 99999, "left"), block("r", 0, 99999, "right")];
+  const sizes = sized([["l", 600, 300], ["r", 600, 300]]);
+  const layout = stackLayout(blocks, sizes, 1000);
+  const scale = (STAGE.right - STAGE.left) / 1232;
+  assert.ok(Math.abs(layout.get("l").scale - scale) < 1e-12);
+  assert.ok(Math.abs(layout.get("l").x - STAGE.left) < 1e-9);
+  assert.ok(Math.abs(layout.get("r").x + 600 * scale - STAGE.right) < 1e-9);
+});
+
+test("the hero's stack span follows its runs of stacking states", () => {
+  const states = [{ atMs: 0, state: "center" }, { atMs: 1000, state: "pulse" }, { atMs: 2000, state: "corner" },
+    { atMs: 3000, state: "small-top" }, { atMs: 4000, state: "hidden" }];
+  assert.deepEqual(heroSpan(states, 500), { id: "hero", exitMs: 2000 }, "the first run has no enter time");
+  assert.deepEqual(heroSpan(states, 1500), { id: "hero", exitMs: 2000 });
+  assert.deepEqual(heroSpan(states, 2500), { id: "hero", exitMs: 2000 }, "a run that ended is kept, for the glide");
+  assert.deepEqual(heroSpan(states, 3500), { id: "hero", enterMs: 3000, exitMs: 4000 });
+  assert.deepEqual(heroSpan(states, 9000), { id: "hero", enterMs: 3000, exitMs: 4000 });
+  assert.equal(heroSpan([{ atMs: 0, state: "corner" }, { atMs: 500, state: "center" }], 200), null);
+  assert.deepEqual(heroSpan([{ atMs: 0, state: "corner" }, { atMs: 500, state: "center" }], 800), { id: "hero", enterMs: 500 });
+  assert.equal(heroSpan([], 0), null);
+});
+
+test("the others glide when the hero joins the stack and when it leaves", () => {
+  const states = [{ atMs: 0, state: "corner" }, { atMs: 2000, state: "small-top" }, { atMs: 5000, state: "hidden" }];
+  const sizes = sized([["hero", 160, 160], ["a", 400, 200]]);
+  const at = (t) => stackLayout([block("a", 0), heroSpan(states, t)].filter(Boolean), sizes, t);
+  const alone = at(1999).get("a").y;
+  assert.equal(at(1999).has("hero"), false);
+  const joined = at(2000 + GLIDE_MS).get("a").y;
+  const mid = at(2000 + GLIDE_MS / 2).get("a").y;
+  assert.ok(joined > alone, "a moves down under the hero");
+  assert.ok(mid > alone && mid < joined, `mid ${mid}`);
+  assert.equal(at(2000).get("a").y, alone, "no jump when the hero joins");
+  assert.ok(at(2000 + GLIDE_MS).get("hero").y < joined, "the hero is on top");
+  const left = 5000 + EXIT_MS;
+  assert.equal(at(left - 1).get("a").y, joined);
+  assert.equal(at(left).get("a").y, joined, "no jump when the hero has left");
+  assert.equal(at(left).has("hero"), false);
+  assert.equal(at(left + GLIDE_MS).get("a").y, alone, "a glides back to the centre");
 });
 
 test("when a block exits the others glide to their new slots", () => {
@@ -141,9 +183,18 @@ test("terminal lines appear as the commands before them finish typing", () => {
 
 test("captions are picked by time", () => {
   const captions = [{ startMs: 0, endMs: 900 }, { startMs: 1000, endMs: 1800 }, { startMs: 3000, endMs: 3500 }];
-  assert.deepEqual([-10, 0, 899, 950, 1000, 2500, 3200, 3500].map((t) => captionAt(captions, t)),
-    [-1, 0, 0, 0, 1, 1, 2, -1]);
+  assert.deepEqual([-10, 0, 899, 950, 1000, 2000, 2100, 3200, 3500].map((t) => captionAt(captions, t)),
+    [-1, 0, 0, 0, 1, 1, 1, 2, -1]);
   assert.equal(captionAt([], 100), -1);
+});
+
+test("a caption is held at most 300 ms past its end, so none hangs over a pause", () => {
+  const captions = [{ startMs: 0, endMs: 1000 }, { startMs: 3000, endMs: 3500 }];
+  assert.equal(CAPTION_HOLD_MS, 300);
+  assert.equal(captionAt(captions, 1300), 0);
+  assert.equal(captionAt(captions, 1301), -1);
+  assert.equal(captionAt(captions, 2999), -1);
+  assert.equal(captionAt(captions, 3000), 1);
 });
 
 test("a word is future, now, then past", () => {

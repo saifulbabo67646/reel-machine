@@ -11,6 +11,7 @@ export const TYPE_CPS = 28;
 export const STAGE = { top: 440, bottom: 1380, left: 64, right: 1016 };
 export const STACK_GAP = 32;
 export const MIN_SCALE = 0.6;
+export const CAPTION_HOLD_MS = 300;
 
 // hero states that take a slot in the stage stack; `corner` and `hidden` float outside it
 export const HERO_STACKING = new Set(["center", "small-top", "pulse", "shake", "rings", "screen", "sleep"]);
@@ -47,6 +48,8 @@ export const alive = (v, t) => enterOf(v) <= t && t < endOf(v);
 
 /** Rows of the live blocks in enter order: a `left`/`right` block pairs with the next one when that is also
     left/right, the `left` one on the left. */
+// edge cases: two `left`s (or two `right`s) still pair, in enter order; a side block whose neighbour is a stack
+// block (or none) gets a row of its own, centred; three side blocks in a row pair the first two only
 function rows(live) {
   const out = [];
   for (let i = 0; i < live.length; i++) {
@@ -75,7 +78,11 @@ function layoutOf(live, sizes) {
   if (!rs.length) return out;
   const needed = rs.reduce((s, r) => s + r.h, 0) + STACK_GAP * (rs.length - 1);
   const room = STAGE.bottom - STAGE.top;
-  const scale = needed > room ? Math.max(MIN_SCALE, room / needed) : 1;
+  // a row wider than the stage (a left/right pair) shrinks the stack too, below MIN_SCALE if it must:
+  // nothing may cross the side margins
+  const widest = Math.max(...rs.map((r) => r.w));
+  const fitW = widest > STAGE.right - STAGE.left ? (STAGE.right - STAGE.left) / widest : 1;
+  const scale = Math.min(fitW, needed > room ? Math.max(MIN_SCALE, room / needed) : 1);
   const height = needed * scale;
   const centre = (STAGE.left + STAGE.right) / 2;
   // rows are placed by their unscaled offset into the stack; a pinned stack measures from the bottom so the
@@ -96,15 +103,17 @@ function layoutOf(live, sizes) {
   return out;
 }
 
-/** The stage stack at `t`. `blocks` are the current beat's block visuals (plus `{id: "hero"}`, timeless, while
-    the hero is in a HERO_STACKING state); `sizes` their natural `{w, h}` measured at build.
+/** The stage stack at `t`. `blocks` are the current beat's block visuals (plus `{id: "hero", ...heroSpan()}`
+    while the hero is in a HERO_STACKING state); `sizes` their natural `{w, h}` measured at build.
     Glide rule: membership changes when a block enters (`enterMs`) or has finished leaving (`exitMs + EXIT_MS`).
     At each change every block that stays glides over GLIDE_MS (smoothstep) from where it was at that moment to
     its slot in the new layout; a newcomer starts in its slot (its own enter animation brings it in). Walking
     the changes in order makes a change during a glide start from the half-glided place, so nothing jumps. */
 export function stackLayout(blocks, sizes, t) {
+  // the hero always takes the top row, whenever it joined
+  const rank = (v) => (v.id === "hero" ? -Infinity : enterOf(v));
   const order = blocks.map((v, i) => ({ v, i }))
-    .sort((a, b) => enterOf(a.v) - enterOf(b.v) || a.i - b.i)
+    .sort((a, b) => rank(a.v) - rank(b.v) || a.i - b.i)
     .map((e) => e.v);
   const changes = [...new Set(order.flatMap((v) => [enterOf(v), endOf(v)]))]
     .filter((c) => Number.isFinite(c) && c <= t)
@@ -174,12 +183,15 @@ export function terminalStarts(v) {
 
 // ------------------------------------------------------------ captions, hero, beats
 
-/** The latest caption started by `t`, held across the short gaps between chunks; -1 before the first and
-    after the last one ends. */
+/** The latest caption started by `t`, held across the short gaps between chunks (up to CAPTION_HOLD_MS past
+    its end, so no caption hangs over a beat transition or a pause); -1 before the first, once the hold has run
+    out, and from the last one's end. */
 export function captionAt(captions, t) {
   let index = -1;
   for (let i = 0; i < captions.length; i++) if (captions[i].startMs <= t) index = i;
-  if (index === captions.length - 1 && index >= 0 && t >= captions[index].endMs) return -1;
+  if (index < 0) return -1;
+  const end = captions[index].endMs;
+  if (index === captions.length - 1 ? t >= end : t > end + CAPTION_HOLD_MS) return -1;
   return index;
 }
 
@@ -193,6 +205,24 @@ export function heroAt(states, t) {
   for (let k = 0; k < states.length; k++) if (states[k].atMs <= t) i = k;
   const s = states[i];
   return { state: s.state, from: i > 0 ? states[i - 1].state : null, p: clamp01((t - s.atMs) / HERO_MOVE_MS), text: s.text ?? null };
+}
+
+/** The hero as a stack block at `t`: `{id: "hero", enterMs, exitMs}` for the run of HERO_STACKING states the
+    latest one started by `t` belongs to — entering when the run starts (no time when that is the first state,
+    so it is in the stack from the start) and leaving when a non-stacking state follows it. null when no run
+    has started yet; a run that has ended is still returned, so the stack sees the hero leave and glides. */
+export function heroSpan(states, t) {
+  if (!states || !states.length) return null;
+  let last = -1;
+  for (let k = 0; k < states.length; k++) if (states[k].atMs <= t && HERO_STACKING.has(states[k].state)) last = k;
+  if (last < 0) return null;
+  let first = last;
+  while (first > 0 && HERO_STACKING.has(states[first - 1].state)) first--;
+  const after = states.slice(last + 1).find((s) => !HERO_STACKING.has(s.state));
+  const span = { id: "hero" };
+  if (first > 0) span.enterMs = states[first].atMs;
+  if (after) span.exitMs = after.atMs;
+  return span;
 }
 
 const transitionLen = (beat) => TRANSITION_LEN[beat.transition] ?? 0;
