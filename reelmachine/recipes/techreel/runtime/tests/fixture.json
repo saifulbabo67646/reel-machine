@@ -1,0 +1,1065 @@
+{
+ "mode": "reel",
+ "width": 1080,
+ "height": 1920,
+ "duration": 21.47,
+ "language": "hi",
+ "look": {
+  "bg": "#06100f",
+  "glow1": "#0f6f66",
+  "glow2": "#0a3d4a",
+  "glow3": "#0b2447",
+  "text": "#e9fbf6",
+  "muted": "#7fa7a0",
+  "accent": "#2ee6b8",
+  "accentInk": "#032019",
+  "card": "rgba(255,255,255,0.05)",
+  "cardEdge": "rgba(46,230,184,0.22)",
+  "red": "#ff5d73",
+  "green": "#4ade80"
+ },
+ "hero": {
+  "kind": "orb",
+  "text": null
+ },
+ "heroStates": [
+  {
+   "atMs": 0,
+   "state": "center",
+   "text": null
+  },
+  {
+   "atMs": 3970,
+   "state": "small-top",
+   "text": null
+  },
+  {
+   "atMs": 6750,
+   "state": "shake",
+   "text": null
+  },
+  {
+   "atMs": 7490,
+   "state": "corner",
+   "text": null
+  },
+  {
+   "atMs": 10510,
+   "state": "hidden",
+   "text": null
+  },
+  {
+   "atMs": 13980,
+   "state": "pulse",
+   "text": null
+  },
+  {
+   "atMs": 15100,
+   "state": "rings",
+   "text": null
+  },
+  {
+   "atMs": 16750,
+   "state": "screen",
+   "text": "LOCAL ✓"
+  },
+  {
+   "atMs": 19699,
+   "state": "sleep",
+   "text": null
+  }
+ ],
+ "beats": [
+  {
+   "id": "hook",
+   "kind": "hook",
+   "startMs": 0,
+   "endMs": 3720,
+   "transition": "cut",
+   "heading": [
+    {
+     "t": "bhai",
+     "a": false
+    },
+    {
+     "t": "176B",
+     "a": true
+    },
+    {
+     "t": "AI?",
+     "a": false
+    }
+   ],
+   "kicker": "OPENAI · 29.09",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "counter",
+     "from": 0,
+     "to": 176.0,
+     "decimals": 0,
+     "prefix": "",
+     "suffix": "B",
+     "label": "BILLION PARAMETERS",
+     "id": "b0v1",
+     "enterMs": 1086,
+     "exitMs": 3970,
+     "class": "block"
+    },
+    {
+     "place": "auto",
+     "kind": "emoji",
+     "emoji": "💀",
+     "id": "b0v2",
+     "enterMs": 3320,
+     "exitMs": 3970,
+     "class": "overlay"
+    }
+   ]
+  },
+  {
+   "id": "pain",
+   "kind": "pain",
+   "startMs": 3970,
+   "endMs": 7290,
+   "transition": "slide",
+   "heading": [
+    {
+     "t": "monthly",
+     "a": false
+    },
+    {
+     "t": "kharcha",
+     "a": true
+    }
+   ],
+   "kicker": "PROBLEM?",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "chips",
+     "items": [
+      "ChatGPT Plus",
+      "Claude Pro",
+      "Gemini Adv"
+     ],
+     "style": "filled",
+     "id": "b1v1",
+     "enterMs": 4320,
+     "exitMs": 7490,
+     "class": "block"
+    },
+    {
+     "place": "stack",
+     "kind": "stamp",
+     "text": "EMI",
+     "tone": "red",
+     "rotate": -10.0,
+     "id": "b1v2",
+     "enterMs": 6390,
+     "exitMs": 7490,
+     "class": "overlay"
+    }
+   ]
+  },
+  {
+   "id": "reveal",
+   "kind": "reveal",
+   "startMs": 7490,
+   "endMs": 10210,
+   "transition": "flash",
+   "heading": [
+    {
+     "t": "milo",
+     "a": false
+    },
+    {
+     "t": "strata",
+     "a": true
+    }
+   ],
+   "kicker": "TOH MERE DOSTON",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "repo",
+     "name": "strata-ai/strata",
+     "description": "Run a 176B mixture-of-experts model on any laptop. One-click install.",
+     "stars": 19900,
+     "license": "MIT",
+     "language": "Python",
+     "id": "b2v1",
+     "enterMs": 8321,
+     "exitMs": 10510,
+     "class": "block"
+    },
+    {
+     "place": "stack",
+     "kind": "stamp",
+     "text": "FREE ✓",
+     "tone": "green",
+     "rotate": 8.0,
+     "id": "b2v2",
+     "enterMs": 10029,
+     "exitMs": 10510,
+     "class": "overlay"
+    }
+   ]
+  },
+  {
+   "id": "explain",
+   "kind": "explain",
+   "startMs": 10510,
+   "endMs": 13830,
+   "transition": "zoom",
+   "heading": [
+    {
+     "t": "apna",
+     "a": true
+    },
+    {
+     "t": "computer",
+     "a": false
+    }
+   ],
+   "kicker": "FEATURE 01/04",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "window",
+     "title": "dot-01 · computer",
+     "tabs": [
+      "Browser",
+      "Files",
+      "Terminal"
+     ],
+     "active": 0,
+     "live": true,
+     "button": "TAKE CONTROL",
+     "cursor": [
+      {
+       "to": [
+        0.7,
+        0.45
+       ],
+       "atMs": 11372
+      },
+      {
+       "to": [
+        0.5,
+        0.86
+       ],
+       "atMs": 13107
+      }
+     ],
+     "id": "b3v1",
+     "enterMs": 10510,
+     "exitMs": 13980,
+     "class": "block"
+    },
+    {
+     "place": "right",
+     "kind": "emoji",
+     "emoji": "🍿",
+     "id": "b3v2",
+     "enterMs": 13030,
+     "exitMs": 13980,
+     "class": "overlay"
+    }
+   ]
+  },
+  {
+   "id": "api",
+   "kind": "feature",
+   "startMs": 13980,
+   "endMs": 16500,
+   "transition": "cut",
+   "heading": [
+    {
+     "t": "OpenAI",
+     "a": false
+    },
+    {
+     "t": "jaisa",
+     "a": false
+    },
+    {
+     "t": "API",
+     "a": true
+    }
+   ],
+   "kicker": "FEATURE 02/04 · LOCALHOST",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "terminal",
+     "lines": [
+      {
+       "cmd": "POST localhost:8080/v1/chat",
+       "tone": "dim"
+      },
+      {
+       "out": "→ 200 OK",
+       "tone": "ok"
+      },
+      {
+       "cmd": "GET /v1/models",
+       "tone": "dim"
+      },
+      {
+       "out": "error: gpu not found",
+       "tone": "err"
+      },
+      {
+       "out": "falling back to cpu…",
+       "tone": "dim"
+      }
+     ],
+     "id": "b4v1",
+     "enterMs": 14403,
+     "exitMs": 16750,
+     "class": "block"
+    },
+    {
+     "place": "stack",
+     "kind": "title",
+     "text": "desi *jugaad* 😎",
+     "size": "m",
+     "id": "b4v3",
+     "enterMs": 16132,
+     "exitMs": 16750,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "honest",
+   "kind": "honest",
+   "startMs": 16750,
+   "endMs": 20270,
+   "transition": "slide",
+   "heading": [
+    {
+     "t": "reality",
+     "a": true
+    },
+    {
+     "t": "check",
+     "a": false
+    }
+   ],
+   "kicker": "HONEST MOMENT",
+   "visuals": [
+    {
+     "place": "left",
+     "kind": "counter",
+     "from": 0,
+     "to": 6.0,
+     "decimals": 0,
+     "prefix": "",
+     "suffix": "B",
+     "label": "ACTIVE",
+     "id": "b5v1",
+     "enterMs": 18499,
+     "exitMs": 21470,
+     "class": "block"
+    },
+    {
+     "place": "right",
+     "kind": "counter",
+     "from": 0,
+     "to": 125.0,
+     "decimals": 0,
+     "prefix": "",
+     "suffix": "B",
+     "label": "TOTAL",
+     "id": "b5v2",
+     "enterMs": 18613,
+     "exitMs": 21470,
+     "class": "block"
+    }
+   ]
+  }
+ ],
+ "captions": [
+  {
+   "startMs": 0,
+   "endMs": 1657,
+   "words": [
+    {
+     "t": "bhai",
+     "a": false,
+     "startMs": 0,
+     "endMs": 229
+    },
+    {
+     "t": "maine",
+     "a": false,
+     "startMs": 229,
+     "endMs": 514
+    },
+    {
+     "t": "laptop",
+     "a": false,
+     "startMs": 514,
+     "endMs": 857
+    },
+    {
+     "t": "mein",
+     "a": false,
+     "startMs": 857,
+     "endMs": 1086
+    },
+    {
+     "t": "176",
+     "a": true,
+     "startMs": 1086,
+     "endMs": 1257
+    },
+    {
+     "t": "billion",
+     "a": true,
+     "startMs": 1257,
+     "endMs": 1657
+    }
+   ]
+  },
+  {
+   "startMs": 1657,
+   "endMs": 2400,
+   "words": [
+    {
+     "t": "ka",
+     "a": false,
+     "startMs": 1657,
+     "endMs": 1771
+    },
+    {
+     "t": "AI",
+     "a": false,
+     "startMs": 1771,
+     "endMs": 1886
+    },
+    {
+     "t": "ghusa",
+     "a": false,
+     "startMs": 1886,
+     "endMs": 2171
+    },
+    {
+     "t": "diya",
+     "a": false,
+     "startMs": 2171,
+     "endMs": 2400
+    }
+   ]
+  },
+  {
+   "startMs": 2520,
+   "endMs": 3720,
+   "words": [
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 2520,
+     "endMs": 2670
+    },
+    {
+     "t": "laptop",
+     "a": false,
+     "startMs": 2670,
+     "endMs": 2970
+    },
+    {
+     "t": "abhi",
+     "a": false,
+     "startMs": 2970,
+     "endMs": 3170
+    },
+    {
+     "t": "tak",
+     "a": false,
+     "startMs": 3170,
+     "endMs": 3320
+    },
+    {
+     "t": "zinda",
+     "a": true,
+     "startMs": 3320,
+     "endMs": 3570
+    },
+    {
+     "t": "hai",
+     "a": false,
+     "startMs": 3570,
+     "endMs": 3720
+    }
+   ]
+  },
+  {
+   "startMs": 3970,
+   "endMs": 4631,
+   "words": [
+    {
+     "t": "har",
+     "a": false,
+     "startMs": 3970,
+     "endMs": 4087
+    },
+    {
+     "t": "mahine",
+     "a": false,
+     "startMs": 4087,
+     "endMs": 4320
+    },
+    {
+     "t": "ChatGPT,",
+     "a": true,
+     "startMs": 4320,
+     "endMs": 4631
+    }
+   ]
+  },
+  {
+   "startMs": 4631,
+   "endMs": 5370,
+   "words": [
+    {
+     "t": "Claude,",
+     "a": false,
+     "startMs": 4631,
+     "endMs": 4903
+    },
+    {
+     "t": "Gemini",
+     "a": false,
+     "startMs": 4903,
+     "endMs": 5137
+    },
+    {
+     "t": "ka",
+     "a": false,
+     "startMs": 5137,
+     "endMs": 5214
+    },
+    {
+     "t": "bill",
+     "a": false,
+     "startMs": 5214,
+     "endMs": 5370
+    }
+   ]
+  },
+  {
+   "startMs": 5490,
+   "endMs": 6559,
+   "words": [
+    {
+     "t": "use",
+     "a": false,
+     "startMs": 5490,
+     "endMs": 5659
+    },
+    {
+     "t": "kar",
+     "a": false,
+     "startMs": 5659,
+     "endMs": 5828
+    },
+    {
+     "t": "raha",
+     "a": false,
+     "startMs": 5828,
+     "endMs": 6052
+    },
+    {
+     "t": "hoon",
+     "a": false,
+     "startMs": 6052,
+     "endMs": 6278
+    },
+    {
+     "t": "ya",
+     "a": false,
+     "startMs": 6278,
+     "endMs": 6390
+    },
+    {
+     "t": "EMI",
+     "a": true,
+     "startMs": 6390,
+     "endMs": 6559
+    }
+   ]
+  },
+  {
+   "startMs": 6559,
+   "endMs": 7290,
+   "words": [
+    {
+     "t": "bhar",
+     "a": false,
+     "startMs": 6559,
+     "endMs": 6784
+    },
+    {
+     "t": "raha",
+     "a": false,
+     "startMs": 6784,
+     "endMs": 7009
+    },
+    {
+     "t": "hoon?",
+     "a": false,
+     "startMs": 7009,
+     "endMs": 7290
+    }
+   ]
+  },
+  {
+   "startMs": 7490,
+   "endMs": 8136,
+   "words": [
+    {
+     "t": "toh",
+     "a": false,
+     "startMs": 7490,
+     "endMs": 7628
+    },
+    {
+     "t": "mere",
+     "a": false,
+     "startMs": 7628,
+     "endMs": 7813
+    },
+    {
+     "t": "doston,",
+     "a": false,
+     "startMs": 7813,
+     "endMs": 8136
+    }
+   ]
+  },
+  {
+   "startMs": 8136,
+   "endMs": 8690,
+   "words": [
+    {
+     "t": "milo",
+     "a": false,
+     "startMs": 8136,
+     "endMs": 8321
+    },
+    {
+     "t": "Strata",
+     "a": true,
+     "startMs": 8321,
+     "endMs": 8598
+    },
+    {
+     "t": "se",
+     "a": false,
+     "startMs": 8598,
+     "endMs": 8690
+    }
+   ]
+  },
+  {
+   "startMs": 8810,
+   "endMs": 9442,
+   "words": [
+    {
+     "t": "20",
+     "a": true,
+     "startMs": 8810,
+     "endMs": 8900
+    },
+    {
+     "t": "hazaar",
+     "a": true,
+     "startMs": 8900,
+     "endMs": 9171
+    },
+    {
+     "t": "stars,",
+     "a": false,
+     "startMs": 9171,
+     "endMs": 9442
+    }
+   ]
+  },
+  {
+   "startMs": 9442,
+   "endMs": 10210,
+   "words": [
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 9442,
+     "endMs": 9578
+    },
+    {
+     "t": "license",
+     "a": false,
+     "startMs": 9578,
+     "endMs": 9894
+    },
+    {
+     "t": "bhi",
+     "a": false,
+     "startMs": 9894,
+     "endMs": 10029
+    },
+    {
+     "t": "free",
+     "a": true,
+     "startMs": 10029,
+     "endMs": 10210
+    }
+   ]
+  },
+  {
+   "startMs": 10510,
+   "endMs": 11372,
+   "words": [
+    {
+     "t": "har",
+     "a": false,
+     "startMs": 10510,
+     "endMs": 10633
+    },
+    {
+     "t": "dot",
+     "a": false,
+     "startMs": 10633,
+     "endMs": 10756
+    },
+    {
+     "t": "ka",
+     "a": false,
+     "startMs": 10756,
+     "endMs": 10838
+    },
+    {
+     "t": "apna",
+     "a": false,
+     "startMs": 10838,
+     "endMs": 11002
+    },
+    {
+     "t": "computer,",
+     "a": true,
+     "startMs": 11002,
+     "endMs": 11372
+    }
+   ]
+  },
+  {
+   "startMs": 11372,
+   "endMs": 11987,
+   "words": [
+    {
+     "t": "files,",
+     "a": false,
+     "startMs": 11372,
+     "endMs": 11618
+    },
+    {
+     "t": "terminal,",
+     "a": false,
+     "startMs": 11618,
+     "endMs": 11987
+    }
+   ]
+  },
+  {
+   "startMs": 11987,
+   "endMs": 12110,
+   "words": [
+    {
+     "t": "sab",
+     "a": false,
+     "startMs": 11987,
+     "endMs": 12110
+    }
+   ]
+  },
+  {
+   "startMs": 12230,
+   "endMs": 13624,
+   "words": [
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 12230,
+     "endMs": 12385
+    },
+    {
+     "t": "zarurat",
+     "a": false,
+     "startMs": 12385,
+     "endMs": 12746
+    },
+    {
+     "t": "pade",
+     "a": false,
+     "startMs": 12746,
+     "endMs": 12953
+    },
+    {
+     "t": "toh",
+     "a": false,
+     "startMs": 12953,
+     "endMs": 13107
+    },
+    {
+     "t": "control",
+     "a": true,
+     "startMs": 13107,
+     "endMs": 13469
+    },
+    {
+     "t": "tum",
+     "a": false,
+     "startMs": 13469,
+     "endMs": 13624
+    }
+   ]
+  },
+  {
+   "startMs": 13624,
+   "endMs": 13830,
+   "words": [
+    {
+     "t": "le",
+     "a": false,
+     "startMs": 13624,
+     "endMs": 13727
+    },
+    {
+     "t": "lo",
+     "a": false,
+     "startMs": 13727,
+     "endMs": 13830
+    }
+   ]
+  },
+  {
+   "startMs": 13980,
+   "endMs": 14557,
+   "words": [
+    {
+     "t": "OpenAI",
+     "a": false,
+     "startMs": 13980,
+     "endMs": 14211
+    },
+    {
+     "t": "jaisa",
+     "a": false,
+     "startMs": 14211,
+     "endMs": 14403
+    },
+    {
+     "t": "API,",
+     "a": true,
+     "startMs": 14403,
+     "endMs": 14557
+    }
+   ]
+  },
+  {
+   "startMs": 14557,
+   "endMs": 14980,
+   "words": [
+    {
+     "t": "localhost",
+     "a": false,
+     "startMs": 14557,
+     "endMs": 14903
+    },
+    {
+     "t": "pe",
+     "a": false,
+     "startMs": 14903,
+     "endMs": 14980
+    }
+   ]
+  },
+  {
+   "startMs": 15100,
+   "endMs": 16389,
+   "words": [
+    {
+     "t": "matlab",
+     "a": false,
+     "startMs": 15100,
+     "endMs": 15321
+    },
+    {
+     "t": "tumhare",
+     "a": false,
+     "startMs": 15321,
+     "endMs": 15579
+    },
+    {
+     "t": "apps",
+     "a": false,
+     "startMs": 15579,
+     "endMs": 15726
+    },
+    {
+     "t": "samjhenge",
+     "a": false,
+     "startMs": 15726,
+     "endMs": 16058
+    },
+    {
+     "t": "ki",
+     "a": false,
+     "startMs": 16058,
+     "endMs": 16132
+    },
+    {
+     "t": "ChatGPT",
+     "a": true,
+     "startMs": 16132,
+     "endMs": 16389
+    }
+   ]
+  },
+  {
+   "startMs": 16389,
+   "endMs": 16500,
+   "words": [
+    {
+     "t": "hai",
+     "a": false,
+     "startMs": 16389,
+     "endMs": 16500
+    }
+   ]
+  },
+  {
+   "startMs": 16750,
+   "endMs": 18050,
+   "words": [
+    {
+     "t": "सच",
+     "a": false,
+     "startMs": 16750,
+     "endMs": 16850
+    },
+    {
+     "t": "बोलूँ",
+     "a": false,
+     "startMs": 16850,
+     "endMs": 17100
+    },
+    {
+     "t": "तो",
+     "a": false,
+     "startMs": 17100,
+     "endMs": 17200
+    },
+    {
+     "t": "सेटअप",
+     "a": true,
+     "startMs": 17200,
+     "endMs": 17450
+    },
+    {
+     "t": "थोड़ा",
+     "a": false,
+     "startMs": 17450,
+     "endMs": 17700
+    },
+    {
+     "t": "मुश्किल",
+     "a": false,
+     "startMs": 17700,
+     "endMs": 18050
+    }
+   ]
+  },
+  {
+   "startMs": 18050,
+   "endMs": 18150,
+   "words": [
+    {
+     "t": "है",
+     "a": false,
+     "startMs": 18050,
+     "endMs": 18150
+    }
+   ]
+  },
+  {
+   "startMs": 18270,
+   "endMs": 19413,
+   "words": [
+    {
+     "t": "sirf",
+     "a": false,
+     "startMs": 18270,
+     "endMs": 18499
+    },
+    {
+     "t": "6B",
+     "a": true,
+     "startMs": 18499,
+     "endMs": 18613
+    },
+    {
+     "t": "kaam",
+     "a": false,
+     "startMs": 18613,
+     "endMs": 18841
+    },
+    {
+     "t": "karte",
+     "a": false,
+     "startMs": 18841,
+     "endMs": 19127
+    },
+    {
+     "t": "hain,",
+     "a": false,
+     "startMs": 19127,
+     "endMs": 19413
+    }
+   ]
+  },
+  {
+   "startMs": 19413,
+   "endMs": 20270,
+   "words": [
+    {
+     "t": "baaki",
+     "a": false,
+     "startMs": 19413,
+     "endMs": 19699
+    },
+    {
+     "t": "so",
+     "a": true,
+     "startMs": 19699,
+     "endMs": 19813
+    },
+    {
+     "t": "rahe",
+     "a": false,
+     "startMs": 19813,
+     "endMs": 20041
+    },
+    {
+     "t": "hain",
+     "a": false,
+     "startMs": 20041,
+     "endMs": 20270
+    }
+   ]
+  }
+ ],
+ "sfx": true
+}
