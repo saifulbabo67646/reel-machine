@@ -1,6 +1,10 @@
 import itertools
 import json
 import re
+import shutil
+import subprocess
+
+import pytest
 
 from reelmachine.recipes.techreel import compose
 from reelmachine.recipes.techreel.compose import (
@@ -166,3 +170,11 @@ def test_project_key_tracks_runtime_bytes(tmp_path, monkeypatch):
     f.write_text("a")
     doc["sfx"] = False
     assert project_key(doc) != k1
+
+
+def test_the_runtime_unit_tests_pass():
+    if shutil.which("node") is None:
+        pytest.skip("node not installed")
+    proc = subprocess.run(["node", "--test", str(compose.RUNTIME_DIR / "tests" / "pure.test.mjs")],
+                          check=False, capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
