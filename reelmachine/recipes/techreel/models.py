@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import re
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -138,10 +137,7 @@ class RepoVisual(VisualBase):
 
 
 Visual = Annotated[
-    Union[
-        HeroVisual, TitleVisual, CounterVisual, StampVisual, EmojiVisual,
-        ChipsVisual, WindowVisual, TerminalVisual, RepoVisual,
-    ],
+    HeroVisual | TitleVisual | CounterVisual | StampVisual | EmojiVisual | ChipsVisual | WindowVisual | TerminalVisual | RepoVisual,
     Field(discriminator="kind"),
 ]
 

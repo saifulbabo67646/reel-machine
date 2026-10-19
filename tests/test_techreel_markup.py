@@ -1,4 +1,11 @@
-from reelmachine.recipes.techreel.markup import Unit, chunks, is_unspaced, norm, plain, units
+from reelmachine.recipes.techreel.markup import (
+    Unit,
+    chunks,
+    is_unspaced,
+    norm,
+    plain,
+    units,
+)
 
 
 def test_units_accent_and_split():
