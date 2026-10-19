@@ -14,7 +14,7 @@ from reelmachine.recipes.techreel.compose import (
     reel_document,
     write_project,
 )
-from reelmachine.recipes.techreel.markup import merge_short, units
+from reelmachine.recipes.techreel.markup import Unit, merge_short, units
 from reelmachine.recipes.techreel.models import HeroVisual, TechReelInputs
 from reelmachine.recipes.techreel.schedule import schedule
 
@@ -320,6 +320,21 @@ def test_merge_short_unspaced_counts_characters():
     assert [i for c in out for i in c] == list(range(len(us)))
     assert all(sum(len(us[i].text) for i in c) <= 18 for c in out)
 
+
+def test_merge_short_measures_time_on_screen_not_speaking_time():
+    # the first chunk is spoken in 100 ms but stays up through a 500 ms pause: it is not a flash
+    times = [(0, 100), (600, 700), (700, 1200)]
+    assert merge_short([[0], [1, 2]], times) == [[0], [1, 2]]
+    # a last chunk is on screen to the line's end
+    assert merge_short([[0, 1], [2]], [(0, 500), (500, 900), (900, 1300)]) == [[0, 1], [2]]
+
+
+def test_merge_short_unspaced_two_character_units():
+    us = [Unit("あい", False) for _ in range(10)]
+    times = [(i * 10, i * 10 + 10) for i in range(10)]
+    out = merge_short([[i] for i in range(10)], times, us=us)
+    assert [i for c in out for i in c] == list(range(10))
+    assert all(sum(len(us[i].text) for i in c) <= 18 for c in out) and len(out) == 2
 
 
 def test_a_flash_chunk_in_the_document_is_merged():

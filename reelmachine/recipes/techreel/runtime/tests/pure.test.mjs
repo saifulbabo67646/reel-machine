@@ -463,6 +463,16 @@ test("the robot blinks every 3 to 5 seconds, from the seed alone", () => {
   })());
 });
 
+test("a pill ease that starts mid-ease continues from the current size, not the target", () => {
+  const words = [{ startMs: 0 }, { startMs: 1000 }, { startMs: 1060 }];
+  const sizes = [{ w: 100, h: 50 }, { w: 200, h: 50 }, { w: 300, h: 50 }];
+  const before = pillAt(sizes, words, 1059.999);
+  const at = pillAt(sizes, words, 1060);
+  assert.ok(before.w > 100 && before.w < 200);
+  assert.ok(Math.abs(at.w - before.w) < 0.01, `${at.w} vs ${before.w}`);   // no jump at the second word
+  assert.equal(pillAt(sizes, words, 1180).w, 300);
+});
+
 test("the caption pill grows with the revealed words, eased over 120 ms", () => {
   const words = [{ startMs: 1000 }, { startMs: 1300 }, { startMs: 1600 }];
   const sizes = [{ w: 100, h: 50 }, { w: 200, h: 50 }, { w: 300, h: 100 }];

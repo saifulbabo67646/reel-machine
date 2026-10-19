@@ -98,7 +98,7 @@ def merge_short(
     chunks: list[list[int]], times: list[tuple[int, int]], min_ms: int = 350, max_units: int = 8,
     us: list[Unit] | None = None, max_chars: int = 18,
 ) -> list[list[int]]:
-    """Chunks with none shorter than `min_ms` unless a merge would break the cap: a short chunk joins the
+    """Chunks with none shorter than `min_ms` unless a merge would break the cap: a short chunk (its time on screen, up to the next chunk's first word) joins the
     next one of its line (the previous when it is last). The cap is `max_units` words, or `max_chars`
     characters when `us` is given (unspaced scripts)."""
 
@@ -107,18 +107,20 @@ def merge_short(
             return sum(len(us[i].text) for i in a + b) <= max_chars
         return len(a) + len(b) <= max_units
 
-    def short(c: list[int]) -> bool:
-        return times[c[-1]][1] - times[c[0]][0] < min_ms
+    def short(c: list[int], nxt: list[int] | None) -> bool:
+        # on screen from its first word until the next chunk replaces it (the line's end for the last)
+        end = times[nxt[0]][0] if nxt else times[-1][1]
+        return end - times[c[0]][0] < min_ms
 
     out = [list(c) for c in chunks]
     i = 0
     while i < len(out):
-        if short(out[i]) and i + 1 < len(out) and fits(out[i], out[i + 1]):
+        if i + 1 < len(out) and short(out[i], out[i + 1]) and fits(out[i], out[i + 1]):
             out[i] += out.pop(i + 1)
         else:
             i += 1
     # a short last chunk has no next to join: fold it into the previous
-    while len(out) > 1 and short(out[-1]) and fits(out[-2], out[-1]):
+    while len(out) > 1 and short(out[-1], None) and fits(out[-2], out[-1]):
         last = out.pop()
         out[-1] += last
     return out

@@ -314,16 +314,20 @@ export function captionAt(captions, t) {
 export const PILL_EASE_MS = 120;
 
 /** The caption pill at `t`: `sizes[k]` is its size with words 0..k revealed (measured at build); it eases from
-    the previous size to the newest word's over PILL_EASE_MS. `k` is the newest revealed word. */
+    where it was to the newest word's over PILL_EASE_MS. `k` is the newest revealed word. A word that comes
+    before the last ease finished starts from that ease's current (partial) size, so the pill never jumps. */
 export function pillAt(sizes, words, t) {
   if (!sizes.length) return null;
   let k = 0;
   for (let i = 0; i < words.length; i++) if (words[i].startMs <= t) k = i;
-  if (k === 0) return { w: sizes[0].w, h: sizes[0].h, k };
-  const p = easeOutCubic(clamp01((t - words[k].startMs) / PILL_EASE_MS));
-  const a = sizes[k - 1];
-  const b = sizes[k];
-  return { w: lerp(a.w, b.w, p), h: lerp(a.h, b.h, p), k };
+  const size = (j, at) => {
+    if (j === 0) return sizes[0];
+    const from = size(j - 1, words[j].startMs);
+    const p = easeOutCubic(clamp01((at - words[j].startMs) / PILL_EASE_MS));
+    return { w: lerp(from.w, sizes[j].w, p), h: lerp(from.h, sizes[j].h, p) };
+  };
+  const { w, h } = size(k, t);
+  return { w, h, k };
 }
 
 export const wordPhase = (w, t) => (t < w.startMs ? "future" : t < w.endMs ? "now" : "past");
