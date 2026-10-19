@@ -175,10 +175,10 @@ def _caller_cache(ctx: StageContext) -> Path:
     return root / "cache" / "techreel"
 
 
-def lint_findings(inputs: TechReelInputs, bound: str | None = None) -> list[dict[str, Any]]:
+def lint_findings(inputs: TechReelInputs, bound: str | None = None, *, allow_local: bool = True) -> list[dict[str, Any]]:
     """The lint's findings as data."""
     return [{"rule": f.rule, "severity": f.severity, "message": f.message, "hint": f.hint, "path": f.path}
-            for f in lint.check(inputs, bound)]
+            for f in lint.check(inputs, bound, allow_local=allow_local)]
 
 
 def bound_provider(ctx: Any, role: str) -> Any:
@@ -197,7 +197,8 @@ class ScriptStage:
 
     def run(self, ctx: StageContext, payload: Any) -> ScriptOutput:
         inputs = TechReelInputs.model_validate(payload)
-        found = lint_findings(inputs, getattr(bound_provider(ctx, "narration"), "name", None))
+        found = lint_findings(inputs, getattr(bound_provider(ctx, "narration"), "name", None),
+                              allow_local=ctx.config.local_files)
         if lint.blocks(inputs):
             for finding in found:
                 if finding["severity"] == "error":

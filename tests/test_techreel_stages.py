@@ -148,11 +148,21 @@ def test_a_strict_full_build_stops_on_a_digit_in_say(tmp_path):
 
 def test_a_storyboard_only_warns(tmp_path):
     out = ScriptStage().run(_ctx(tmp_path), SCRIPT)
-    assert [f["rule"] for f in out.lint] == ["digit-in-say"]
+    assert [f["rule"] for f in out.lint if f["severity"] == "error"] == ["digit-in-say"]
     assert out.lint[0]["path"] == "beats[0].lines[0].say" and out.lint[0]["severity"] == "error"
     assert out.warnings and out.warnings[0].startswith("digit-in-say: ")
     full_warn = ScriptStage().run(_ctx(tmp_path), SCRIPT | {"mode": "full", "lint": "warn"})
-    assert [f["rule"] for f in full_warn.lint] == ["digit-in-say"]
+    assert [f["rule"] for f in full_warn.lint if f["severity"] == "error"] == ["digit-in-say"]
+
+
+def test_the_script_stage_lints_local_images_by_the_config(tmp_path):
+    ctx = _ctx(tmp_path)
+    ctx = dataclasses.replace(ctx, config=dataclasses.replace(ctx.config, local_files=False))
+    image = {"kind": "image", "src": "/tmp/shot.png"}
+    script = {"title": "t", "mode": "full", "beats": [{"lines": [{"say": "hello there"}], "visuals": [image]}]}
+    with pytest.raises(InvalidInput) as exc:
+        ScriptStage().run(ctx, script)
+    assert exc.value.details["rule"] == "image-local"
 
 
 def _clip(path, *parts):

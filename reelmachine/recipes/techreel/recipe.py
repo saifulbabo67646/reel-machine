@@ -47,10 +47,10 @@ EXAMPLE: dict[str, Any] = {
         {
             "id": "hook", "kind": "hook", "kicker": "NEW TOOL", "heading": "Laptop pe *apna* AI?",
             "lines": [
-                {"say": "भाई, अब तुम्हारे पुराने लैपटॉप पर भी अपना खुद का एआई चलेगा।",
-                 "text": "Bhai, ab tumhare purane laptop par bhi *apna* khud ka AI chalega."},
-                {"say": "सिर्फ़ चार जीबी रैम में, और वो भी बिना इंटरनेट के।",
-                 "text": "Sirf *4 GB* RAM mein, aur woh bhi bina internet ke."},
+                {"say": "भाई, पुराने लैपटॉप पर भी अपना एआई चलेगा।",
+                 "text": "Bhai, purane laptop par bhi *apna* AI chalega."},
+                {"say": "सिर्फ़ चार जीबी रैम में, बिना इंटरनेट के।",
+                 "text": "Sirf *4 GB* RAM mein, bina internet ke."},
             ],
             "visuals": [
                 {"kind": "hero", "state": "center"},
@@ -63,54 +63,83 @@ EXAMPLE: dict[str, Any] = {
         {
             "id": "pain", "kind": "pain", "heading": "Cloud AI ka *bill*", "transition": "slide",
             "lines": [
-                {"say": "हर महीने का बिल, हर सवाल उनके सर्वर पर, और प्राइवेसी गई तेल लेने।",
-                 "text": "Har mahine ka bill, har sawaal unke server par, aur privacy gayi *tel lene*."},
+                {"say": "हर महीने बिल, हर सवाल उनके सर्वर पर।",
+                 "text": "Har mahine bill, har sawaal unke server par."},
+                {"say": "और प्राइवेसी? वो गई तेल लेने।",
+                 "text": "Aur privacy? Woh gayi *tel lene*."},
                 {"say": "मेरा क्रेडिट कार्ड अब मुझसे बात नहीं करता।",
                  "text": "Mera credit card ab mujhse baat nahi karta."},
             ],
             "visuals": [
                 {"kind": "hero", "state": "shake"},
-                {"kind": "stamp", "text": "PRIVACY GONE", "at": {"line": 0, "word": "privacy"}},
-                {"kind": "emoji", "emoji": "💸", "at": {"line": 1, "word": "card"}},
+                {"kind": "receipts", "items": [{"title": "Cloud AI", "sub": "monthly"}]},
+                {"kind": "stamp", "text": "PRIVACY GONE", "at": {"line": 1, "word": "privacy"}},
+                {"kind": "emoji", "emoji": "💸", "at": {"line": 2, "word": "card"}},
             ],
         },
         {
             "id": "reveal", "kind": "reveal", "kicker": "OPEN SOURCE", "heading": "Milo *Pocket LLM* se",
             "transition": "flash",
             "lines": [
-                {"say": "मिलो पॉकेट एल एल एम से, एक ओपन सोर्स ऐप जो पूरा मॉडल तुम्हारे लैपटॉप पर चलाता है।",
-                 "text": "Milo *Pocket LLM* se, ek open source app jo poora model tumhare laptop par chalata hai."},
+                {"say": "मिलो पॉकेट एल एल एम, एक ओपन ऐप।",
+                 "text": "Milo *Pocket LLM* se, open source app."},
+                {"say": "पूरा मॉडल तुम्हारे लैपटॉप पर चलता है।",
+                 "text": "Poora model tumhare laptop par chalta hai."},
                 {"say": "विंडोज़, मैक और लिनक्स, तीनों पर।", "text": "Windows, Mac aur Linux, *teeno* par."},
             ],
             "visuals": [
                 {"kind": "hero", "state": "hidden"},
                 {"kind": "repo", "name": "pocket-llm/pocket-llm",
                  "description": "Run small language models offline on any laptop", "stars": 12400,
-                 "license": "MIT", "language": "Rust", "at": {"line": 0, "word": "open"}},
+                 "license": "MIT", "language": "Rust", "exit": {"line": 2}},
                 {"kind": "chips", "items": ["Windows", "Mac", "Linux"], "style": "filled", "at": {"line": 1}},
+                {"kind": "emoji", "emoji": "💻", "at": {"line": 2}},
             ],
         },
         {
             "id": "feature", "kind": "feature", "heading": "Bas *ek command*", "transition": "zoom",
             "lines": [
-                {"say": "बस एक कमांड चलाओ, मॉडल डाउनलोड, और चैट शुरू।",
-                 "text": "Bas *ek command* chalao, model download, aur chat shuru."},
-                {"say": "और हाँ, लैपटॉप का पंखा थोड़ा गाना ज़रूर गाएगा।",
-                 "text": "Aur haan, laptop ka pankha thoda *gaana* zaroor gaayega."},
+                {"say": "बस एक कमांड चलाओ, मॉडल डाउनलोड।",
+                 "text": "Bas *ek command* chalao, model download."},
+                {"say": "फिर चैट शुरू, सीधे अपने लैपटॉप पर।",
+                 "text": "Phir chat shuru, seedha apne laptop par."},
+                {"say": "और हाँ, लैपटॉप का पंखा गाना ज़रूर गाएगा।",
+                 "text": "Aur haan, laptop ka pankha *gaana* zaroor gaayega."},
             ],
             "visuals": [
-                {"kind": "terminal", "exit": {"line": 1}, "lines": [
+                {"kind": "terminal", "exit": {"line": 2}, "lines": [
                     {"cmd": "pocket pull tiny-3b"},
                     {"out": "downloaded 1.9 GB", "tone": "ok"},
                     {"cmd": "pocket chat"},
-                    {"out": "> namaste! main offline hoon"},
                 ]},
                 {"kind": "window", "title": "Pocket LLM", "tabs": ["Chat", "Models"], "live": True,
                  "button": "Send", "rows": ["> pankha itna shor kyun?", "Main soch raha hoon. Zor se."],
                  "at": {"line": 1},
-                 "cursor": [{"to": [0.78, 0.86], "at": {"line": 1, "word": "gaana"}}]},
-                {"kind": "hero", "state": "corner", "at": {"line": 1, "word": "pankha"}},
+                 "cursor": [{"to": [0.78, 0.86], "at": {"line": 2, "word": "gaana"}}]},
+                {"kind": "hero", "state": "corner", "at": {"line": 2}},
             ],
+        },
+        {
+            "id": "honest", "kind": "honest", "heading": "Ek *sach* baat", "transition": "cut",
+            "lines": [
+                {"say": "सच कहूँ, छोटा मॉडल थोड़ा कम समझदार है।",
+                 "text": "Sach kahun toh chhota model thoda kam samajhdaar hai."},
+                {"say": "पर प्राइवेसी और बिल के लिए, चलता है।",
+                 "text": "Par privacy aur bill ke liye, *chalta hai*."},
+            ],
+            "visuals": [
+                {"kind": "bars", "items": [{"label": "Cloud", "value": 9}, {"label": "Pocket", "value": 6}],
+                 "highlight": 1},
+                {"kind": "stamp", "text": "CHALTA HAI", "tone": "green", "at": {"line": 1}},
+            ],
+        },
+        {
+            "id": "cta", "kind": "cta", "transition": "slide", "keyword": "POCKET", "dm": "Link bhej dunga",
+            "lines": [
+                {"say": "लिंक चाहिए? नीचे पॉकेट लिखो।", "text": "Link chahiye? Neeche *POCKET* likho."},
+                {"say": "और फ़ॉलो करना मत भूलना।", "text": "Aur *follow* karna mat bhoolna."},
+            ],
+            "visuals": [],
         },
     ],
 }
@@ -191,13 +220,13 @@ class TechReelRecipe:
         checks: list[CheckResult] = []
         details: dict[str, Any] = {}
         bound = getattr(bound_provider(ctx, "narration"), "name", "")
-        found = lint_findings(inputs, bound or None)
+        config = ctx.config or get_settings()
+        found = lint_findings(inputs, bound or None, allow_local=config.local_files)
         details["lint"] = found
         errors = [f"{f['path']}: {f['message']}" for f in found if f["severity"] == "error"]
         blocking = bool(errors) and lint.blocks(inputs)
         checks.append(CheckResult(name="lint", ok=not blocking,
                                   detail="; ".join(errors) if blocking else _lint_counts(found)))
-        config = ctx.config or get_settings()
         try:
             assets.check_svgs(inputs)
             assets.check_sources(inputs, allow_local=config.local_files)
