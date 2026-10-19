@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from ...config import get_settings
@@ -18,6 +20,7 @@ from ...core.recipe import (
 from ...core.stage import StageContext
 from ..doodle.narration import provider_for
 from . import assets, lint
+from .guide import GUIDE
 from .models import TechReelInputs
 from .schedule import estimate
 from .stages import (
@@ -32,142 +35,9 @@ from .stages import (
 )
 from .verify import verify_techreel
 
-# an original Hindi new-tool reel about a fictional open-source app: Devanagari `say` with the numbers as words,
-# Hinglish `text` with the digits and the accents
-EXAMPLE: dict[str, Any] = {
-    "mode": "storyboard",
-    "title": "Pocket LLM: AI on an old laptop",
-    "language": "hi",
-    "voice": "fake:default",
-    "look": "mint",
-    "hero": {"kind": "orb"},
-    "creator": {"name": "Your Name", "handle": "@yourhandle"},
-    "sources": ["https://example.com/pocket-llm"],
-    "beats": [
-        {
-            "id": "hook", "kind": "hook", "kicker": "NEW TOOL", "heading": "Laptop pe *apna* AI?",
-            "lines": [
-                {"say": "भाई, पुराने लैपटॉप पर भी अपना एआई चलेगा।",
-                 "text": "Bhai, purane laptop par bhi *apna* AI chalega."},
-                {"say": "सिर्फ़ चार जीबी रैम में, बिना इंटरनेट के।",
-                 "text": "Sirf *4 GB* RAM mein, bina internet ke."},
-            ],
-            "visuals": [
-                {"kind": "hero", "state": "center"},
-                {"kind": "hero", "state": "pulse", "at": {"line": 0, "word": "AI"}},
-                {"kind": "hero", "state": "small-top", "at": {"line": 1}},
-                {"kind": "counter", "to": 4, "suffix": " GB", "label": "RAM KAAFI HAI",
-                 "at": {"line": 1, "word": "4"}},
-            ],
-        },
-        {
-            "id": "pain", "kind": "pain", "heading": "Cloud AI ka *bill*", "transition": "slide",
-            "lines": [
-                {"say": "हर महीने बिल, हर सवाल उनके सर्वर पर।",
-                 "text": "Har mahine bill, har sawaal unke server par."},
-                {"say": "और प्राइवेसी? वो गई तेल लेने।",
-                 "text": "Aur privacy? Woh gayi *tel lene*."},
-                {"say": "मेरा क्रेडिट कार्ड अब मुझसे बात नहीं करता।",
-                 "text": "Mera credit card ab mujhse baat nahi karta."},
-            ],
-            "visuals": [
-                {"kind": "hero", "state": "shake"},
-                {"kind": "receipts", "items": [{"title": "Cloud AI", "sub": "monthly"}]},
-                {"kind": "stamp", "text": "PRIVACY GONE", "at": {"line": 1, "word": "privacy"}},
-                {"kind": "emoji", "emoji": "💸", "at": {"line": 2, "word": "card"}},
-            ],
-        },
-        {
-            "id": "reveal", "kind": "reveal", "kicker": "OPEN SOURCE", "heading": "Milo *Pocket LLM* se",
-            "transition": "flash",
-            "lines": [
-                {"say": "मिलो पॉकेट एल एल एम, एक ओपन ऐप।",
-                 "text": "Milo *Pocket LLM* se, open source app."},
-                {"say": "पूरा मॉडल तुम्हारे लैपटॉप पर चलता है।",
-                 "text": "Poora model tumhare laptop par chalta hai."},
-                {"say": "विंडोज़, मैक और लिनक्स, तीनों पर।", "text": "Windows, Mac aur Linux, *teeno* par."},
-            ],
-            "visuals": [
-                {"kind": "hero", "state": "hidden"},
-                {"kind": "repo", "name": "pocket-llm/pocket-llm",
-                 "description": "Run small language models offline on any laptop", "stars": 12400,
-                 "license": "MIT", "language": "Rust", "exit": {"line": 2}},
-                {"kind": "chips", "items": ["Windows", "Mac", "Linux"], "style": "filled", "at": {"line": 1}},
-                {"kind": "emoji", "emoji": "💻", "at": {"line": 2}},
-            ],
-        },
-        {
-            "id": "feature", "kind": "feature", "heading": "Bas *ek command*", "transition": "zoom",
-            "lines": [
-                {"say": "बस एक कमांड चलाओ, मॉडल डाउनलोड।",
-                 "text": "Bas *ek command* chalao, model download."},
-                {"say": "फिर चैट शुरू, सीधे अपने लैपटॉप पर।",
-                 "text": "Phir chat shuru, seedha apne laptop par."},
-                {"say": "और हाँ, लैपटॉप का पंखा गाना ज़रूर गाएगा।",
-                 "text": "Aur haan, laptop ka pankha *gaana* zaroor gaayega."},
-            ],
-            "visuals": [
-                {"kind": "terminal", "exit": {"line": 2}, "lines": [
-                    {"cmd": "pocket pull tiny-3b"},
-                    {"out": "downloaded 1.9 GB", "tone": "ok"},
-                    {"cmd": "pocket chat"},
-                ]},
-                {"kind": "window", "title": "Pocket LLM", "tabs": ["Chat", "Models"], "live": True,
-                 "button": "Send", "rows": ["> pankha itna shor kyun?", "Main soch raha hoon. Zor se."],
-                 "at": {"line": 1},
-                 "cursor": [{"to": [0.78, 0.86], "at": {"line": 2, "word": "gaana"}}]},
-                {"kind": "hero", "state": "corner", "at": {"line": 2}},
-            ],
-        },
-        {
-            "id": "honest", "kind": "honest", "heading": "Ek *sach* baat", "transition": "cut",
-            "lines": [
-                {"say": "सच कहूँ, छोटा मॉडल थोड़ा कम समझदार है।",
-                 "text": "Sach kahun toh chhota model thoda kam samajhdaar hai."},
-                {"say": "पर प्राइवेसी और बिल के लिए, चलता है।",
-                 "text": "Par privacy aur bill ke liye, *chalta hai*."},
-            ],
-            "visuals": [
-                {"kind": "bars", "items": [{"label": "Cloud", "value": 9}, {"label": "Pocket", "value": 6}],
-                 "highlight": 1},
-                {"kind": "stamp", "text": "CHALTA HAI", "tone": "green", "at": {"line": 1}},
-            ],
-        },
-        {
-            "id": "cta", "kind": "cta", "transition": "slide", "keyword": "POCKET", "dm": "Link bhej dunga",
-            "lines": [
-                {"say": "लिंक चाहिए? नीचे पॉकेट लिखो।", "text": "Link chahiye? Neeche *POCKET* likho."},
-                {"say": "और फ़ॉलो करना मत भूलना।", "text": "Aur *follow* karna mat bhoolna."},
-            ],
-            "visuals": [],
-        },
-    ],
-}
-
-GUIDE: dict[str, Any] = {
-    "summary": (
-        "Write a short, funny, fact-checked script in beats; each beat is a few narrated lines and the "
-        "visuals that enter on their words. reel-machine narrates, animates, renders and verifies; you do the "
-        "research and the writing."
-    ),
-    "workflow": [
-        "research the topic or link yourself: confirm every number from a primary source, put each URL in `sources`",
-        "outline the reel as beats: hook, pain, reveal, explain/feature, honest, cta",
-        "write each beat's lines (1–4), one joke every 2–3 lines",
-        "pick a visual for every beat from the components; cue each on the word it illustrates",
-        "probe: fix every lint error",
-        "build mode `storyboard` and look at storyboard.jpg",
-        "build mode `full`",
-    ],
-    "language": (
-        "`say` is exactly what the voice reads: in the voice's script (Devanagari for Hindi), numbers, symbols "
-        "and names with digits written as words (\"चार जीबी\", \"G P T four o\"), no `*` markup; digits or `*` in "
-        "`say` are lint errors. `text` is the caption (any script; Hinglish in Latin for Hindi), keeps the "
-        "digits, and marks accent words as `*word*`; it defaults to `say`. Word cues match caption words. "
-        "Hindi voices do not spell Latin letters: \"AI\" in a Devanagari `say` comes out as a long \"एएएए\", so "
-        "write \"एआई\"; spell an acronym as spaced letters (\"एल एल एम\", not \"एलएलएम\", which runs together)."
-    ),
-}
+# the Hindi example (an original new-tool reel about a fictional open-source app); the guide lists all three
+EXAMPLES_DIR = Path(__file__).resolve().parent / "examples"
+EXAMPLE: dict[str, Any] = json.loads((EXAMPLES_DIR / "hi-pocket-llm.json").read_text(encoding="utf-8"))
 
 
 def _lint_counts(found: list[dict[str, Any]]) -> str:

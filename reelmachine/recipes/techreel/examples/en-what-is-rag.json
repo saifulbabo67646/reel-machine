@@ -1,0 +1,129 @@
+{
+  "mode": "storyboard",
+  "title": "What is RAG? AI with an open book",
+  "language": "en",
+  "voice": "fake:default",
+  "look": "violet",
+  "hero": {"kind": "robot"},
+  "creator": {"name": "Your Name", "handle": "@yourhandle"},
+  "sources": [
+    "https://arxiv.org/abs/2005.11401",
+    "https://images.nasa.gov/details/ARC-1967-A-38151"
+  ],
+  "beats": [
+    {
+      "id": "hook", "kind": "hook", "kicker": "AI IN ONE MINUTE", "heading": "What is *RAG*?",
+      "lines": [
+        {"say": "Your chatbot just lied to you. Confidently."},
+        {"say": "Three letters fix a lot of that: RAG.", "text": "Three letters fix a lot of that: *RAG*."}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "center"},
+        {"kind": "stamp", "text": "WRONG", "tone": "red", "at": {"line": 0, "word": "confidently"}},
+        {"kind": "hero", "state": "small-top", "at": {"line": 1}},
+        {"kind": "title", "text": "Retrieval-Augmented *Generation*", "size": "m", "at": {"line": 1, "word": "letters"}}
+      ]
+    },
+    {
+      "id": "pain", "kind": "pain", "kicker": "PROBLEM?", "heading": "It *guesses*", "transition": "slide",
+      "lines": [
+        {"say": "A model reads a mountain of text, once."},
+        {"say": "Then its knowledge freezes. Like my gym progress.",
+         "text": "Then its knowledge *freezes*. Like my gym progress."},
+        {"say": "Ask about your files? It guesses.", "text": "Ask about your files? It *guesses*."}
+      ],
+      "visuals": [
+        {"kind": "svg", "size": "s", "exit": {"line": 2},
+         "svg": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 170'><g fill='none' stroke='currentColor' stroke-width='6' stroke-linejoin='round'><rect x='30' y='130' width='140' height='30' rx='4'/><rect x='44' y='100' width='118' height='30' rx='4' style='stroke:var(--accent)'/><rect x='36' y='70' width='126' height='30' rx='4'/><rect x='52' y='40' width='104' height='30' rx='4' style='stroke:var(--accent)'/><rect x='62' y='10' width='86' height='30' rx='4'/></g><g stroke='currentColor' stroke-width='4' opacity='0.5'><line x1='48' y1='145' x2='150' y2='145'/><line x1='60' y1='115' x2='146' y2='115'/><line x1='52' y1='85' x2='146' y2='85'/><line x1='68' y1='55' x2='140' y2='55'/><line x1='78' y1='25' x2='132' y2='25'/></g></svg>"},
+        {"kind": "hero", "state": "sleep", "at": {"line": 1}},
+        {"kind": "emoji", "emoji": "🥶", "at": {"line": 1, "word": "freezes"}},
+        {"kind": "chat", "channel": "help-desk", "at": {"line": 2}, "messages": [
+          {"from": "You", "text": "What's our refund policy?"},
+          {"from": "Bot", "text": "Full refund within 900 years! 😇", "bot": true}
+        ]}
+      ]
+    },
+    {
+      "id": "trick", "kind": "reveal", "kicker": "THE TRICK", "heading": "An *open-book* exam", "transition": "flash",
+      "lines": [
+        {"say": "RAG turns every question into an open-book exam."},
+        {"say": "Before it answers, it looks things up.", "text": "Before it answers, it *looks things up*."},
+        {"say": "In your documents, not its memory."}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "center"},
+        {"kind": "hero", "state": "rings", "at": {"line": 1, "word": "looks"}},
+        {"kind": "image", "src": "https://images-assets.nasa.gov/image/ARC-1967-A-38151/ARC-1967-A-38151~medium.jpg",
+         "highlight": [0.6, 0.2, 0.16, 0.4], "at": {"line": 0, "word": "open-book"}},
+        {"kind": "stamp", "text": "NOTES ALLOWED", "tone": "green", "at": {"line": 2, "word": "documents"}}
+      ]
+    },
+    {
+      "id": "pipeline", "kind": "explain", "kicker": "HOW IT WORKS", "heading": "Search, *then* answer",
+      "transition": "slide",
+      "lines": [
+        {"say": "Your question goes to search first."},
+        {"say": "It grabs the few snippets that matter.", "text": "It grabs the *few* snippets that matter."},
+        {"say": "The model reads them, then answers."}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "hidden"},
+        {"kind": "nodes", "layout": "flow", "exit": {"line": 2}, "items": [
+          {"label": "Question", "icon": "❓"}, {"label": "Search", "icon": "🔎"},
+          {"label": "Snippets", "icon": "📄"}, {"label": "Answer", "icon": "💬"}
+        ]},
+        {"kind": "people", "total": 100, "lit": 3, "label": "YOUR DOCUMENTS", "badge": "NOT RELEVANT 💤",
+         "at": {"line": 1, "word": "few"}, "exit": {"line": 2}},
+        {"kind": "equation", "rows": ["your question", "+ the right snippets"], "result": "a grounded answer",
+         "at": {"line": 2}}
+      ]
+    },
+    {
+      "id": "payoff", "kind": "feature", "kicker": "WHY IT WINS", "heading": "Fresh *and* sourced", "transition": "cut",
+      "lines": [
+        {"say": "No retraining: just update the documents."},
+        {"say": "And it can cite its sources."},
+        {"say": "Unlike me in every argument."}
+      ],
+      "visuals": [
+        {"kind": "checklist", "items": ["No retraining", "Fresh documents", "Answers with sources"],
+         "exit": {"line": 1}},
+        {"kind": "chat", "channel": "help-desk", "at": {"line": 1}, "messages": [
+          {"from": "You", "text": "What's our refund policy?"},
+          {"from": "Bot", "text": "30 days. Source: refunds.pdf, page 2 📄", "bot": true}
+        ]},
+        {"kind": "emoji", "emoji": "😅", "at": {"line": 2, "word": "me"}}
+      ]
+    },
+    {
+      "id": "honest", "kind": "honest", "kicker": "HONEST MOMENT", "heading": "The *catch*", "transition": "slide",
+      "lines": [
+        {"say": "RAG is only as good as its search."},
+        {"say": "Messy documents in, messy answers out.", "text": "*Messy* documents in, *messy* answers out."},
+        {"say": "So clean that folder called final final two.",
+         "text": "So clean that folder called *final_final_2*."}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "shake", "at": {"line": 1, "word": "messy"}},
+        {"kind": "stamp", "text": "GARBAGE IN", "tone": "red", "rotate": -12, "at": {"line": 1, "word": "out"}},
+        {"kind": "emoji", "emoji": "🙈", "at": {"line": 2, "word": "folder"}}
+      ]
+    },
+    {
+      "id": "cta", "kind": "cta", "kicker": "SAVE THIS", "heading": "Want the *cheat sheet*?", "transition": "slide",
+      "lines": [
+        {"say": "Comment RAG for the cheat sheet.", "text": "Comment *RAG* for the cheat sheet."},
+        {"say": "Follow for more AI, minus the jargon.", "text": "*Follow* for more AI, minus the jargon."},
+        {"say": "Your chatbot? Still confident. Now also right."}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "corner"},
+        {"kind": "comment", "keyword": "RAG", "reply": "cheat sheet on its way", "exit": {"line": 2}},
+        {"kind": "follow", "at": {"line": 1, "word": "follow"}, "exit": {"line": 2}},
+        {"kind": "hero", "state": "center", "at": {"line": 2}},
+        {"kind": "hero", "state": "pulse", "at": {"line": 2, "word": "confident"}},
+        {"kind": "stamp", "text": "NOW RIGHT", "tone": "green", "at": {"line": 2, "word": "right"}}
+      ]
+    }
+  ]
+}

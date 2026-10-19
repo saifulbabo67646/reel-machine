@@ -1,0 +1,146 @@
+{
+  "mode": "storyboard",
+  "title": "Pocket LLM: AI on an old laptop",
+  "language": "hi",
+  "voice": "fake:default",
+  "look": "mint",
+  "hero": {"kind": "orb"},
+  "creator": {"name": "Your Name", "handle": "@yourhandle"},
+  "sources": ["https://example.com/pocket-llm"],
+  "beats": [
+    {
+      "id": "hook", "kind": "hook", "kicker": "NEW TOOL", "heading": "Laptop pe *apna* AI?",
+      "lines": [
+        {"say": "भाई, पुराने लैपटॉप पर भी अपना एआई चलेगा।",
+         "text": "Bhai, purane laptop par bhi *apna* AI chalega."},
+        {"say": "सिर्फ़ चार जीबी रैम में, बिना इंटरनेट के।",
+         "text": "Sirf *4 GB* RAM mein, bina internet ke."}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "center"},
+        {"kind": "hero", "state": "pulse", "at": {"line": 0, "word": "AI"}},
+        {"kind": "hero", "state": "small-top", "at": {"line": 1}},
+        {"kind": "counter", "to": 4, "suffix": " GB", "label": "RAM KAAFI HAI", "at": {"line": 1, "word": "4"}}
+      ]
+    },
+    {
+      "id": "pain", "kind": "pain", "kicker": "PROBLEM?", "heading": "Cloud AI ka *bill*", "transition": "slide",
+      "lines": [
+        {"say": "हर महीने बिल, हर सवाल उनके सर्वर पर।",
+         "text": "Har mahine bill, har sawaal unke server par."},
+        {"say": "और प्राइवेसी? वो गई तेल लेने।",
+         "text": "Aur privacy? Woh gayi *tel lene*."},
+        {"say": "मेरा क्रेडिट कार्ड अब मुझसे बात नहीं करता।",
+         "text": "Mera credit card ab mujhse baat nahi karta."}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "shake", "at": {"line": 2, "word": "card"}},
+        {"kind": "receipts", "items": [
+          {"title": "Chatbot Plus", "sub": "monthly"},
+          {"title": "Image AI Pro", "sub": "monthly"},
+          {"title": "Chatbot Plus", "sub": "monthly · phir se"}
+        ]},
+        {"kind": "stamp", "text": "PRIVACY GONE", "at": {"line": 1, "word": "privacy"}},
+        {"kind": "emoji", "emoji": "💸", "at": {"line": 2, "word": "card"}}
+      ]
+    },
+    {
+      "id": "reveal", "kind": "reveal", "kicker": "OPEN SOURCE", "heading": "Milo *Pocket LLM* se",
+      "transition": "flash",
+      "lines": [
+        {"say": "मिलो पॉकेट एल एल एम से, ओपन सोर्स।",
+         "text": "Milo *Pocket LLM* se, open source."},
+        {"say": "पूरा मॉडल तुम्हारे लैपटॉप पर, मुफ़्त।",
+         "text": "Poora model tumhare laptop par, *muft*."},
+        {"say": "विंडोज़, मैक और लिनक्स, तीनों पर।", "text": "Windows, Mac aur Linux, *teeno* par."}
+      ],
+      "visuals": [
+        {"kind": "repo", "name": "pocket-llm/pocket-llm",
+         "description": "Run small language models offline on any laptop", "stars": 12400,
+         "license": "MIT", "language": "Rust", "exit": {"line": 2}},
+        {"kind": "chips", "items": ["Offline", "Free", "MIT"], "style": "filled", "at": {"line": 1},
+         "exit": {"line": 2}},
+        {"kind": "hero", "state": "split", "count": 3, "labels": ["Windows", "Mac", "Linux"], "at": {"line": 2}}
+      ]
+    },
+    {
+      "id": "privacy", "kind": "explain", "kicker": "PRIVACY", "heading": "Data *ghar* pe", "transition": "cut",
+      "lines": [
+        {"say": "तुम्हारा डेटा लैपटॉप से बाहर नहीं जाता।",
+         "text": "Tumhara data laptop se *bahar* nahi jaata."},
+        {"say": "मेरे दोस्तों से ज़्यादा राज़ यही रखता है।",
+         "text": "Mere doston se zyada *raaz* yahi rakhta hai."}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "center"},
+        {"kind": "hero", "state": "locked", "at": {"line": 0, "word": "bahar"}},
+        {"kind": "title", "text": "server pe *kuch nahi*", "size": "m", "at": {"line": 0, "word": "nahi"}},
+        {"kind": "emoji", "emoji": "🤐", "at": {"line": 1, "word": "raaz"}}
+      ]
+    },
+    {
+      "id": "feature", "kind": "feature", "kicker": "FEATURE 01/02", "heading": "Bas *ek command*",
+      "transition": "zoom",
+      "lines": [
+        {"say": "बस एक कमांड चलाओ, मॉडल डाउनलोड।",
+         "text": "Bas *ek command* chalao, model download."},
+        {"say": "फिर चैट शुरू, सीधे अपने लैपटॉप पर।",
+         "text": "Phir chat shuru, seedha apne laptop par."},
+        {"say": "और हाँ, लैपटॉप का पंखा गाना ज़रूर गाएगा।",
+         "text": "Aur haan, laptop ka pankha *gaana* zaroor gaayega."}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "hidden"},
+        {"kind": "terminal", "exit": {"line": 1}, "lines": [
+          {"cmd": "pocket pull tiny-3b"},
+          {"out": "downloaded 1.9 GB", "tone": "ok"},
+          {"cmd": "pocket chat"}
+        ]},
+        {"kind": "window", "title": "Pocket LLM", "tabs": ["Chat", "Models"], "live": true,
+         "button": "Send", "rows": ["> pankha itna shor kyun?", "Main soch raha hoon. Zor se."],
+         "at": {"line": 1},
+         "cursor": [{"to": [0.78, 0.86], "at": {"line": 2, "word": "gaana"}}]},
+        {"kind": "hero", "state": "corner", "at": {"line": 2}},
+        {"kind": "emoji", "emoji": "🎤", "at": {"line": 2, "word": "pankha"}}
+      ]
+    },
+    {
+      "id": "honest", "kind": "honest", "kicker": "HONEST MOMENT", "heading": "Ek *sach* baat", "transition": "slide",
+      "lines": [
+        {"say": "सच कहूँ, छोटा मॉडल थोड़ा कम समझदार है।",
+         "text": "Sach kahun, chhota model thoda kam samajhdaar hai."},
+        {"say": "और बहुत बड़ा मॉडल? लैपटॉप हाथ जोड़ लेगा।",
+         "text": "Aur bahut bada model? Laptop *haath jod* lega."}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "hidden"},
+        {"kind": "chips", "items": ["Private ✓", "Free ✓", "Genius ✗"], "style": "outline", "exit": {"line": 1}},
+        {"kind": "error", "title": "Laptop.exe", "body": "Itna bada model? Main nahi kar paunga 🙏",
+         "button": "Theek hai", "at": {"line": 1}}
+      ]
+    },
+    {
+      "id": "bill", "kind": "other", "kicker": "AB HISAAB", "heading": "Bill *zero*", "transition": "flash",
+      "lines": [
+        {"say": "पर बिल? ज़ीरो।", "text": "Par bill? *Zero*."},
+        {"say": "और मेरा क्रेडिट कार्ड फिर से मुझसे बात करने लगा।",
+         "text": "Aur mera credit card phir se mujhse *baat* karne laga."}
+      ],
+      "visuals": [
+        {"kind": "flash", "text": "bill: *₹0*", "at": {"line": 0, "word": "zero"}, "exit": {"line": 1}},
+        {"kind": "versus", "at": {"line": 1},
+         "left": {"label": "Cloud AI", "value": "₹₹₹", "emoji": "💸"},
+         "right": {"label": "Pocket LLM", "value": "₹0", "emoji": "😌"}},
+        {"kind": "emoji", "emoji": "🥹", "at": {"line": 1, "word": "baat"}}
+      ]
+    },
+    {
+      "id": "cta", "kind": "cta", "transition": "slide", "keyword": "POCKET", "dm": "Link bhej dunga",
+      "lines": [
+        {"say": "लिंक चाहिए? नीचे पॉकेट लिखो।", "text": "Link chahiye? Neeche *POCKET* likho."},
+        {"say": "और फ़ॉलो करना मत भूलना।", "text": "Aur *follow* karna mat bhoolna."}
+      ],
+      "visuals": [{"kind": "hero", "state": "corner"}]
+    }
+  ]
+}

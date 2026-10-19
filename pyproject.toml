@@ -142,6 +142,7 @@ reelmachine = [
     "recipes/dialoguereel/runtime/*.mjs",
     "recipes/dialoguereel/runtime/*.css",
     "recipes/mapreel/runtime/*.mjs",
+    "recipes/techreel/examples/*.json",
     "recipes/techreel/runtime/*.mjs",
     "recipes/techreel/runtime/*.css",
     "vendor/srt-whiteboard-animation/LICENSE",
