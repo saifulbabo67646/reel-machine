@@ -42,7 +42,7 @@ function buildBeat(ui, beat, index, doc) {
   const blocks = [], overlays = [];
   for (const v of beat.visuals) {
     const comp = COMPONENTS[v.kind];
-    if (!comp) continue;
+    if (!comp) { console.warn(`techreel: no component for visual kind "${v.kind}", skipped`); continue; }
     const node = comp.build(v, doc);
     if (v.class === "overlay") {
       const wrap = el("div", "over", over);
@@ -81,6 +81,8 @@ function build(doc, root) {
 
   ui.beats = doc.beats.map((beat, i) => buildBeat(ui, beat, i, doc));
   if (doc.hero) {
+    // kinds the runtime cannot draw yet fall back to the orb rather than crash
+    if (!HERO_SIZE[doc.hero.kind]) console.warn(`techreel: hero kind "${doc.hero.kind}" is not drawn yet, using orb`);
     ui.heroKind = HERO_SIZE[doc.hero.kind] ? doc.hero.kind : "orb";
     ui.hero = buildHero(ui.heroKind, doc);
     ui.heroSize = HERO_SIZE[ui.heroKind];

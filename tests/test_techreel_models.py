@@ -79,3 +79,88 @@ def test_window_cursor_move():
     assert v.cursor[0].to == (0.5, 0.2)
     with pytest.raises(ValidationError):
         _beat({"kind": "window", "title": "w", "cursor": [{"to": [1.5, 0.2], "at": {"line": 0}}]})
+
+
+# ---------------------------------------------------------------- plan 2 catalogue
+
+_MINIMAL = {
+    "equation": {"kind": "equation", "rows": ["a"], "result": "b"},
+    "chat": {"kind": "chat", "messages": [{"from": "me", "text": "hi"}]},
+    "dialog": {"kind": "dialog", "title": "Allow?"},
+    "error": {"kind": "error", "title": "Oops", "body": "bad"},
+    "receipts": {"kind": "receipts", "items": [{"title": "a"}]},
+    "checklist": {"kind": "checklist", "items": ["a"]},
+    "people": {"kind": "people", "total": 10, "lit": 3},
+    "versus": {"kind": "versus", "left": {"label": "a", "value": "1"}, "right": {"label": "b", "value": "2"}},
+    "nodes": {"kind": "nodes", "items": [{"label": "a"}, {"label": "b"}]},
+    "bars": {"kind": "bars", "items": [{"label": "a", "value": 1}, {"label": "b", "value": 2}]},
+    "flash": {"kind": "flash", "text": "boom"},
+    "heartbeat": {"kind": "heartbeat"},
+    "comment": {"kind": "comment", "keyword": "GUIDE"},
+    "follow": {"kind": "follow"},
+    "image": {"kind": "image", "src": "https://x.test/a.png"},
+    "svg": {"kind": "svg", "svg": "<svg/>"},
+}
+_BAD = {
+    "equation": {"rows": []}, "chat": {"messages": []}, "dialog": {"title": "x" * 41},
+    "error": {"button": "x" * 13}, "receipts": {"items": []}, "checklist": {"items": ["a"] * 7},
+    "people": {"total": 0}, "versus": {"left": {"label": "x" * 21, "value": "1"}},
+    "nodes": {"items": [{"label": "a"}]}, "bars": {"items": [{"label": "a", "value": -1}, {"label": "b", "value": 1}]},
+    "flash": {"text": "x" * 41}, "heartbeat": {"label": "x" * 41}, "comment": {"keyword": "x" * 25},
+    "follow": {"extra": 1}, "image": {"src": ""}, "svg": {"svg": "x" * 60001},
+}
+
+
+@pytest.mark.parametrize("kind", sorted(_MINIMAL))
+def test_new_visual_validates_and_refuses(kind):
+    assert _beat(_MINIMAL[kind]).visuals[0].kind == kind
+    with pytest.raises(ValidationError):
+        _beat({**_MINIMAL[kind], **_BAD[kind]})
+
+
+def test_chat_message_accepts_from_and_sender():
+    msgs = _beat(_MINIMAL["chat"]).visuals[0].messages
+    assert msgs[0].sender == "me" and msgs[0].bot is False
+    from reelmachine.recipes.techreel.models import ChatMessage
+    assert ChatMessage(sender="me", text="x").sender == "me"
+
+
+def test_people_lit_cannot_exceed_total():
+    with pytest.raises(ValidationError):
+        _beat({"kind": "people", "total": 10, "lit": 11})
+
+
+def test_dialog_click_and_image_highlight():
+    d = _beat({"kind": "dialog", "title": "t", "click": "approve", "click_at": {"line": 0}}).visuals[0]
+    assert d.click == "approve" and d.click_at.line == 0
+    with pytest.raises(ValidationError):
+        _beat({"kind": "image", "src": "x", "highlight": [0, 0, 1.2, 1]})
+    assert _beat({"kind": "image", "src": "x", "highlight": [0, 0.1, 0.5, 1]}).visuals[0].highlight
+
+
+def test_hero_spec_svg_and_src():
+    from reelmachine.recipes.techreel.models import HeroSpec
+    for kind in ("chip", "phone", "robot"):
+        HeroSpec(kind=kind)
+    with pytest.raises(ValidationError):
+        HeroSpec(kind="svg")
+    with pytest.raises(ValidationError):
+        HeroSpec(kind="image")
+    with pytest.raises(ValidationError):
+        HeroSpec(kind="orb", svg="<svg/>")
+    with pytest.raises(ValidationError):
+        HeroSpec(kind="orb", src="a.png")
+    with pytest.raises(ValidationError):
+        HeroSpec(kind="svg", svg="<svg/>", src="a.png")
+    assert HeroSpec(kind="svg", svg="<svg/>").svg == "<svg/>"
+    assert HeroSpec(kind="image", src="a.png").src == "a.png"
+
+
+def test_hero_states_locked_split():
+    v = _beat({"kind": "hero", "state": "split", "count": 4, "labels": ["a", "b"]}).visuals[0]
+    assert (v.count, v.labels) == (4, ["a", "b"])
+    assert _beat({"kind": "hero", "state": "locked"}).visuals[0].count == 3
+    with pytest.raises(ValidationError):
+        _beat({"kind": "hero", "state": "split", "count": 1})
+    with pytest.raises(ValidationError):
+        _beat({"kind": "hero", "state": "split", "labels": ["x" * 17]})

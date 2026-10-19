@@ -11,8 +11,8 @@ from reelmachine.core.stage import StageOutput
 Look = Literal["mint", "ember", "violet", "mono"]
 BeatKind = Literal["hook", "pain", "reveal", "explain", "feature", "honest", "cta", "other"]
 Transition = Literal["cut", "slide", "flash", "zoom"]
-HeroKind = Literal["orb", "laptop", "monitor"]
-HeroState = Literal["center", "small-top", "corner", "hidden", "pulse", "shake", "rings", "screen", "sleep"]
+HeroKind = Literal["orb", "laptop", "monitor", "chip", "phone", "robot", "svg", "image"]
+HeroState = Literal["center", "small-top", "corner", "hidden", "pulse", "shake", "rings", "screen", "sleep", "locked", "split"]
 Unit01 = Annotated[float, Field(ge=0, le=1)]
 
 _ID = r"^[a-z][a-z0-9_-]{0,23}$"
@@ -58,6 +58,8 @@ class HeroVisual(VisualBase):
     kind: Literal["hero"]
     state: HeroState
     text: str | None = Field(None, max_length=24)
+    count: int = Field(3, ge=2, le=6)                    # how many copies a `split` makes
+    labels: list[Annotated[str, Field(max_length=16)]] = Field(default_factory=list, max_length=6)
 
 
 class TitleVisual(VisualBase):
@@ -140,8 +142,145 @@ class RepoVisual(VisualBase):
     language: str = Field("", max_length=24)
 
 
+class EquationVisual(VisualBase):
+    kind: Literal["equation"]
+    rows: list[Annotated[str, Field(max_length=40)]] = Field(min_length=1, max_length=4)
+    result: str = Field(max_length=24)
+
+
+class ChatMessage(_Model):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    sender: str = Field(max_length=24, alias="from")     # `from` is a Python keyword
+    text: str = Field(max_length=120)
+    bot: bool = False
+
+
+class ChatVisual(VisualBase):
+    kind: Literal["chat"]
+    channel: str = Field("", max_length=32)
+    messages: list[ChatMessage] = Field(min_length=1, max_length=5)
+
+
+class DialogVisual(VisualBase):
+    kind: Literal["dialog"]
+    title: str = Field(max_length=40)
+    body: str = Field("", max_length=120)
+    approve: str = Field("Approve", max_length=16)
+    decline: str = Field("Decline", max_length=16)
+    click: Literal["approve", "decline"] | None = None
+    click_at: Cue | None = None
+
+
+class ErrorVisual(VisualBase):
+    kind: Literal["error"]
+    title: str = Field(max_length=40)
+    body: str = Field(max_length=120)
+    button: str = Field("OK", max_length=12)
+
+
+class ReceiptItem(_Model):
+    title: str = Field(max_length=32)
+    sub: str = Field("", max_length=32)
+
+
+class ReceiptsVisual(VisualBase):
+    kind: Literal["receipts"]
+    items: list[ReceiptItem] = Field(min_length=1, max_length=5)
+
+
+class ChecklistVisual(VisualBase):
+    kind: Literal["checklist"]
+    items: list[Annotated[str, Field(max_length=40)]] = Field(min_length=1, max_length=6)
+    state: Literal["done", "progress"] = "done"
+
+
+class PeopleVisual(VisualBase):
+    kind: Literal["people"]
+    total: int = Field(ge=1, le=200)
+    lit: int = Field(ge=0)
+    label: str = Field("", max_length=40)
+    badge: str = Field("", max_length=24)
+
+    @model_validator(mode="after")
+    def _lit_within_total(self) -> PeopleVisual:
+        if self.lit > self.total:
+            raise ValueError("lit cannot exceed total")
+        return self
+
+
+class Score(_Model):
+    label: str = Field(max_length=20)
+    value: str = Field(max_length=12)
+    emoji: str = Field("", max_length=16)
+
+
+class VersusVisual(VisualBase):
+    kind: Literal["versus"]
+    left: Score
+    right: Score
+
+
+class NodeItem(_Model):
+    label: str = Field(max_length=20)
+    icon: str = Field("", max_length=16)
+
+
+class NodesVisual(VisualBase):
+    kind: Literal["nodes"]
+    items: list[NodeItem] = Field(min_length=2, max_length=6)
+    layout: Literal["row", "triangle", "ring", "flow"] = "row"
+
+
+class BarItem(_Model):
+    label: str = Field(max_length=20)
+    value: float = Field(ge=0)
+
+
+class BarsVisual(VisualBase):
+    kind: Literal["bars"]
+    items: list[BarItem] = Field(min_length=2, max_length=6)
+    unit: str = Field("", max_length=8)
+    highlight: int | None = None
+
+
+class FlashVisual(VisualBase):
+    kind: Literal["flash"]
+    text: str = Field(max_length=40)
+
+
+class HeartbeatVisual(VisualBase):
+    kind: Literal["heartbeat"]
+    label: str = Field("", max_length=40)
+
+
+class CommentVisual(VisualBase):
+    kind: Literal["comment"]
+    keyword: str = Field(max_length=24)
+    reply: str = Field("", max_length=40)
+
+
+class FollowVisual(VisualBase):
+    kind: Literal["follow"]                              # draws the reel's `creator`
+
+
+class ImageVisual(VisualBase):
+    kind: Literal["image"]
+    src: str = Field(min_length=1, max_length=500)
+    highlight: tuple[Unit01, Unit01, Unit01, Unit01] | None = None
+
+
+class SvgVisual(VisualBase):
+    kind: Literal["svg"]
+    svg: str = Field(min_length=1, max_length=60000)
+    size: Literal["s", "m", "l"] = "m"
+
+
 Visual = Annotated[
-    HeroVisual | TitleVisual | CounterVisual | StampVisual | EmojiVisual | ChipsVisual | WindowVisual | TerminalVisual | RepoVisual,
+    HeroVisual | TitleVisual | CounterVisual | StampVisual | EmojiVisual | ChipsVisual | WindowVisual
+    | TerminalVisual | RepoVisual | EquationVisual | ChatVisual | DialogVisual | ErrorVisual | ReceiptsVisual
+    | ChecklistVisual | PeopleVisual | VersusVisual | NodesVisual | BarsVisual | FlashVisual | HeartbeatVisual
+    | CommentVisual | FollowVisual | ImageVisual | SvgVisual,
     Field(discriminator="kind"),
 ]
 
@@ -149,6 +288,16 @@ Visual = Annotated[
 class HeroSpec(_Model):
     kind: HeroKind
     text: str | None = Field(None, max_length=24)
+    svg: str | None = Field(None, max_length=60000)
+    src: str | None = Field(None, max_length=500)
+
+    @model_validator(mode="after")
+    def _art_matches_kind(self) -> HeroSpec:
+        if (self.svg is not None) != (self.kind == "svg"):
+            raise ValueError("`svg` is given when, and only when, the hero kind is svg")
+        if (self.src is not None) != (self.kind == "image"):
+            raise ValueError("`src` is given when, and only when, the hero kind is image")
+        return self
 
 
 class Creator(_Model):

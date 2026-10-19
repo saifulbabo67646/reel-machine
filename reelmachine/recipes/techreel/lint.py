@@ -33,6 +33,8 @@ def _cues(visual) -> list[tuple[str, Cue]]:
         found.append(("at", visual.at))
     if isinstance(visual.exit, Cue):
         found.append(("exit", visual.exit))
+    if getattr(visual, "click_at", None) is not None:
+        found.append(("click_at", visual.click_at))
     for k, move in enumerate(getattr(visual, "cursor", [])):
         found.append((f"cursor[{k}].at", move.at))
     return found

@@ -186,3 +186,31 @@ def test_the_runtime_unit_tests_pass():
     proc = subprocess.run(["node", "--test", str(compose.RUNTIME_DIR / "tests" / "pure.test.mjs")],
                           check=False, capture_output=True, text=True)
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_new_overlays_and_nested_camel():
+    beats = [{"keyword": "GUIDE", "dm": "sent", "next": "part two",
+              "lines": [{"say": "one two three"}],
+              "visuals": [
+                  {"kind": "error", "title": "Oops", "body": "bad"},
+                  {"kind": "flash", "text": "boom"},
+                  {"kind": "dialog", "title": "t", "click": "approve", "click_at": {"line": 0}},
+                  {"kind": "chat", "messages": [{"from": "me", "text": "hi", "bot": True}]},
+              ]}, {"lines": [{"say": "x"}]}]
+    inputs = TechReelInputs.model_validate({"title": "t", "creator": {"name": "N", "handle": "@h"}, "beats": beats})
+    plan = schedule(inputs.beats, [[900], [300]])
+    doc = reel_document(inputs, plan, _times(inputs))
+    assert doc["creator"] == {"name": "N", "handle": "@h", "avatar": None}
+    b0, b1 = doc["beats"]
+    assert (b0["keyword"], b0["dm"], b0["next"]) == ("GUIDE", "sent", "part two")
+    assert (b1["keyword"], b1["dm"], b1["next"]) == ("", "", "")
+    err, flash, dialog, chat = b0["visuals"]
+    assert err["class"] == "overlay" and flash["class"] == "overlay" and dialog["class"] == "block"
+    assert dialog["clickAtMs"] == plan.beats[0].lines[0].start_ms and "clickAt" not in dialog
+    assert chat["messages"] == [{"from": "me", "text": "hi", "bot": True}]
+    json.dumps(doc, allow_nan=False)
+
+
+def test_creator_absent_is_null():
+    _, _, doc = _doc()
+    assert doc["creator"] is None

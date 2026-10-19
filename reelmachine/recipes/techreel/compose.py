@@ -15,14 +15,14 @@ from typing import Any
 
 from .markup import chunks, units
 from .models import HeroVisual, TechReelInputs, Visual
-from .schedule import Plan, cue_ms, exit_ms
+from .schedule import BeatSlot, Plan, cue_ms, exit_ms
 
 HERE = Path(__file__).resolve().parent
 RUNTIME_DIR = HERE / "runtime"
 RUNTIME_FILES = ("*.mjs", "*.css")
 
 WIDTH, HEIGHT, FPS = 1080, 1920, 30
-_OVERLAYS = ("stamp", "emoji")
+_OVERLAYS = ("stamp", "emoji", "error", "flash")
 _KEYS = ("bg", "glow1", "glow2", "glow3", "text", "muted", "accent", "accentInk", "card", "cardEdge", "red", "green")
 
 
@@ -55,12 +55,23 @@ def _camel(name: str) -> str:
     return head + "".join(part.title() for part in rest)
 
 
-def _visual(visual: Visual, vid: str, enter: int, leave: int, cues: list[int]) -> dict[str, Any]:
+def _camel_keys(value: Any) -> Any:
+    """Nested model fields camelCase too; aliases (`from`) were already applied by the dump."""
+    if isinstance(value, dict):
+        return {_camel(k): _camel_keys(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_camel_keys(v) for v in value]
+    return value
+
+
+def _visual(visual: Visual, vid: str, enter: int, leave: int, cues: list[int], slot: BeatSlot, times: list, us: list) -> dict[str, Any]:
     """A stage visual as the page reads it: fields camelCased, cues resolved to reel ms."""
-    fields = visual.model_dump(exclude={"at", "exit"}, exclude_none=True)
-    out: dict[str, Any] = {_camel(k): v for k, v in fields.items() if k != "cursor"}
+    fields = visual.model_dump(exclude={"at", "exit", "click_at"}, exclude_none=True, by_alias=True)
+    out: dict[str, Any] = {_camel(k): _camel_keys(v) for k, v in fields.items() if k != "cursor"}
     if visual.kind == "window":
         out["cursor"] = [{"to": list(m.to), "atMs": ms} for m, ms in zip(visual.cursor, cues, strict=True)]
+    if getattr(visual, "click_at", None) is not None:
+        out["clickAtMs"] = cue_ms(visual.click_at, slot, times, us)[0]
     out |= {"id": vid, "enterMs": enter, "exitMs": leave,
             "class": "overlay" if visual.kind in _OVERLAYS else "block"}
     return out
@@ -82,12 +93,13 @@ def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tupl
                 continue
             leave = exit_ms(visual.exit, slot, next_start, times[b], us)
             moves = [cue_ms(m.at, slot, times[b], us)[0] for m in getattr(visual, "cursor", [])]
-            stage.append(_visual(visual, f"b{b}v{v}", enter, leave, moves))
+            stage.append(_visual(visual, f"b{b}v{v}", enter, leave, moves, slot, times[b], us))
         beats.append({
             "id": beat.id or f"b{b}", "kind": beat.kind, "startMs": slot.start_ms, "endMs": slot.end_ms,
             "transition": beat.transition,
             "heading": [{"t": u.text, "a": u.accent} for u in units(beat.heading, inputs.language)] if beat.heading else [],
-            "kicker": beat.kicker or "", "visuals": stage,
+            "kicker": beat.kicker or "", "keyword": beat.keyword or "", "dm": beat.dm or "",
+            "next": beat.next or "", "visuals": stage,
         })
         for line_slot, line_us, line_times in zip(slot.lines, us, times[b], strict=True):
             groups = chunks(line_us, inputs.language)
@@ -108,7 +120,9 @@ def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tupl
     return {
         "mode": "reel", "width": WIDTH, "height": HEIGHT, "duration": plan.duration_ms / 1000,
         "language": inputs.language, "look": look_tokens(inputs),
-        "hero": {"kind": inputs.hero.kind, "text": inputs.hero.text} if inputs.hero else None,
+        "hero": ({"kind": inputs.hero.kind, "text": inputs.hero.text}
+                 | inputs.hero.model_dump(include={"svg", "src"}, exclude_none=True)) if inputs.hero else None,
+        "creator": inputs.creator.model_dump() if inputs.creator else None,
         "heroStates": hero_states, "beats": beats, "captions": captions, "sfx": inputs.sfx,
     }
 

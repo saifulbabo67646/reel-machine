@@ -101,3 +101,10 @@ def test_cue_word_warning_on_exit_cue():
     miss = {"kind": "title", "text": "x", "exit": {"line": 0, "word": "banana"}}
     f = check(_inputs([_beat(visuals=[miss])]))
     assert [(x.rule, x.severity, x.path) for x in f] == [("cue-word", "warning", "beats[0].visuals[0].exit.word")]
+
+
+def test_click_at_cue_is_checked():
+    dialog = {"kind": "dialog", "title": "t", "click": "approve", "click_at": {"line": 3}}
+    assert "cue-line" in _rules(check(_inputs([_beat(visuals=[dialog])])))
+    dialog["click_at"] = {"line": 0, "word": "zzz"}
+    assert "cue-word" in _rules(check(_inputs([_beat(visuals=[dialog])])))
