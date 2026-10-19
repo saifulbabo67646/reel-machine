@@ -6,7 +6,10 @@ import { clamp01, seedOf, HERO_MOVE_MS } from "./pure.mjs";
 import { el } from "./components.mjs";
 
 /** Natural size of each hero (px), what the stage stack lays out. */
-export const HERO_SIZE = { orb: { w: 360, h: 360 }, laptop: { w: 760, h: 470 }, monitor: { w: 620, h: 540 } };
+export const HERO_SIZE = {
+  orb: { w: 360, h: 360 }, laptop: { w: 760, h: 470 }, monitor: { w: 620, h: 540 },
+  svg: { w: 420, h: 420 }, image: { w: 420, h: 420 }, // the caller's art, centred in a 420 px box
+};
 // where text shows on the screen-like heroes, in the hero's own px
 const SCREEN = { laptop: { x: 114, y: 34, w: 532, h: 336 }, monitor: { x: 36, y: 36, w: 548, h: 344 } };
 const SHAKE_MS = 400, SHAKE_PX = 10, SHAKE_HZ = 12, PULSE_HZ = 1.2, RING_PERIOD_MS = 1600;
@@ -100,7 +103,7 @@ export function buildHero(kind, doc) {
   const ui = { node, inner, kind, size, rings: [], zs: [], text: null };
   // the rings sit behind the object
   // round the orb; round the whole object for the screens (their screens are opaque, so a ring only shows outside)
-  const ringD = kind === "orb" ? size.w : Math.max(size.w, size.h) * 0.8;
+  const ringD = SCREEN[kind] ? Math.max(size.w, size.h) * 0.8 : size.w;
   for (let i = 0; i < 3; i++) {
     const ring = el("div", "ring", inner);
     Object.assign(ring.style, { width: `${ringD}px`, height: `${ringD}px`, left: `${(size.w - ringD) / 2}px`, top: `${(size.h - ringD) / 2}px` });
@@ -114,6 +117,23 @@ export function buildHero(kind, doc) {
     ui.turb = art.querySelector("#hero-turb");
     ui.flow = art.querySelector("#hero-flow");
     ui.drift = art.querySelector("#hero-drift");
+    ui.label = el("div", "orblabel", inner);
+  } else if (!SCREEN[kind]) {
+    // an agent's drawing (scoped by compose.py, ids prefixed "c_hero.") or the caller's image, contained
+    const art = el("div", "heroart", inner);
+    if (kind === "svg") {
+      art.innerHTML = doc.hero?.svg || "";
+      const drawn = art.querySelector("svg");
+      if (drawn) {
+        drawn.setAttribute("width", String(size.w));
+        drawn.setAttribute("height", String(size.h));
+      }
+    } else if (doc.hero?.file) {
+      const img = el("img", null, art);
+      img.alt = "";
+      img.src = doc.hero.file;
+      node._ready = (img.decode ? img.decode() : Promise.resolve()).catch(() => null);
+    }
     ui.label = el("div", "orblabel", inner);
   } else {
     const box = SCREEN[kind];
@@ -148,7 +168,7 @@ function setScreenText(ui, text) {
   if (ui.text === text) return;
   ui.text = text;
   ui.label.textContent = text;
-  if (ui.kind === "orb") return;
+  if (!SCREEN[ui.kind]) return;
   // as big as fits in the screen's width (measured only when the text changes)
   const box = SCREEN[ui.kind];
   let px = 170;
@@ -192,7 +212,7 @@ export function updateHero(node, h, t, doc) {
   const text = (h.state === "screen" ? h.text : null) ?? (h.from === "screen" ? ui.text : null) ?? doc.hero?.text ?? "";
   if (screen > 0) setScreenText(ui, text);
   ui.label.style.opacity = screen.toFixed(3);
-  if (ui.kind === "orb") ui.label.style.transform = `translate(-50%, -50%) scale(${(0.8 + 0.2 * screen).toFixed(3)})`;
+  if (!SCREEN[ui.kind]) ui.label.style.transform = `translate(-50%, -50%) scale(${(0.8 + 0.2 * screen).toFixed(3)})`;
   if (ui.glow) ui.glow.style.opacity = screen.toFixed(3);
 
   if (ui.turb) {

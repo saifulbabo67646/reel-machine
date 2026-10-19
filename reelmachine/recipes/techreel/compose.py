@@ -9,11 +9,12 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from html import escape
 from pathlib import Path
 from typing import Any
 
+from ..dialoguereel.svg import inline_svg
 from .markup import Unit, chunks, units
 from .models import HeroVisual, TechReelInputs, Visual
 from .schedule import BeatSlot, Plan, cue_ms, exit_ms
@@ -21,6 +22,7 @@ from .schedule import BeatSlot, Plan, cue_ms, exit_ms
 HERE = Path(__file__).resolve().parent
 RUNTIME_DIR = HERE / "runtime"
 RUNTIME_FILES = ("*.mjs", "*.css")
+ASSETS = "assets"         # the project folder the images are copied into; their `file` is relative to the page
 
 WIDTH, HEIGHT, FPS = 1080, 1920, 30
 _OVERLAYS = ("stamp", "emoji", "error", "flash")
@@ -74,10 +76,17 @@ def _visual(
     slot: BeatSlot,
     times: Sequence[Sequence[tuple[int, int]]],
     us: Sequence[Sequence[Unit]],
+    images: Mapping[str, str],
+    path: str,
 ) -> dict[str, Any]:
-    """A stage visual as the page reads it: fields camelCased, cues resolved to reel ms."""
-    fields = visual.model_dump(exclude={"at", "exit", "click_at"}, exclude_none=True, by_alias=True)
+    """A stage visual as the page reads it: fields camelCased, cues resolved to reel ms; an image as its file in
+    the project (never its source), a drawing re-checked with its ids scoped to this visual."""
+    fields = visual.model_dump(exclude={"at", "exit", "click_at", "src"}, exclude_none=True, by_alias=True)
     out: dict[str, Any] = {_camel(k): _camel_keys(v) for k, v in fields.items() if k != "cursor"}
+    if visual.kind == "image" and visual.src in images:
+        out["file"] = f"{ASSETS}/{images[visual.src]}"
+    elif visual.kind == "svg":
+        out["svg"] = inline_svg(visual.svg, vid, path=f"{path}.svg", view_box=None)
     if visual.kind == "window":
         out["cursor"] = [{"to": list(m.to), "atMs": ms} for m, ms in zip(visual.cursor, cues, strict=True)]
     if getattr(visual, "click_at", None) is not None:
@@ -87,8 +96,23 @@ def _visual(
     return out
 
 
-def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tuple[int, int]]]]) -> dict[str, Any]:
-    """`times[b][l]` are beat b line l's unit times, line-relative; here they move to reel time."""
+def _hero(inputs: TechReelInputs, images: Mapping[str, str]) -> dict[str, Any] | None:
+    hero = inputs.hero
+    if hero is None:
+        return None
+    out: dict[str, Any] = {"kind": hero.kind, "text": hero.text}
+    if hero.svg is not None:
+        out["svg"] = inline_svg(hero.svg, "hero", path="hero.svg", view_box=None)
+    if hero.src is not None and hero.src in images:
+        out["file"] = f"{ASSETS}/{images[hero.src]}"
+    return out
+
+
+def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tuple[int, int]]]],
+                  images: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """`times[b][l]` are beat b line l's unit times, line-relative; here they move to reel time. `images` maps
+    each image `src` to its file name in the assets folder (an image missing from it is drawn as a blank frame)."""
+    images = images or {}
     beats: list[dict[str, Any]] = []
     captions: list[dict[str, Any]] = []
     hero_states: list[dict[str, Any]] = []
@@ -103,7 +127,8 @@ def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tupl
                 continue
             leave = exit_ms(visual.exit, slot, next_start, times[b], us)
             moves = [cue_ms(m.at, slot, times[b], us)[0] for m in getattr(visual, "cursor", [])]
-            stage.append(_visual(visual, f"b{b}v{v}", enter, leave, moves, slot, times[b], us))
+            stage.append(_visual(visual, f"b{b}v{v}", enter, leave, moves, slot, times[b], us, images,
+                                 f"beats[{b}].visuals[{v}]"))
         beats.append({
             "id": beat.id or f"b{b}", "kind": beat.kind, "startMs": slot.start_ms, "endMs": slot.end_ms,
             "transition": beat.transition,
@@ -130,8 +155,7 @@ def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tupl
     return {
         "mode": "reel", "width": WIDTH, "height": HEIGHT, "duration": plan.duration_ms / 1000,
         "language": inputs.language, "look": look_tokens(inputs),
-        "hero": ({"kind": inputs.hero.kind, "text": inputs.hero.text}
-                 | inputs.hero.model_dump(include={"svg", "src"}, exclude_none=True)) if inputs.hero else None,
+        "hero": _hero(inputs, images),
         "creator": inputs.creator.model_dump() if inputs.creator else None,
         "heroStates": hero_states, "beats": beats, "captions": captions, "sfx": inputs.sfx,
     }
@@ -161,13 +185,39 @@ def _runtime_paths() -> list[Path]:
     return sorted(p for pattern in RUNTIME_FILES for p in RUNTIME_DIR.glob(pattern))
 
 
-def write_project(doc: dict[str, Any], dest: Path) -> Path:
+def asset_files(doc: dict[str, Any]) -> list[str]:
+    """The file names the document's images point at (in the assets folder), sorted, each once."""
+    files = [v["file"] for beat in doc.get("beats", []) for v in beat.get("visuals", []) if "file" in v]
+    if (doc.get("hero") or {}).get("file"):
+        files.append(doc["hero"]["file"])
+    return sorted({f.removeprefix(f"{ASSETS}/") for f in files})
+
+
+def _asset_paths(doc: dict[str, Any], assets: Path | None) -> list[Path]:
+    names = asset_files(doc)
+    if names and assets is None:
+        raise FileNotFoundError("the document has images but no assets folder was given")
+    paths = [Path(assets) / name for name in names] if names else []
+    for path in paths:
+        if not path.is_file():
+            raise FileNotFoundError(f"the image {path.name} is missing from {path.parent}")
+    return paths
+
+
+def write_project(doc: dict[str, Any], dest: Path, assets: Path | None = None) -> Path:
+    """The HyperFrames project: index.html with the document, the runtime, and the images the document uses
+    (copied from `assets`)."""
     dest = Path(dest)
+    images = _asset_paths(doc, assets)
     if dest.exists():
         shutil.rmtree(dest)
     (dest / "runtime").mkdir(parents=True)
     for path in _runtime_paths():
         shutil.copy2(path, dest / "runtime" / path.name)
+    if images:
+        (dest / ASSETS).mkdir()
+        for path in images:
+            shutil.copy2(path, dest / ASSETS / path.name)
     # every "<" escaped, not only "</": text like "<!--<script>" would otherwise put the HTML parser into its
     # "script data double escaped" state, the real </script> would not close the data script, and the
     # runtime's module script would be swallowed (buildReady never settles and the render hangs)
@@ -184,11 +234,14 @@ def write_project(doc: dict[str, Any], dest: Path) -> Path:
     return dest
 
 
-def project_key(doc: dict[str, Any]) -> str:
-    """What the rendered video depends on: the document, the runtime and the template."""
+def project_key(doc: dict[str, Any], assets: Path | None = None) -> str:
+    """What the rendered video depends on: the document, the runtime, the template and the images' bytes."""
     digest = hashlib.sha256(json.dumps(doc, sort_keys=True, ensure_ascii=False, allow_nan=False).encode("utf-8"))
     for path in _runtime_paths():
         digest.update(f"\0{path.name}\0".encode())
+        digest.update(path.read_bytes())
+    for path in _asset_paths(doc, assets):
+        digest.update(f"\0{ASSETS}/{path.name}\0".encode())
         digest.update(path.read_bytes())
     digest.update(_TEMPLATE.encode("utf-8"))
     return digest.hexdigest()

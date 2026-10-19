@@ -18,6 +18,7 @@ ElementTree (text and attribute values escaped, names from the checked tree).
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping
 from xml.etree import ElementTree
@@ -85,8 +86,9 @@ def _check_css(text: str, element: str, path: str) -> None:
                       element, path)
 
 
-def _parse(svg: str, path: str) -> tuple[Element, set[str]]:
-    """The checked tree and its ids, or InvalidInput naming what broke the contract."""
+def _parse(svg: str, path: str, view_box: str | None = VIEW_BOX) -> tuple[Element, set[str]]:
+    """The checked tree and its ids, or InvalidInput naming what broke the contract. `view_box` None takes any
+    positive viewBox (a drawing rather than a character)."""
     if len(svg.encode("utf-8")) > MAX_BYTES:
         raise _refuse(f"the SVG is over {MAX_BYTES:,} bytes", "svg", path,
                       hint="simplify paths or drop embedded images")
@@ -101,8 +103,13 @@ def _parse(svg: str, path: str) -> tuple[Element, set[str]]:
         raise _refuse(f"the SVG is not well-formed XML: {exc}", "svg", path) from exc
     if _local(root.tag)[1] != "svg":
         raise _refuse("the root element must be <svg>", _local(root.tag)[1], path)
-    if " ".join(re.split(r"[\s,]+", (root.get("viewBox") or "").strip())) != VIEW_BOX:
-        raise _refuse(f'the root <svg> needs viewBox="{VIEW_BOX}"', "svg", path)
+    box = re.split(r"[\s,]+", (root.get("viewBox") or "").strip())
+    if view_box is None:
+        if not _positive_box(box):
+            raise _refuse('the root <svg> needs a viewBox="min-x min-y width height" with a positive size',
+                          "svg", path, hint="drawings scale to their slot by their viewBox")
+    elif " ".join(box) != view_box:
+        raise _refuse(f'the root <svg> needs viewBox="{view_box}"', "svg", path)
 
     ids: set[str] = set()
     for node in root.iter():
@@ -135,6 +142,19 @@ def _parse(svg: str, path: str) -> tuple[Element, set[str]]:
                     raise _refuse(f'id "{value}" is used twice', tag, path, hint="give every id one element")
                 ids.add(value)
     return root, ids
+
+
+def _positive_box(box: list[str]) -> bool:
+    try:
+        numbers = [float(n) for n in box]
+    except ValueError:
+        return False
+    return len(numbers) == 4 and all(math.isfinite(n) for n in numbers) and numbers[2] > 0 and numbers[3] > 0
+
+
+def check_drawing(svg: str, *, path: str) -> None:
+    """Check an agent drawing against the safety rules alone: any viewBox, no character groups needed."""
+    _parse(svg, path, None)
 
 
 def check_svg(svg: str, *, path: str) -> list[str]:
@@ -179,10 +199,10 @@ def part_id(char_id: str, name: str) -> str:
 _URL_REF = re.compile(r"""(url\(\s*["']?\s*)#""", re.IGNORECASE)
 
 
-def inline_svg(svg: str, char_id: str, *, path: str = "svg") -> str:
-    """The character as the page receives it: re-checked, every id and in-document reference
-    scoped with `part_id`, and serialized from the tree."""
-    root, _ = _parse(svg, path)
+def inline_svg(svg: str, char_id: str, *, path: str = "svg", view_box: str | None = VIEW_BOX) -> str:
+    """The character (or, `view_box` None, any drawing) as the page receives it: re-checked, every id and
+    in-document reference scoped with `part_id`, and serialized from the tree."""
+    root, _ = _parse(svg, path, view_box)
     prefix = part_id(char_id, "")
     for node in root.iter():
         for raw, value in list(node.attrib.items()):

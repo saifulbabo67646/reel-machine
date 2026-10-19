@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...config import get_settings
+from ...core.errors import InvalidInput
 from ...core.manifest import CheckResult, VerificationReport
 from ...core.recipe import (
     CostNote,
@@ -15,10 +17,11 @@ from ...core.recipe import (
 )
 from ...core.stage import StageContext
 from ..doodle.narration import provider_for
-from . import lint
+from . import assets, lint
 from .models import TechReelInputs
 from .schedule import estimate
 from .stages import (
+    AssetsStage,
     ComposeStage,
     NarrationStage,
     PreviewStage,
@@ -161,7 +164,8 @@ class TechReelRecipe:
         version=1,
         stages=(
             StageSpec(stage=ScriptStage()),
-            StageSpec(stage=NarrationStage(), feeds="script", uses=("narration",)),
+            StageSpec(stage=AssetsStage(), feeds="script"),
+            StageSpec(stage=NarrationStage(), feeds="assets", uses=("narration",)),
             StageSpec(stage=ComposeStage(), feeds="narration"),
             StageSpec(stage=PreviewStage(), feeds="compose", uses=("renderer",)),
             StageSpec(stage=RenderStage(), feeds="preview", uses=("renderer",)),
@@ -182,7 +186,8 @@ class TechReelRecipe:
     )
 
     def probe(self, inputs: TechReelInputs, ctx: ProbeContext) -> ProbeReport:
-        """Checks the lint, the renderer and the voice, and estimates the length. Writes nothing."""
+        """Checks the lint, the drawings and image sources (fetching nothing), the renderer and the voice, and
+        estimates the length. Writes nothing."""
         checks: list[CheckResult] = []
         details: dict[str, Any] = {}
         bound = getattr(bound_provider(ctx, "narration"), "name", "")
@@ -192,6 +197,17 @@ class TechReelRecipe:
         blocking = bool(errors) and lint.blocks(inputs)
         checks.append(CheckResult(name="lint", ok=not blocking,
                                   detail="; ".join(errors) if blocking else _lint_counts(found)))
+        config = ctx.config or get_settings()
+        try:
+            assets.check_svgs(inputs)
+            assets.check_sources(inputs, allow_local=config.local_files)
+            count = sum(1 for _ in assets.image_sources(inputs))
+            checks.append(CheckResult(name="assets", ok=True,
+                                      detail=f"{count} image{'s' * (count != 1)} to fetch" if count else "no images"))
+        except InvalidInput as exc:
+            path = exc.details.get("path", "")
+            checks.append(CheckResult(name="assets", ok=False, detail=f"{path}: {exc.message}"))
+            details["assets"] = {"path": path, "message": exc.message, "hint": exc.hint}
         plan = estimate(inputs)
         details["estimatedMs"] = plan.duration_ms
         details["beats"] = [{"index": i, "estimatedMs": b.end_ms - b.start_ms} for i, b in enumerate(plan.beats)]

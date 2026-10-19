@@ -16,6 +16,8 @@ const TICKET_GAP_MS = 260, TICKET_OVERLAP = 0.4, TICKET_TILT = 3;
 const ITEM_GAP_MS = 200, TICK_AFTER_MS = 250;
 const VS_CARD_GAP_MS = 140, VS_GLOW_AT_MS = 650, VS_GLOW_MS = 300;
 const BAR_MS = 600, BAR_GAP_MS = 120;
+const IMG_MAX_W = 880, IMG_MAX_H = 600, KEN_BURNS = 0.06, DRIFT = 0.025, MARK_AT_MS = 400, MARK_MS = 300, MARK_HZ = 1.4;
+const DRAWING_W = { s: 320, m: 520, l: 760 }, DRAWING_MAX_H = 760, DRAWING_POP_MS = 320;
 
 const CHECK_SVG = `<svg viewBox="0 0 24 24"><path d="M5 12.5 L10 17.5 L19 7" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const CROSS_SVG = `<svg viewBox="0 0 24 24"><path d="M6.5 6.5 L17.5 17.5 M17.5 6.5 L6.5 17.5" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg>`;
@@ -382,4 +384,85 @@ const bars = {
   },
 };
 
-export const CARDS = { equation, chat, dialog, error, receipts, checklist, versus, bars };
+// ------------------------------------------------------------ image
+
+/** The image's pixels decoded (a failed load leaves the blank frame); main.mjs waits on it before fit. */
+const loaded = (img) => (img.decode ? img.decode() : Promise.resolve()).catch(() => null);
+
+const image = {
+  build(v) {
+    const node = el("div", "imgframe");
+    const inner = el("div", "imginner", node);
+    if (v.file) {
+      node._img = el("img", null, inner);
+      node._img.alt = "";
+      node._img.src = v.file;
+      node._ready = loaded(node._img);
+    }
+    if (v.highlight) {
+      const [x, y, w, h] = v.highlight;
+      node._mark = el("div", "imgmark", inner);
+      Object.assign(node._mark.style, { left: `${x * 100}%`, top: `${y * 100}%`, width: `${w * 100}%`, height: `${h * 100}%` });
+    }
+    // which way this image drifts as it zooms: a fixed angle from its id
+    const a = ((seedOf(String(v.id)) % 360) * Math.PI) / 180;
+    node._drift = [Math.cos(a), Math.sin(a)];
+    node._inner = inner;
+    return node;
+  },
+  fit(node) {
+    // as big as the box allows at the image's own aspect (a missing image keeps a 16:9 blank)
+    const iw = node._img?.naturalWidth || 16, ih = node._img?.naturalHeight || 9;
+    const k = Math.min(IMG_MAX_W / iw, IMG_MAX_H / ih);
+    node.style.width = `${Math.round(iw * k)}px`;
+    node.style.height = `${Math.round(ih * k)}px`;
+  },
+  update(node, v, t) {
+    // Ken Burns: 1.0 → 1.06 over the visual's life, drifting a little off centre on its seeded heading
+    const life = Math.max(1, (v.exitMs ?? v.enterMs + 4000) - v.enterMs);
+    const q = clamp01((t - v.enterMs) / life);
+    const s = 1 + KEN_BURNS * q;
+    const [dx, dy] = node._drift;
+    node._inner.style.transform = `translate(${(dx * DRIFT * 100 * q).toFixed(3)}%, ${(dy * DRIFT * 100 * q).toFixed(3)}%) scale(${s.toFixed(4)})`;
+    if (node._mark) {
+      // the highlight draws on 400 ms in (from a touch big), then breathes
+      const at = v.enterMs + MARK_AT_MS;
+      const p = clamp01((t - at) / MARK_MS);
+      const pulse = p >= 1 ? 0.5 + 0.5 * Math.sin((2 * Math.PI * MARK_HZ * (t - at - MARK_MS)) / 1000) : 0;
+      node._mark.style.opacity = clamp01(p * 2).toFixed(3);
+      node._mark.style.transform = `scale(${(lerp(1.25, 1, easeOut(p)) + 0.03 * pulse).toFixed(4)})`;
+      node._mark.style.setProperty("--pulse", pulse.toFixed(3));
+    }
+  },
+};
+
+// ------------------------------------------------------------ svg (an agent's drawing)
+
+const drawing = {
+  ownEnter: true,
+  build(v) {
+    const node = el("div", "drawing");
+    // compose.py re-checked the drawing and scoped its ids to this visual; it is safe markup
+    node.innerHTML = v.svg || "";
+    const art = node.querySelector("svg");
+    const width = DRAWING_W[v.size] ?? DRAWING_W.m;
+    const box = art?.viewBox?.baseVal;
+    let w = width, h = box && box.width > 0 ? (width * box.height) / box.width : width;
+    // a tall drawing is held to the stage's room by its height instead
+    if (h > DRAWING_MAX_H) [w, h] = [(w * DRAWING_MAX_H) / h, DRAWING_MAX_H];
+    if (art) {
+      art.setAttribute("width", w.toFixed(1));
+      art.setAttribute("height", h.toFixed(1));
+    }
+    node.style.width = `${w.toFixed(1)}px`;
+    node.style.height = `${h.toFixed(1)}px`;
+    return node;
+  },
+  update(node, v, t) {
+    const p = clamp01((t - v.enterMs) / DRAWING_POP_MS);
+    node.style.opacity = clamp01(p * 3).toFixed(3);
+    node.style.transform = `scale(${Math.max(0, lerp(0.4, 1, backOut(p))).toFixed(4)}) rotate(${(-6 * (1 - easeOut(p))).toFixed(2)}deg)`;
+  },
+};
+
+export const CARDS = { equation, chat, dialog, error, receipts, checklist, versus, bars, image, svg: drawing };

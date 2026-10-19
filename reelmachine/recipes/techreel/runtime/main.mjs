@@ -435,6 +435,9 @@ try {
     ].map((p) => p.catch(() => null)));
     if (document.fonts.ready) await document.fonts.ready;
   }
+  // images first: fit() measures an image card by its pixels, and no frame is captured before they are decoded
+  const pending = [ui.hero?._ready, ...ui.beats.flatMap((b) => [...b.blocks, ...b.overlays].map((x) => x.node._ready))];
+  await Promise.all(pending.filter(Boolean));
   fit(ui);
   const renderAt = (t) => renderFrame(ui, doc, t);
   window.addEventListener("hf-seek", (event) => {

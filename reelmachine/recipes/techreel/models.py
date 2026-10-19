@@ -359,6 +359,12 @@ class ScriptOutput(StageOutput):
     warnings: list[str] = Field(default_factory=list)    # the findings that did not stop the build, as text
 
 
+class AssetsOutput(StageOutput):
+    script: ScriptOutput
+    images: dict[str, str] = Field(default_factory=dict)   # each image `src` → its file name in `folder`
+    folder: str = ""
+
+
 class LineSlotModel(_Model):
     """`schedule.LineSlot` as stage data."""
 
@@ -382,6 +388,8 @@ class NarrationOutput(StageOutput):
     beats: list[BeatSlotModel]
     times: list[list[list[tuple[int, int]]]]             # per beat, per line, per caption unit; line-relative
     provider: str = ""
+    images: dict[str, str] = Field(default_factory=dict)   # the assets stage's, passed on to compose
+    assets: str = ""                                     # the folder those files are in
 
 
 class ComposeOutput(StageOutput):

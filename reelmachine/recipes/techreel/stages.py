@@ -1,4 +1,4 @@
-"""techreel stages: script → narration → compose → preview → render.
+"""techreel stages: script → assets → narration → compose → preview → render.
 
 `storyboard` stops at the preview with a sheet of stills (each beat's middle and its last visual
 landing); `full` renders the reel, mixes the voice with the sound effects and writes the captions.
@@ -16,7 +16,12 @@ from typing import Any
 from ... import ffmpeg
 from ...config import Settings
 from ...core.assets import AssetKind, Provenance
-from ...core.errors import InvalidInput, RendererUnavailable, VoiceUnavailable
+from ...core.errors import (
+    InvalidInput,
+    ReelError,
+    RendererUnavailable,
+    VoiceUnavailable,
+)
 from ...core.stage import StageContext
 from ...core.timeline import Caption, WordSpan
 from ...render.captions import write_srt
@@ -25,9 +30,10 @@ from ..doodle.narration import provider_for
 from ..explainer3d.audio import mix, pad_speech, silence, synth_sfx
 from ..explainer3d.stages import speak_line
 from ..explainer3d.video import mux
-from . import compose, lint
+from . import assets, compose, lint
 from .markup import is_unspaced, units
 from .models import (
+    AssetsOutput,
     BeatSlotModel,
     ComposeOutput,
     LineSlotModel,
@@ -189,6 +195,28 @@ class ScriptStage:
         return ScriptOutput(inputs=inputs, lint=found, warnings=warnings)
 
 
+class AssetsStage:
+    """The caller's images fetched (or taken from the caller's cache) into this stage's folder; drawings checked.
+    Runs for a storyboard too: its stills show the images."""
+
+    id = "assets"
+    revision = 1
+    cacheable = False
+    output_model = AssetsOutput
+
+    def run(self, ctx: StageContext, payload: ScriptOutput) -> AssetsOutput:
+        inputs = payload.inputs
+        folder = ctx.workdir / "assets"
+        try:
+            assets.check_svgs(inputs)
+            images = assets.fetch_images(inputs, folder, allow_local=ctx.config.local_files,
+                                         cache=_caller_cache(ctx) / "images")
+        except ReelError as exc:
+            exc.stage = self.id
+            raise
+        return AssetsOutput(script=payload, images=images, folder=str(folder) if images else "")
+
+
 def plan_of(narration: NarrationOutput) -> Plan:
     """The narration's `Plan` again."""
     beats = tuple(BeatSlot(b.start_ms, b.end_ms, tuple(LineSlot(ln.start_ms, ln.speech_ms, ln.end_ms)
@@ -200,7 +228,7 @@ def plan_of(narration: NarrationOutput) -> Plan:
 def document(narration: NarrationOutput) -> dict[str, Any]:
     """The reel document the narration's timings give (compose, the storyboard and the mix all read it)."""
     times = [[list(line) for line in beat] for beat in narration.times]
-    return compose.reel_document(narration.script.inputs, plan_of(narration), times)
+    return compose.reel_document(narration.script.inputs, plan_of(narration), times, narration.images)
 
 
 class NarrationStage:
@@ -211,8 +239,9 @@ class NarrationStage:
     cacheable = False
     output_model = NarrationOutput
 
-    def run(self, ctx: StageContext, payload: ScriptOutput) -> NarrationOutput:
-        inputs, settings = payload.inputs, ctx.config
+    def run(self, ctx: StageContext, payload: AssetsOutput) -> NarrationOutput:
+        script = payload.script
+        inputs, settings = script.inputs, ctx.config
         provider = ctx.providers.get("narration")
         name = getattr(provider, "name", "")
         if provider_for(inputs.voice) != name:
@@ -265,8 +294,8 @@ class NarrationStage:
                                lines=[LineSlotModel(start_ms=ln.start_ms, speech_ms=ln.speech_ms, end_ms=ln.end_ms)
                                       for ln in s.lines])
                  for s in plan.beats]
-        return NarrationOutput(script=payload, audio_asset=asset.id, duration_ms=plan.duration_ms, beats=beats,
-                               times=times, provider=name)
+        return NarrationOutput(script=script, audio_asset=asset.id, duration_ms=plan.duration_ms, beats=beats,
+                               times=times, provider=name, images=payload.images, assets=payload.folder)
 
 
 class ComposeStage:
@@ -277,7 +306,8 @@ class ComposeStage:
 
     def run(self, ctx: StageContext, payload: NarrationOutput) -> ComposeOutput:
         doc = document(payload)
-        project = compose.write_project(doc, ctx.workdir / "project")
+        folder = Path(payload.assets) if payload.assets else None
+        project = compose.write_project(doc, ctx.workdir / "project", folder)
         resolved = {
             "durationMs": payload.duration_ms,
             "beats": [{"id": b["id"], "startMs": b["startMs"], "endMs": b["endMs"],
@@ -288,7 +318,7 @@ class ComposeStage:
         }
         (_artifacts(ctx) / "script.resolved.json").write_text(
             json.dumps(resolved, indent=2, ensure_ascii=False), encoding="utf-8")
-        return ComposeOutput(narration=payload, project=str(project), key=compose.project_key(doc))
+        return ComposeOutput(narration=payload, project=str(project), key=compose.project_key(doc, folder))
 
 
 def _renderer(ctx: StageContext, stage: str) -> Any:

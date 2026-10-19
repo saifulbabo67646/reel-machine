@@ -291,8 +291,8 @@ def _have_pillow() -> bool:
     return True
 
 
-def _normalise(data: bytes) -> bytes:
-    """Any raster image as an RGBA PNG whose longest side is at most IMAGE_MAX_SIDE, alpha kept."""
+def _normalise(data: bytes, max_side: int = IMAGE_MAX_SIDE) -> bytes:
+    """Any raster image as an RGBA PNG whose longest side is at most `max_side`, alpha kept."""
     if _is_svg(data):
         raise ValueError(SVG_REFUSED)
     try:
@@ -305,14 +305,14 @@ def _normalise(data: bytes) -> bytes:
             if img.width * img.height > IMAGE_MAX_PIXELS:
                 raise _TooManyPixels(f"{img.width}x{img.height} is over {IMAGE_MAX_PIXELS // 1_000_000} M pixels")
             if img.format == "JPEG":
-                img.draft("RGB", (IMAGE_MAX_SIDE, IMAGE_MAX_SIDE))  # decode at a reduced scale where it can
+                img.draft("RGB", (max_side, max_side))  # decode at a reduced scale where it can
             img.load()
             img = ImageOps.exif_transpose(img).convert("RGBA")
     except _TooManyPixels:
         raise
     except (OSError, SyntaxError, ValueError, Image.DecompressionBombError) as exc:
         raise ValueError(f"not a readable image ({exc})") from exc
-    img.thumbnail((IMAGE_MAX_SIDE, IMAGE_MAX_SIDE), Image.LANCZOS)
+    img.thumbnail((max_side, max_side), Image.LANCZOS)
     out = io.BytesIO()
     img.save(out, format="PNG")
     return out.getvalue()
