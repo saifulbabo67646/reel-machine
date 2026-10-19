@@ -141,7 +141,7 @@ def _assets(inputs: TechReelInputs, allow_local: bool, found: list[Finding]) -> 
         found.append(Finding("svg", "error", f"{path}: {exc.message}", exc.hint or "fix the drawing", path))
     if not allow_local:
         for path, src in assets.image_sources(inputs):
-            if not assets._is_url(src):
+            if assets.is_local(src):
                 found.append(Finding("image-local", "error", f"{path} is a local path",
                                      "local files are read for local runs only: use an https URL", path))
 
@@ -170,7 +170,7 @@ def check(inputs: TechReelInputs, bound_provider: str | None = None, *, allow_lo
                 found.append(Finding("markup-in-say", "error", f"{path} contains `*`",
                                      "accent markup belongs in `text`; the voice would read it aloud", path))
             if line.text and line.say.strip():
-                ratio = len(plain(line.text)) / len(line.say)
+                ratio = len(plain(line.text)) / len(line.say.strip())
                 if not TEXT_RATIO[0] <= ratio <= TEXT_RATIO[1]:
                     tpath = f"beats[{b}].lines[{n}].text"
                     found.append(Finding("text-mismatch", "warning",

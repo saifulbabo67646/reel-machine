@@ -132,6 +132,15 @@ def test_check_sources_never_fetches(tmp_path, monkeypatch):
     assert exc.value.details["path"] == "beats[0].visuals[0].src"
 
 
+
+@pytest.mark.parametrize("src, local", [
+    ("a.png", True), ("/tmp/a.png", True), ("C:\\shots\\a.png", True),
+    ("https://e.com/a.png", False), ("http://e.com/a.png", False), ("ftp://e.com/a.png", False),
+])
+def test_is_local_names_paths_on_this_machine(src, local):
+    assert assets.is_local(src) is local
+
+
 # ------------------------------------------------------------ svg
 
 

@@ -46,14 +46,18 @@ def _is_url(src: str) -> bool:
     return urlsplit(src).scheme.lower() in ("http", "https")
 
 
+def is_local(src: str) -> bool:
+    """Whether `src` names a file on this machine: no scheme, or a one-letter one (a Windows drive, "C:\\a.png")."""
+    return len(urlsplit(src).scheme) <= 1
+
+
 def check_sources(inputs: TechReelInputs, *, allow_local: bool) -> None:
     """What can be said of the images without fetching them: a URL is http(s), a path needs local files."""
     for path, src in image_sources(inputs):
-        scheme = urlsplit(src).scheme.lower()
         if _is_url(src):
             continue
-        # a one-letter scheme is a Windows drive ("C:\\shots\\a.png"), not a URL
-        if len(scheme) > 1:
+        if not is_local(src):
+            scheme = urlsplit(src).scheme.lower()
             raise InvalidInput(f"an image is an https URL or a local path, not a {scheme}: URL",
                                details={"path": path})
         if not allow_local:

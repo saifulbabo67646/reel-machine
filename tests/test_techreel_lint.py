@@ -233,6 +233,8 @@ def test_text_mismatch():
     ok = {"lines": [{"say": "this is what is said aloud", "text": "this is *what* is said"}]}
     assert "text-mismatch" not in _rules(check(_inputs([ok])))
     assert "text-mismatch" not in _rules(check(_inputs([_beat()])))
+    padded = {"lines": [{"say": "  hi there " + " " * 40, "text": "hi there"}]}
+    assert "text-mismatch" not in _rules(check(_inputs([padded])))   # what is said, not its padding
 
 
 def test_hindi_latin():
