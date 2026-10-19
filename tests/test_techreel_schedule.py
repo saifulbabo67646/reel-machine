@@ -1,0 +1,63 @@
+from reelmachine.recipes.techreel.markup import units
+from reelmachine.recipes.techreel.models import Beat, Cue, Line, TechReelInputs
+from reelmachine.recipes.techreel.schedule import (
+    BeatSlot,
+    LineSlot,
+    cue_ms,
+    estimate,
+    exit_ms,
+    schedule,
+)
+
+
+def _beats():
+    return [
+        Beat(lines=[Line(say="a b"), Line(say="c")]),
+        Beat(lines=[Line(say="d")], transition="slide"),
+    ]
+
+
+def test_schedule():
+    p = schedule(_beats(), [[1000, 800], [500]])
+    assert (p.beats[0].start_ms, p.beats[0].end_ms) == (0, 1920)
+    assert p.beats[0].lines == (LineSlot(0, 1000, 1000), LineSlot(1120, 800, 1920))
+    assert (p.beats[1].start_ms, p.beats[1].end_ms) == (2170, 2670)
+    assert p.duration_ms == 3870
+
+
+SLOT = BeatSlot(1000, 3000, (LineSlot(1000, 1000, 2000), LineSlot(2120, 800, 2920)))
+US = [units("mein *176 billion* mein 176", "en"), units("x", "en")]
+TIMES = [[(0, 100), (100, 400), (400, 700), (700, 800), (800, 1000)], [(0, 800)]]
+
+
+def test_cue_none_and_range():
+    assert cue_ms(None, SLOT, TIMES, US) == (1000, True)
+    assert cue_ms(Cue(line=5), SLOT, TIMES, US) == (1000, False)
+
+
+def test_cue_word():
+    assert cue_ms(Cue(line=0, word="*176*,"), SLOT, TIMES, US) == (1100, True)
+    assert cue_ms(Cue(line=0, word="mein"), SLOT, TIMES, US) == (1000, True)    # first match wins
+    assert cue_ms(Cue(line=0, word="nope"), SLOT, TIMES, US) == (1000, False)
+    assert cue_ms(Cue(line=1, word="nope"), SLOT, TIMES, US) == (2120, False)
+
+
+def test_cue_multiword_matches_first_token():
+    assert cue_ms(Cue(line=0, word="billion mein"), SLOT, TIMES, US) == (1400, True)
+
+
+def test_cue_frac():
+    assert cue_ms(Cue(line=0, frac=0.5), SLOT, TIMES, US) == (1500, True)
+
+
+def test_exit():
+    assert exit_ms("beat", SLOT, 4000, TIMES, US) == 4000
+    assert exit_ms("beat", SLOT, None, TIMES, US) == 3000 + 1200
+    assert exit_ms(Cue(line=0, frac=1), SLOT, 4000, TIMES, US) == 2000
+
+
+def test_estimate():
+    inp = TechReelInputs(title="t", beats=_beats())
+    p = estimate(inp)
+    assert p.duration_ms > 0
+    assert all(ln.speech_ms >= 400 for b in p.beats for ln in b.lines)
