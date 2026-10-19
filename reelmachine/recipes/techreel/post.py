@@ -6,6 +6,8 @@ It is built from the captions (`text`, else `say`), never from a `say` that has 
 
 from __future__ import annotations
 
+import unicodedata
+
 from ..mapreel.sources import _clean, _link
 from .markup import plain
 from .models import Line, TechReelInputs
@@ -25,8 +27,9 @@ def _caption(line: Line) -> str:
 
 
 def _title_tags(title: str) -> list[str]:
-    """Hashtags from the title's words: letters and digits only (any script), at least 3 characters."""
-    words = ["".join(ch for ch in raw if ch.isalnum()) for raw in title.split()]
+    """Hashtags from the title's words: letters, marks and digits only (any script), at least 3 characters.
+    Marks (category M) stay so Devanagari matras and viramas survive."""
+    words = ["".join(ch for ch in raw if unicodedata.category(ch)[0] in "LMN") for raw in title.split()]
     return [f"#{w.lower()}" for w in words if len(w) >= 3]
 
 

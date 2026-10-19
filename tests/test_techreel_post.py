@@ -59,6 +59,11 @@ def test_title_hashtags_dedupe_and_filter():
     assert all(t[1:].isalnum() for t in tags) and 8 <= len(tags) <= 12
 
 
+def test_devanagari_and_japanese_title_words_stay_intact():
+    assert "#नमस्ते" in hashtags("hi", "नमस्ते दोस्तों AI")
+    assert "#量子化" in hashtags("ja", "量子化 入門")
+
+
 def test_other_languages_use_english_set_and_short_sets_are_topped_up():
     assert hashtags("fr", "x")[:6] == ["#ai", "#tech", "#aitools", "#opensource", "#llm", "#coding"]
     assert 8 <= len(hashtags("ja", "AI")) <= 12
