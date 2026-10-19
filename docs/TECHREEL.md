@@ -87,7 +87,7 @@ Every step is an MCP tool ([MCP.md](MCP.md)). None of them waits for a render.
 | field | default | meaning |
 |---|---|---|
 | `title` | required | the reel's name; its words seed `post.md`'s hashtags and the default comment keyword (not shown on screen) |
-| `beats` | `[]` | up to 40 beats; the guide asks for 6 to 10 and the lint for 30 to 150 s |
+| `beats` | required | 1 to 40 beats (none is a schema error, `INVALID_INPUT`); the guide asks for 6 to 10 and the lint for 30 to 150 s |
 | `language` | `en` | the language spoken (BCP-47: `hi`, `en`, `ja`, ...) |
 | `voice` | `fake:default` | one narrator, `<provider>:<voice>`, e.g. `supertonic:M1` |
 | `look` | `mint` | `mint`, `ember`, `violet` or `mono` |
@@ -150,9 +150,9 @@ most 60 KB, a viewBox, no script, `foreignObject`, event attributes or external
 references, embedded images as `data:` PNG/JPEG only.
 
 Images (`image` visuals, an `image` hero, the creator's `avatar`) are https URLs, or local
-paths on local (CLI or stdio) runs only. They are downloaded once through a guard that
-refuses private addresses, normalised to PNG of at most 1600 px and **kept per caller
-without expiry**: to refresh an image, change its URL (for example add `?v=2`).
+paths on local (CLI or stdio) runs only. They are downloaded once (for a remote caller
+through a guard that refuses private addresses; a local run downloads directly),
+normalised to PNG of at most 1600 px and **kept per caller without expiry**: to refresh an image, change its URL (for example add `?v=2`).
 
 ### The ending
 
@@ -215,7 +215,7 @@ Measured on a Supertonic 3 server; the lint and the guide encode each one.
   `say` makes the voice stop for 1.0 to 1.4 s, enough to fail verify's `silence` check
   ("Your chatbot? Still confident." paused 1.1 s twice). Use a comma or a colon in `say`
   and keep the question mark in `text`, or end the line there and start a new one. A line
-  break costs only the 120 ms line gap.
+  break costs only the 120 ms line gap. Lint `say-pause` warns about it.
 - **Acronyms said as words**: "RAG" in capitals came out "Reg" or "Rage"; "Rag" is said
   as "rag". Write how it is said in `say` and the capitals in `text`.
 - **Japanese kanji the voice stumbles on**: 量子化 and 圧縮袋 were misread; write them
@@ -225,7 +225,8 @@ Measured on a Supertonic 3 server; the lint and the guide encode each one.
 
 No fonts are bundled ([THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)). HyperFrames
 supplies Archivo Black, Montserrat, JetBrains Mono and Noto Sans JP; the Devanagari and
-the Hiragino faces are the operating system's.
+the Hiragino faces are the operating system's. Japanese falls back to Noto Sans CJK JP
+(`fonts-noto-cjk`) and then Hiragino Sans.
 
 | OS | what to install |
 |---|---|
@@ -277,7 +278,6 @@ re-mixes the audio.
 
 | rule | when | severity |
 |---|---|---|
-| `no-beats` | the reel has no beats | error |
 | `voice-provider` | `voice` is not from the bound provider | error |
 | `empty-say` | a line's `say` is empty | error |
 | `digit-in-say` | a digit in `say` | error |
@@ -286,6 +286,8 @@ re-mixes the audio.
 | `svg` | a drawing breaks the safety rules | error |
 | `image-local` | a local image path on a hosted (HTTP) run | error |
 | `image-scheme` | an image that is neither https nor a local path | error |
+| `say-pause` | a `?`, `!`, `.`, `…`, `।`, `。` or `？` with more words after it inside one `say` (the voice pauses 1 to 1.4 s there) | warning |
+| `exit-before-enter` | a visual's `exit` cue lands at or before its enter (it is clamped to the enter, so the visual never shows) | warning |
 | `cue-word` | a cue's `word` is not in its line's caption (it falls back to the line's start) | warning |
 | `text-mismatch` | `text` is under 0.4x or over 2.5x the length of `say` | warning |
 | `hindi-latin` | a Hindi `say` mostly in Latin letters | warning |
