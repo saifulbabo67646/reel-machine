@@ -5,7 +5,7 @@ import {
   backOut, clamp01, enterP, exitP, alive, stackLayout, counterValue, typed, terminalStarts, captionAt, wordPhase,
   heroAt, heroSpan, beatAt, transitionP, progress, blob, seedOf, CAPTION_HOLD_MS, staggerP, winner, numberParts,
   gridOf, litSet, nodeLayout, nodeLinks, emptySpot, effectiveHeroState, heroTimeline, splitPoints, blinkAt,
-  PILL_EASE_MS, pillAt, isUnspaced, accentUnits, accentPieces,
+  PILL_EASE_MS, pillAt, isUnspaced, accentUnits, accentPieces, BLOCK_GROW, grownSize,
 } from "../pure.mjs";
 
 const block = (id, enterMs, exitMs = 99999, place = "stack") => ({ id, kind: "title", class: "block", enterMs, exitMs, place });
@@ -514,4 +514,19 @@ test("a word's pieces: plain and accented runs in order", () => {
     [{ t: "re", a: false }, { t: "mark", a: true }, { t: "able", a: false }]);
   assert.deepEqual(accentPieces({ t: "zinda", a: true }), [{ t: "zinda", a: true }]);
   assert.deepEqual(accentPieces({ t: "hai", a: false }), [{ t: "hai", a: false }]);
+});
+
+test("the big blocks grow 1.15x so the stage looks full; the rest keep their size", () => {
+  assert.equal(BLOCK_GROW, 1.15);
+  for (const kind of ["counter", "repo", "window", "terminal", "chat", "dialog", "receipts", "people"]) {
+    const s = grownSize(kind, 400, 200);
+    assert.ok(Math.abs(s.w - 460) < 1e-9 && Math.abs(s.h - 230) < 1e-9, kind);
+    assert.equal(s.grow, 1.15);
+  }
+  for (const kind of ["title", "chips", "checklist", "nodes", "follow"]) assert.deepEqual(grownSize(kind, 400, 200), { w: 400, h: 200, grow: 1 });
+  // a grown block too wide for the stage is still shrunk back by the stack's fit
+  const v = block("a", 0);
+  const w = grownSize("window", 952, 600);
+  const pos = stackLayout([v], sized([["a", w.w, w.h]]), 1000).get("a");
+  assert.ok(w.w * pos.scale <= STAGE.right - STAGE.left + 1e-9);
 });

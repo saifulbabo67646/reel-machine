@@ -5,7 +5,7 @@
 // index.html?t=3.2 shows the frame at 3.2 s.
 import {
   ENTER_MS, GLIDE_MS, HERO_MOVE_MS, HERO_STACKING, STAGE, backOut, clamp01, enterP, exitP, alive, stackLayout,
-  captionAt, wordPhase, pillAt, heroAt, heroSpan, heroTimeline, beatAt, transitionP, progress, blob, seedOf, isUnspaced,
+  captionAt, wordPhase, pillAt, heroAt, heroSpan, heroTimeline, beatAt, transitionP, progress, blob, seedOf, isUnspaced, grownSize,
 } from "./pure.mjs";
 import { COMPONENTS, STAMP_FROM, STAMP_TILT, el, fillWord, wordSpans, slam } from "./components.mjs";
 import { CARDS } from "./cards.mjs";
@@ -19,7 +19,7 @@ const easeOut = (p) => 1 - Math.pow(1 - p, 3);
 const easeInOut = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
 const TRANSITION_LEN = { cut: 0, slide: 250, flash: 200, zoom: 300 };
 const HEADING_STAGGER_MS = 70, HEADING_OUT_MS = 150;
-const HEADING_ROOM = 300, HEADING_GAP = 22, HEADING_PX = 96, TEXT_W = 952;
+const HEADING_ROOM = 300, HEADING_GAP = 22, HEADING_PX = 104, TEXT_W = 952;
 const CAPTION_ROOM = 220, CAPTION_POP_MS = 160;
 const SMALL_TOP = 0.45, CORNER = 0.3;
 const STAGE_CX = (STAGE.left + STAGE.right) / 2, STAGE_CY = (STAGE.top + STAGE.bottom) / 2;
@@ -124,7 +124,10 @@ function fit(ui) {
     }
     for (const blk of b.blocks) {
       if (blk.comp.fit) blk.comp.fit(blk.node, blk.v);
-      ui.sizes.set(blk.v.id, { w: blk.node.offsetWidth, h: blk.node.offsetHeight });
+      // the big cards are laid out (and drawn) a little larger than they measure, so the stage looks full
+      const { w, h, grow } = grownSize(blk.v.kind, blk.node.offsetWidth, blk.node.offsetHeight);
+      blk.grow = grow;
+      ui.sizes.set(blk.v.id, { w, h });
     }
     for (const o of b.overlays) {
       if (o.comp.fit) o.comp.fit(o.node, o.v);
@@ -269,7 +272,7 @@ function applyStage(ui, doc, b, ms) {
       continue;
     }
     blk.slot.style.display = "block";
-    blk.slot.style.transform = `translate(${px(pos.x)}, ${px(pos.y)}) scale(${pos.scale.toFixed(4)})`;
+    blk.slot.style.transform = `translate(${px(pos.x)}, ${px(pos.y)}) scale(${(pos.scale * (blk.grow ?? 1)).toFixed(4)})`;
     const e = enterP(blk.v, ms), x = exitP(blk.v, ms);
     let opacity = 1 - x, scale = 1 - 0.08 * x, y = 0;
     if (!blk.comp.ownEnter) {

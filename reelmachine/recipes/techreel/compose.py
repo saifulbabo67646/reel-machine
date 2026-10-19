@@ -52,23 +52,64 @@ def _look(*values: str) -> dict[str, str]:
     return dict(zip(_KEYS, values, strict=True))
 
 
-# `accentInk` is the text colour on an accent fill; the glows are three soft background blooms
+# `accentInk` is the text colour on an accent fill (look_tokens recomputes it from the accent); the glows are
+# three soft background blooms
 LOOKS: dict[str, dict[str, str]] = {
-    "mint": _look("#06100f", "#0f6f66", "#0a3d4a", "#0b2447", "#e9fbf6", "#7fa7a0", "#2ee6b8", "#032019",
+    "mint": _look("#06100f", "#0f6f66", "#0a3d4a", "#0b2447", "#e9fbf6", "#7fa7a0", "#2ee6b8", "#000000",
                   "rgba(255,255,255,0.05)", "rgba(46,230,184,0.22)", "#ff5d73", "#4ade80"),
-    "ember": _look("#141110", "#7a2e12", "#4a2a1a", "#2a2321", "#f7efe9", "#a8998f", "#ff5a2a", "#1a0a04",
+    "ember": _look("#141110", "#7a2e12", "#4a2a1a", "#2a2321", "#f7efe9", "#a8998f", "#ff5a2a", "#ffffff",
                    "rgba(255,255,255,0.05)", "rgba(255,90,42,0.24)", "#ff4d5e", "#5ee08a"),
-    "violet": _look("#0d0a18", "#3b2a8c", "#241a5e", "#14123a", "#f1edff", "#9a93bf", "#9b7bff", "#140a2e",
+    "violet": _look("#0d0a18", "#3b2a8c", "#241a5e", "#14123a", "#f1edff", "#9a93bf", "#9b7bff", "#ffffff",
                     "rgba(255,255,255,0.05)", "rgba(155,123,255,0.24)", "#ff6b8b", "#5eead4"),
     "mono": _look("#0b0b0c", "#2a2a2e", "#1c1c1f", "#141416", "#f4f4f5", "#9a9aa0", "#f4f4f5",
-                  "#0b0b0c", "rgba(255,255,255,0.06)", "rgba(255,255,255,0.20)", "#ff6b6b", "#6ee7a0"),
+                  "#000000", "rgba(255,255,255,0.06)", "rgba(255,255,255,0.20)", "#ff6b6b", "#6ee7a0"),
 }
 
 
+_INK_LUMINANCE = 0.45    # an accent brighter than this takes black text, else white
+_ACCENT_CONTRAST = 3.0   # the least an accent may contrast with the background (large text, WCAG)
+
+
+def _rgb(colour: str) -> tuple[int, int, int]:
+    return int(colour[1:3], 16), int(colour[3:5], 16), int(colour[5:7], 16)
+
+
+def _luminance(colour: str) -> float:
+    """WCAG relative luminance of a #rrggbb colour."""
+    def linear(c: int) -> float:
+        v = c / 255
+        return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+    r, g, b = (linear(c) for c in _rgb(colour))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _contrast(a: str, b: str) -> float:
+    hi, lo = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _toward_white(colour: str, p: float) -> str:
+    return "#" + "".join(f"{round(c + (255 - c) * p):02x}" for c in _rgb(colour))
+
+
+def _readable_accent(accent: str, bg: str) -> str:
+    """`accent`, or the least mix of it with white that reaches 3:1 on `bg`: a dim custom accent would vanish
+    into the dark background (every look's background is dark, so lightening only raises the contrast)."""
+    if _contrast(accent, bg) >= _ACCENT_CONTRAST:
+        return accent
+    for step in range(1, 101):
+        lighter = _toward_white(accent, step / 100)
+        if _contrast(lighter, bg) >= _ACCENT_CONTRAST:
+            return lighter
+    return "#ffffff"
+
+
 def look_tokens(inputs: TechReelInputs) -> dict[str, str]:
+    """The look's colours, with the custom accent if there is one, made readable on the background; the ink (text
+    on an accent fill) is black or white by the accent's luminance."""
     tokens = dict(LOOKS[inputs.look])
-    if inputs.accent:
-        tokens["accent"] = inputs.accent
+    tokens["accent"] = _readable_accent(inputs.accent or tokens["accent"], tokens["bg"])
+    tokens["accentInk"] = "#000000" if _luminance(tokens["accent"]) > _INK_LUMINANCE else "#ffffff"
     return tokens
 
 

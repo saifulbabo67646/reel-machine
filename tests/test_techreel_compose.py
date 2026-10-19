@@ -137,8 +137,48 @@ def test_look_tokens():
     assert LOOKS["ember"]["bg"] == "#141110" and LOOKS["ember"]["accent"] == "#ff5a2a"
     assert LOOKS["violet"]["accent"] == "#9b7bff" and LOOKS["mono"]["accent"] == "#f4f4f5"
     assert look_tokens(_inputs())["accent"] == "#2ee6b8"
-    assert look_tokens(_inputs(accent="#123456"))["accent"] == "#123456"
+    assert look_tokens(_inputs(accent="#ffd400"))["accent"] == "#ffd400"
     assert LOOKS["mint"]["accent"] == "#2ee6b8"               # the table is not mutated
+
+
+def _luminance(hex_colour):
+    def channel(c):
+        c /= 255
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (int(hex_colour[i:i + 2], 16) for i in (1, 3, 5))
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+
+
+def _contrast(a, b):
+    hi, lo = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+@pytest.mark.parametrize(("look", "ink"), [("mint", "#000000"), ("ember", "#ffffff"), ("violet", "#ffffff"),
+                                           ("mono", "#000000")])
+def test_look_tokens_accent_ink_follows_the_accent_luminance(look, ink):
+    # black ink on an accent brighter than 0.45 relative luminance, else white
+    tokens = look_tokens(_inputs(look=look))
+    assert tokens["accentInk"] == ink
+    assert tokens["accent"] == LOOKS[look]["accent"]          # every built-in accent already reads on its bg
+
+
+def test_look_tokens_custom_accent_ink():
+    assert look_tokens(_inputs(accent="#ffd400"))["accentInk"] == "#000000"     # luminance ~0.69
+    assert look_tokens(_inputs(accent="#e0245e"))["accentInk"] == "#ffffff"     # luminance ~0.19
+
+
+def test_look_tokens_lightens_a_dim_accent_to_three_to_one():
+    tokens = look_tokens(_inputs(accent="#123456"))          # ~1.6:1 on mint's bg
+    accent, bg = tokens["accent"], tokens["bg"]
+    assert _contrast("#123456", bg) < 3
+    assert 3 <= _contrast(accent, bg) < 3.15                  # lightened only as far as it must
+    orig = [int("#123456"[i:i + 2], 16) for i in (1, 3, 5)]
+    new = [int(accent[i:i + 2], 16) for i in (1, 3, 5)]
+    assert all(n >= o for n, o in zip(new, orig))             # toward white, the hue kept
+    assert new[2] > new[1] > new[0]
+    assert tokens["accentInk"] == ("#000000" if _luminance(accent) > 0.45 else "#ffffff")
+    assert look_tokens(_inputs(accent="#000000", look="mono"))["accent"] != "#000000"
 
 
 def test_write_project(tmp_path, monkeypatch):

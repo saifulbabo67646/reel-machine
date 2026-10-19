@@ -27,62 +27,128 @@ const BOARD = "#050809"; // the line art's fill: near-black, so the objects read
 
 const NS = "http://www.w3.org/2000/svg";
 
-function orbSvg(seed) {
-  // chrome is a reflected world: a white sky over a dark horizon that curves round the sphere, a light floor
-  // under it lit in the accent. Turbulence displaces that world into liquid swirls; on top, sphere shading:
-  // the fresnel falloff, a thin bright rim, the accent bounce light and a white specular.
+// the orb's reflected world is drawn ORB_PAD px past the orb on every side, so the liquid and the lens warps
+// always have world to pull in from; at the rim the lens reads LENS_PX further out, and at mid-radius it turns
+// the reflection up to SWIRL_PX round the centre
+const ORB = 360, ORB_PAD = 200, LENS_PX = 110, SWIRL_PX = 60;
+// the liquid's contrast curve: darks a little deeper, lights brighter, so the reflections read as polished
+const CHROME_CURVE = "0 0.08 0.2 0.38 0.6 0.8 0.93 1";
+
+function orbSvg(seed, lens) {
+  // liquid chrome is a mirror of a world: a dark sky (the reel's night) over a bright, blurred horizon and a
+  // pale floor. Turbulence (drifting with t) warps that world into flowing liquid, a finer noise thresholded
+  // hard gives the crisp white glints, and a sphere lens squeezes both towards the rim so they wrap round the
+  // ball. On top: the fresnel edge, a soft accent rim light, an inner caustic and the hard white specular.
+  const P = ORB_PAD, W = ORB + 2 * P;
+  const band = (y, h, fill, o = 1) => `<rect x="${-P}" y="${y}" width="${W}" height="${h}" fill="${fill}" opacity="${o}"/>`;
   return `
-<svg xmlns="${NS}" width="360" height="360" viewBox="0 0 360 360">
+<svg xmlns="${NS}" width="${ORB}" height="${ORB}" viewBox="0 0 ${ORB} ${ORB}">
   <defs>
     <linearGradient id="hero-sky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff"/><stop offset="0.55" stop-color="#e4e9eb"/><stop offset="1" stop-color="#9aa4a9"/>
+      <stop offset="0" stop-color="#34444a"/><stop offset="0.3" stop-color="#56676b"/>
+      <stop offset="0.46" stop-color="#8e9b9d"/><stop offset="0.52" stop-color="#d4dbdc"/>
+      <stop offset="0.6" stop-color="#7f8d90"/><stop offset="0.8" stop-color="#a2adaf"/>
+      <stop offset="1" stop-color="#8d999b"/>
     </linearGradient>
-    <linearGradient id="hero-floor" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#f2f5f6"/><stop offset="0.45" stop-color="#8f999e"/><stop offset="1" stop-color="#3a4448"/>
-    </linearGradient>
-    <radialGradient id="hero-shade" cx="50%" cy="45%" r="52%">
-      <stop offset="0.62" stop-color="#000" stop-opacity="0"/>
-      <stop offset="0.9" stop-color="#000" stop-opacity="0.32"/>
-      <stop offset="0.97" stop-color="#000" stop-opacity="0.5"/>
-      <stop offset="1" stop-color="#fff" stop-opacity="0.55"/>
+    <radialGradient id="hero-body" cx="34%" cy="68%" r="58%">
+      <stop offset="0" stop-color="#d3dadb" stop-opacity="0.78"/>
+      <stop offset="0.4" stop-color="#c3cbcc" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#b9c2c3" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="hero-rim" cx="50%" cy="22%" r="82%">
-      <stop offset="0.6" stop-color="var(--accent)" stop-opacity="0"/>
-      <stop offset="0.76" stop-color="var(--accent)" stop-opacity="0.42"/>
-      <stop offset="0.82" stop-color="var(--accent)" stop-opacity="0.7"/>
+    <radialGradient id="hero-shade" cx="50%" cy="50%" r="50%" fx="42%" fy="40%">
+      <stop offset="0.6" stop-color="#0b1416" stop-opacity="0"/>
+      <stop offset="0.86" stop-color="#0b1416" stop-opacity="0.3"/>
+      <stop offset="0.96" stop-color="#0b1416" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#0b1416" stop-opacity="0.8"/>
+    </radialGradient>
+    <radialGradient id="hero-rim" cx="50%" cy="28%" r="74%">
+      <stop offset="0.74" stop-color="var(--accent)" stop-opacity="0"/>
+      <stop offset="0.9" stop-color="var(--accent)" stop-opacity="0.22"/>
+      <stop offset="0.97" stop-color="var(--accent)" stop-opacity="0.5"/>
     </radialGradient>
     <radialGradient id="hero-spec" cx="50%" cy="50%" r="50%">
       <stop offset="0" stop-color="#fff" stop-opacity="1"/>
-      <stop offset="0.35" stop-color="#fff" stop-opacity="0.75"/>
+      <stop offset="0.7" stop-color="#fff" stop-opacity="0.95"/>
       <stop offset="1" stop-color="#fff" stop-opacity="0"/>
     </radialGradient>
-    <filter id="hero-liquid" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
-      <feTurbulence id="hero-turb" type="fractalNoise" baseFrequency="0.011" numOctaves="2" seed="${seed}" result="noise"/>
+    <filter id="hero-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter>
+    <filter id="hero-caustic" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>
+    <filter id="hero-liquid" filterUnits="userSpaceOnUse" x="${-P}" y="${-P}" width="${W}" height="${W}" color-interpolation-filters="sRGB">
+      <feTurbulence id="hero-turb" type="fractalNoise" baseFrequency="0.007 0.010" numOctaves="2" seed="${seed}" result="noise"/>
       <feOffset id="hero-drift" in="noise" dx="0" dy="0" result="moved"/>
-      <feDisplacementMap in="SourceGraphic" in2="moved" scale="95" xChannelSelector="R" yChannelSelector="G"/>
+      <feDisplacementMap in="SourceGraphic" in2="moved" scale="150" xChannelSelector="R" yChannelSelector="G" result="liquid"/>
+      <feComponentTransfer in="liquid" result="crisp">
+        <feFuncR type="table" tableValues="${CHROME_CURVE}"/>
+        <feFuncG type="table" tableValues="${CHROME_CURVE}"/>
+        <feFuncB type="table" tableValues="${CHROME_CURVE}"/>
+      </feComponentTransfer>
+      <feTurbulence id="hero-glint" type="fractalNoise" baseFrequency="0.006 0.022" numOctaves="2" seed="${seed + 1}" result="fine"/>
+      <feDisplacementMap in="fine" in2="moved" scale="90" xChannelSelector="R" yChannelSelector="G" result="fineflow"/>
+      <feColorMatrix in="fineflow" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  1 0 0 0 0" result="fineA"/>
+      <feComponentTransfer in="fineA" result="glints"><feFuncA type="linear" slope="12" intercept="-6.4"/></feComponentTransfer>
+      <feMerge result="world"><feMergeNode in="crisp"/><feMergeNode in="glints"/></feMerge>
+      ${lens ? `<feImage href="${lens}" x="0" y="0" width="${ORB}" height="${ORB}" preserveAspectRatio="none" result="lens"/>
+      <feDisplacementMap in="world" in2="lens" scale="${2 * (LENS_PX + SWIRL_PX)}" xChannelSelector="R" yChannelSelector="G"/>` : ""}
+      <feGaussianBlur stdDeviation="0.9"/>
     </filter>
-    <clipPath id="hero-clip"><circle cx="180" cy="180" r="179"/></clipPath>
+    <clipPath id="hero-clip"><circle cx="180" cy="180" r="179.5"/></clipPath>
   </defs>
   <g clip-path="url(#hero-clip)">
-    <rect width="360" height="360" fill="#b9c1c5"/>
+    <rect width="${ORB}" height="${ORB}" fill="#b4bec0"/>
     <g filter="url(#hero-liquid)">
-      <g id="hero-flow">
-        <rect x="-120" y="-120" width="600" height="340" fill="url(#hero-sky)"/>
-        <ellipse cx="180" cy="198" rx="300" ry="36" fill="#262e32"/>
-        <ellipse cx="180" cy="300" rx="300" ry="96" fill="url(#hero-floor)"/>
-        <ellipse cx="180" cy="232" rx="300" ry="16" fill="#5b666b"/>
-        <ellipse cx="96" cy="120" rx="64" ry="12" fill="#6f7a7f" transform="rotate(-18 96 120)"/>
-        <ellipse cx="262" cy="96" rx="58" ry="10" fill="#7d878c" transform="rotate(14 262 96)"/>
-        <ellipse cx="180" cy="420" rx="260" ry="80" fill="var(--accent)" opacity="0.55"/>
-      </g>
+      <g transform="rotate(-24 180 180)"><g id="hero-flow">
+        <rect x="${-P}" y="${-P}" width="${W}" height="${W}" fill="url(#hero-sky)"/>
+        <g filter="url(#hero-soft)">
+          ${band(70, 26, "#1f2c31", 0.9)}
+          ${band(120, 18, "#c3cdce", 0.7)}
+          ${band(176, 20, "#fff")}
+          ${band(232, 14, "#6f7e82", 0.8)}
+          ${band(296, 22, "#d0d8d9", 0.7)}
+          ${band(340, 16, "#fff", 0.9)}
+          <ellipse cx="180" cy="${ORB + 40}" rx="240" ry="50" fill="var(--accent)" opacity="0.1"/>
+        </g>
+      </g></g>
     </g>
+    <circle cx="180" cy="180" r="180" fill="url(#hero-body)"/>
     <circle cx="180" cy="180" r="180" fill="url(#hero-shade)"/>
     <circle cx="180" cy="180" r="180" fill="url(#hero-rim)"/>
-    <ellipse cx="122" cy="92" rx="52" ry="30" fill="url(#hero-spec)" transform="rotate(-32 122 92)"/>
-    <ellipse cx="262" cy="270" rx="14" ry="8" fill="url(#hero-spec)" opacity="0.7" transform="rotate(-40 262 270)"/>
+    <g id="hero-caustic" filter="url(#hero-caustic)" opacity="0.3">
+      <path d="M150 300 C 214 300, 270 262, 276 214 C 280 180, 262 160, 240 158"
+            stroke="color-mix(in srgb, var(--accent) 45%, #fff)" stroke-width="6" fill="none" stroke-linecap="round"/>
+    </g>
+    <ellipse cx="112" cy="84" rx="30" ry="14" fill="url(#hero-spec)" transform="rotate(-38 112 84)"/>
+    <ellipse cx="84" cy="128" rx="8" ry="5" fill="#fff" opacity="0.85" transform="rotate(-55 84 128)"/>
   </g>
   <circle cx="180" cy="180" r="179" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.5"/>
 </svg>`;
+}
+
+/** The sphere lens as a displacement map (a data URL, drawn once): red/green say how far right/down each pixel
+    of the orb reads its reflection from. Outwards with the square of the distance from the centre, so the world
+    bunches up towards the rim as on a ball; and round the centre, most at mid-radius, so the reflections curl.
+    Plain arithmetic per pixel, so every render draws the same map; "" (no lens, a flat mirror) without a canvas. */
+function lensMap() {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = ORB;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+  const img = ctx.createImageData(ORB, ORB);
+  const R = ORB / 2, reach = 2 * (LENS_PX + SWIRL_PX);
+  for (let y = 0; y < ORB; y++) {
+    for (let x = 0; x < ORB; x++) {
+      const nx = (x + 0.5 - R) / R, ny = (y + 0.5 - R) / R;
+      const r = Math.min(1, Math.hypot(nx, ny));
+      const out = LENS_PX * r * r, curl = SWIRL_PX * Math.sin(Math.PI * r);
+      const u = r > 0 ? nx / Math.hypot(nx, ny) : 0, v = r > 0 ? ny / Math.hypot(nx, ny) : 0;
+      const i = 4 * (y * ORB + x);
+      img.data[i] = Math.round(255 * (0.5 + (out * u - curl * v) / reach));
+      img.data[i + 1] = Math.round(255 * (0.5 + (out * v + curl * u) / reach));
+      img.data[i + 2] = 128;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas.toDataURL("image/png");
 }
 
 const laptopSvg = () => `
@@ -192,10 +258,11 @@ export function buildHero(kind, doc) {
     el("div", "orbglow", inner);
     const art = el("div", null, inner);
     art.style.position = "relative";
-    art.innerHTML = orbSvg(seed % 1000);
+    art.innerHTML = orbSvg(seed % 1000, lensMap());
     ui.turb = art.querySelector("#hero-turb");
     ui.flow = art.querySelector("#hero-flow");
     ui.drift = art.querySelector("#hero-drift");
+    ui.caustic = art.querySelector("#hero-caustic");
     ui.label = el("div", "orblabel", inner);
   } else if (kind === "chip" || kind === "robot") {
     const art = el("div", null, inner);
@@ -363,15 +430,16 @@ export function updateHero(node, h, t, doc, split = null) {
   }
 
   if (ui.turb) {
-    // the liquid swirl: the noise field drifts and breathes, and the reflected world sways under it — all
-    // smooth functions of t, so any frame can be drawn on its own
-    const f = 0.0105 + 0.0015 * Math.sin((2 * Math.PI * t) / 5200);
-    const g = 0.0110 + 0.0012 * Math.cos((2 * Math.PI * t) / 6900);
+    // the liquid flow: the noise field drifts and breathes, the reflected world sways and turns under it, the
+    // caustic circles — all smooth functions of t, so any frame can be drawn on its own
+    const f = 0.0090 + 0.0014 * Math.sin((2 * Math.PI * t) / 5200);
+    const g = 0.0160 + 0.0020 * Math.cos((2 * Math.PI * t) / 6900);
     ui.turb.setAttribute("baseFrequency", `${f.toFixed(5)} ${g.toFixed(5)}`);
-    ui.drift.setAttribute("dx", (70 * Math.sin((2 * Math.PI * t) / 7000)).toFixed(2));
-    ui.drift.setAttribute("dy", (50 * Math.cos((2 * Math.PI * t) / 9000)).toFixed(2));
-    const tilt = 7 * Math.sin((2 * Math.PI * t) / 6100);
-    const bob = 10 * Math.sin((2 * Math.PI * t) / 4300);
+    ui.drift.setAttribute("dx", (90 * Math.sin((2 * Math.PI * t) / 7000)).toFixed(2));
+    ui.drift.setAttribute("dy", (60 * Math.cos((2 * Math.PI * t) / 9000)).toFixed(2));
+    const tilt = 9 * Math.sin((2 * Math.PI * t) / 6100);
+    const bob = 14 * Math.sin((2 * Math.PI * t) / 4300);
     ui.flow.setAttribute("transform", `rotate(${tilt.toFixed(2)} 180 180) translate(0 ${bob.toFixed(2)})`);
+    ui.caustic.setAttribute("transform", `rotate(${(14 * Math.sin((2 * Math.PI * t) / 5600)).toFixed(2)} 220 214)`);
   }
 }

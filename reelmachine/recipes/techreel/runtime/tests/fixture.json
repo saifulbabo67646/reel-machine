@@ -12,7 +12,7 @@
   "text": "#e9fbf6",
   "muted": "#7fa7a0",
   "accent": "#2ee6b8",
-  "accentInk": "#032019",
+  "accentInk": "#000000",
   "card": "rgba(255,255,255,0.05)",
   "cardEdge": "rgba(46,230,184,0.22)",
   "red": "#ff5d73",

@@ -7,7 +7,7 @@
 :root {
   /* the look's tokens; main.mjs overwrites them from doc.look */
   --bg: #06100f; --glow1: #0f6f66; --glow2: #0a3d4a; --glow3: #0b2447; --text: #e9fbf6; --muted: #7fa7a0;
-  --accent: #2ee6b8; --accentInk: #032019; --card: rgba(255,255,255,0.05); --cardEdge: rgba(46,230,184,0.22);
+  --accent: #2ee6b8; --accentInk: #000000; --card: rgba(255,255,255,0.05); --cardEdge: rgba(46,230,184,0.22);
   --red: #ff5d73; --green: #4ade80;
   --deva: "Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN";
   --jp: "Noto Sans JP", "Hiragino Sans";
@@ -56,7 +56,7 @@ html, body { margin: 0; background: #000; }
   border: 1.5px solid color-mix(in srgb, var(--accent) 32%, transparent);
 }
 .htitle {
-  font-family: var(--display); font-size: 96px; line-height: 1.02; letter-spacing: -0.01em; color: var(--text);
+  font-family: var(--display); font-size: 104px; line-height: 1.02; letter-spacing: -0.01em; color: var(--text);
   max-width: 952px; text-transform: uppercase; text-shadow: 0 6px 30px rgba(0,0,0,0.35);
   text-wrap: balance; /* no lone short word on the last line */
 }

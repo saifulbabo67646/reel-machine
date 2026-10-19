@@ -160,6 +160,17 @@ function layoutOf(live, sizes) {
   return out;
 }
 
+/** How much bigger than its measured size a block kind is laid out: the big cards fill the stage better a
+    little larger. The stack's fit still shrinks a grown block that no longer fits. */
+export const BLOCK_GROW = 1.15;
+const GROWN = new Set(["counter", "repo", "window", "terminal", "chat", "dialog", "receipts", "people"]);
+
+/** A block's natural size for the stack, from its measured size, and the factor it was grown by. */
+export function grownSize(kind, w, h) {
+  const grow = GROWN.has(kind) ? BLOCK_GROW : 1;
+  return { w: w * grow, h: h * grow, grow };
+}
+
 /** The stage stack at `t`. `blocks` are the current beat's block visuals (plus `{id: "hero", ...heroSpan()}`
     while the hero is in a HERO_STACKING state); `sizes` their natural `{w, h}` measured at build.
     Glide rule: membership changes when a block enters (`enterMs`) or has finished leaving (`exitMs + EXIT_MS`).
