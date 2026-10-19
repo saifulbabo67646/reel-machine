@@ -9,11 +9,12 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+from collections.abc import Sequence
 from html import escape
 from pathlib import Path
 from typing import Any
 
-from .markup import chunks, units
+from .markup import Unit, chunks, units
 from .models import HeroVisual, TechReelInputs, Visual
 from .schedule import BeatSlot, Plan, cue_ms, exit_ms
 
@@ -64,7 +65,16 @@ def _camel_keys(value: Any) -> Any:
     return value
 
 
-def _visual(visual: Visual, vid: str, enter: int, leave: int, cues: list[int], slot: BeatSlot, times: list, us: list) -> dict[str, Any]:
+def _visual(
+    visual: Visual,
+    vid: str,
+    enter: int,
+    leave: int,
+    cues: list[int],
+    slot: BeatSlot,
+    times: Sequence[Sequence[tuple[int, int]]],
+    us: Sequence[Sequence[Unit]],
+) -> dict[str, Any]:
     """A stage visual as the page reads it: fields camelCased, cues resolved to reel ms."""
     fields = visual.model_dump(exclude={"at", "exit", "click_at"}, exclude_none=True, by_alias=True)
     out: dict[str, Any] = {_camel(k): _camel_keys(v) for k, v in fields.items() if k != "cursor"}

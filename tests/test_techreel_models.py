@@ -164,3 +164,17 @@ def test_hero_states_locked_split():
         _beat({"kind": "hero", "state": "split", "count": 1})
     with pytest.raises(ValidationError):
         _beat({"kind": "hero", "state": "split", "labels": ["x" * 17]})
+
+
+def test_dialog_click_at_needs_click():
+    with pytest.raises(ValidationError, match="click_at needs click"):
+        _beat({"kind": "dialog", "title": "t", "click_at": {"line": 0}})
+    assert _beat({"kind": "dialog", "title": "t", "click": "decline"}).visuals[0].click_at is None
+
+
+def test_bars_highlight_within_items():
+    items = [{"label": "a", "value": 1}, {"label": "b", "value": 2}]
+    assert _beat({"kind": "bars", "items": items, "highlight": 1}).visuals[0].highlight == 1
+    for bad in (2, -1):
+        with pytest.raises(ValidationError):
+            _beat({"kind": "bars", "items": items, "highlight": bad})

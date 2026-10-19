@@ -171,6 +171,13 @@ class DialogVisual(VisualBase):
     click: Literal["approve", "decline"] | None = None
     click_at: Cue | None = None
 
+    @model_validator(mode="after")
+    def _click_at_needs_click(self) -> DialogVisual:
+        # a cue with no button to press would silently press nothing
+        if self.click_at is not None and self.click is None:
+            raise ValueError("click_at needs click")
+        return self
+
 
 class ErrorVisual(VisualBase):
     kind: Literal["error"]
@@ -242,6 +249,12 @@ class BarsVisual(VisualBase):
     items: list[BarItem] = Field(min_length=2, max_length=6)
     unit: str = Field("", max_length=8)
     highlight: int | None = None
+
+    @model_validator(mode="after")
+    def _highlight_within_items(self) -> BarsVisual:
+        if self.highlight is not None and not 0 <= self.highlight < len(self.items):
+            raise ValueError(f"highlight must be an item index, 0 to {len(self.items) - 1}")
+        return self
 
 
 class FlashVisual(VisualBase):
