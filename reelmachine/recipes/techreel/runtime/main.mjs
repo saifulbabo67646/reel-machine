@@ -122,13 +122,11 @@ function fit(ui) {
     }
   }
   for (const cap of ui.captions) {
-    cap.node.style.display = "block";
     let size = 54;
     while (cap.node.offsetHeight > CAPTION_ROOM && size > 30) {
       size -= 2;
       cap.node.style.fontSize = `${size}px`;
     }
-    cap.node.style.display = "none";
   }
 }
 
@@ -140,11 +138,14 @@ const heroScale = (state) => (state === "small-top" ? SMALL_TOP : 1);
 function layoutOf(ui, k, ms, kScale) {
   const blocks = ui.beats[k].blocks.map((b) => b.v);
   const span = ui.hero ? heroSpan(ui.states, ms) : null;
+  let sizes = ui.sizes;
   if (span) {
     blocks.push(span);
-    ui.sizes.set("hero", { w: ui.heroSize.w * kScale, h: ui.heroSize.h * kScale });
+    sizes = new Map(ui.sizes).set("hero", { w: ui.heroSize.w * kScale, h: ui.heroSize.h * kScale });
   }
-  return stackLayout(blocks, ui.sizes, ms);
+  const layout = stackLayout(blocks, sizes, ms);
+  layout.sizes = sizes; // what it was laid out with, for the overlays' anchor boxes
+  return layout;
 }
 
 /** The hero's centre and scale in its stack slot at `ms`; across a beat change it glides from the old
@@ -188,8 +189,7 @@ function applyHero(ui, doc, ms) {
   let pose;
   if (!h.from || h.p >= 1 || (stacks(h.from) && stacks(h.state))) {
     // between two stacking states the slot itself changes size, so the stack makes room as the hero grows
-    const k = h.from && stacks(h.from) && stacks(h.state) ? lerp(heroScale(h.from), heroScale(h.state), e) : heroScale(h.state);
-    pose = poseOf(ui, doc, h.state, ms, k, null);
+    pose = poseOf(ui, doc, h.state, ms, currentHeroScale(ui, ms), null);
     if (h.from && h.p < 1) pose.o = lerp(h.from === "sleep" ? 0.45 : 1, pose.o, clamp01(h.p));
   } else {
     const atMs = ms - h.p * HERO_MOVE_MS;
@@ -242,15 +242,16 @@ function applyStage(ui, doc, b, ms) {
     const box = anchorBox(ui, b, o.v, layout, ms);
     let cx, cy;
     if (o.v.kind === "emoji") {
-      // on the block's top corner, a little inside it
-      cx = o.v.place === "left" ? box.x + 30 : box.x + box.w - 30;
-      cy = box.y + 20;
+      // perched just above the block's top corner, so it covers none of the block's content
+      cx = o.v.place === "left" ? box.x + o.w / 2 : box.x + box.w - o.w / 2;
+      cy = box.y - o.h / 2 + 12;
     } else {
       cx = box.x + box.w / 2;
       cy = box.y + box.h / 2;
     }
-    // keep the overlay's centre inside the stage's margins
-    cx = Math.min(STAGE.right - o.w / 2 + 40, Math.max(STAGE.left + o.w / 2 - 40, cx));
+    // the whole overlay stays inside the stage: the side margins and the heading/caption bands
+    cx = Math.min(STAGE.right - o.w / 2, Math.max(STAGE.left + o.w / 2, cx));
+    cy = Math.min(STAGE.bottom - o.h / 2, Math.max(STAGE.top + o.h / 2, cy));
     o.wrap.style.display = "block";
     o.wrap.style.transform = `translate(${px(cx - o.w / 2)}, ${px(cy - o.h / 2)})`;
     o.wrap.style.opacity = (1 - exitP(o.v, ms)).toFixed(3);
@@ -280,7 +281,7 @@ function anchorBox(ui, b, v, layout, ms) {
   }
   const hero = layout.get("hero");
   if (hero) {
-    const size = ui.sizes.get("hero");
+    const size = layout.sizes.get("hero");
     return { x: hero.x, y: hero.y, w: size.w * hero.scale, h: size.h * hero.scale };
   }
   return { x: STAGE_CX - 200, y: STAGE_CY - 200, w: 400, h: 400 };
@@ -338,11 +339,8 @@ function applyTransition(b, kind, p, incoming) {
 function applyCaptions(ui, doc, ms) {
   const index = captionAt(doc.captions || [], ms);
   ui.captions.forEach((cap, k) => {
-    if (k !== index) {
-      cap.node.style.display = "none";
-      return;
-    }
-    cap.node.style.display = "block";
+    cap.node.classList.toggle("on", k === index);
+    if (k !== index) return;
     const p = clamp01((ms - cap.c.startMs) / CAPTION_POP_MS);
     cap.node.style.opacity = clamp01(p * 2).toFixed(3);
     cap.node.style.transform = `translateY(${px(10 * (1 - easeOut(p)))}) scale(${lerp(0.94, 1, backOut(p)).toFixed(4)})`;
@@ -391,7 +389,15 @@ try {
   const doc = JSON.parse(document.getElementById("reel-data").textContent);
   const root = document.getElementById("root");
   const ui = build(doc, root);
-  if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  if (document.fonts) {
+    // ask for each caption's face with its own text (a face is only fetched for text that uses it), then wait
+    // for everything the page laid out, so fit() measures real metrics
+    const text = (doc.captions || []).flatMap((c) => c.words.map((w) => w.t)).join(" ");
+    const css = getComputedStyle(document.documentElement);
+    await Promise.all([css.getPropertyValue("--sans"), css.getPropertyValue("--display"), css.getPropertyValue("--mono")]
+      .map((family) => document.fonts.load(`800 54px ${family}`, text || "a").catch(() => null)));
+    if (document.fonts.ready) await document.fonts.ready;
+  }
   fit(ui);
   const renderAt = (t) => renderFrame(ui, doc, t);
   window.addEventListener("hf-seek", (event) => {

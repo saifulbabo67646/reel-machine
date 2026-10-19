@@ -176,7 +176,7 @@ const windowViz = {
       const tabs = el("div", "tabs", node);
       v.tabs.forEach((name, i) => el("div", i === (v.active || 0) ? "tab on" : "tab", tabs, name));
     }
-    for (const k of ["a", "b", "c", "d"]) el("div", `sk ${k}`, node);
+    for (const k of ["a", "b", "c"]) el("div", `sk ${k}`, node); // three skeleton rows
     node._button = v.button ? el("div", "wbutton", node, v.button) : null;
     node._cursor = el("div", "cursor", node);
     node._cursor.innerHTML = CURSOR_SVG;
@@ -222,7 +222,7 @@ const terminal = {
     const top = el("div", "top", node);
     const dots = el("div", "bar3", top);
     for (let i = 0; i < 3; i++) el("i", "dot3", dots);
-    el("div", "ttitle", top, "~/strata — zsh");
+    el("div", "ttitle", top, "zsh");
     node._lines = (v.lines || []).map((line) => {
       if (line.cmd != null) {
         const row = el("div", "tline cmd", node);
