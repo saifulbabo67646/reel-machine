@@ -63,6 +63,10 @@ provenance, which then flows into the manifest:
 No fonts are bundled. Style packs reference font names (for example `Amiri Quran` for
 Arabic, `Helvetica` for Latin); the deployment installs them under their own licences.
 `reel doctor` and the render output will show a fallback if a font is missing.
+`techreel` names its fonts in CSS and bundles none: Archivo Black, Montserrat, JetBrains
+Mono and Noto Sans JP come with HyperFrames, and the Devanagari and Hiragino faces are the
+operating system's (Kohinoor Devanagari and Hiragino Sans on macOS, `fonts-noto-core` on
+Debian/Ubuntu), each under its own licence.
 
 ## Corpus data
 
@@ -73,7 +77,9 @@ Arabic, `Helvetica` for Latin); the deployment installs them under their own lic
   and the alquran.cloud / Quran Foundation APIs are attributed there.
 - **Voices**: cloud narration (ElevenLabs, Cartesia) is billed and licensed per vendor and
   per voice; the chosen voice and provider are recorded in the manifest. The bundled fake
-  voice is CC0.
+  voice is CC0. Supertonic is run by the deployment, not shipped: its model and voices
+  (F1–F5, M1–M5) are licensed under OpenRAIL-M, whose use restrictions carry over to the
+  reels made with them.
 
 ## Runtime dependencies
 

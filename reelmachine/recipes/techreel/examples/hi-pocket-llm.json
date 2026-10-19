@@ -28,7 +28,7 @@
       "lines": [
         {"say": "हर महीने बिल, हर सवाल उनके सर्वर पर।",
          "text": "Har mahine bill, har sawaal unke server par."},
-        {"say": "और प्राइवेसी? वो गई तेल लेने।",
+        {"say": "और प्राइवेसी, वो गई तेल लेने।",
          "text": "Aur privacy? Woh gayi *tel lene*."},
         {"say": "मेरा क्रेडिट कार्ड अब मुझसे बात नहीं करता।",
          "text": "Mera credit card ab mujhse baat nahi karta."}
@@ -110,7 +110,7 @@
       "lines": [
         {"say": "सच कहूँ, छोटा मॉडल थोड़ा कम समझदार है।",
          "text": "Sach kahun, chhota model thoda kam samajhdaar hai."},
-        {"say": "और बहुत बड़ा मॉडल? लैपटॉप हाथ जोड़ लेगा।",
+        {"say": "और बहुत बड़ा मॉडल, लैपटॉप हाथ जोड़ लेगा।",
          "text": "Aur bahut bada model? Laptop *haath jod* lega."}
       ],
       "visuals": [
@@ -123,7 +123,7 @@
     {
       "id": "bill", "kind": "other", "kicker": "AB HISAAB", "heading": "Bill *zero*", "transition": "flash",
       "lines": [
-        {"say": "पर बिल? ज़ीरो।", "text": "Par bill? *Zero*."},
+        {"say": "पर बिल, ज़ीरो।", "text": "Par bill? *Zero*."},
         {"say": "और मेरा क्रेडिट कार्ड फिर से मुझसे बात करने लगा।",
          "text": "Aur mera credit card phir se mujhse *baat* karne laga."}
       ],

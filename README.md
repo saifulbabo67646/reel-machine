@@ -1,7 +1,7 @@
 # reel-machine
 
 A modular reel production engine. A reel is a **Timeline plus Assets**; rendering is a
-separate step that turns `(timeline, assets, style)` into a video file. Eight recipes ship
+separate step that turns `(timeline, assets, style)` into a video file. Nine recipes ship
 with it:
 
 | recipe | what it makes | needs |
@@ -14,6 +14,7 @@ with it:
 | `explainer3d` | narrated 3D explainer reels: an agent writes a scene script (cast, shots, moves, camera); each shot is a three.js scene rendered by HyperFrames, objects carry over between shots and a camera can continue across a cut; `storyboard` mode renders one still per shot first. The `cinematic` look adds CC0 models (`find_models`), a golden-hour lake and an underwater set, impact moves (leap, slam, burst, drizzle, smash, throw…), viral captions, synthesised music and a `length` target (15–90 s). Sets are data — presets (lake, underwater, kitchen, living-room, workshop, studio, cafe) or built from a sky, floor, walls, props and marks (`find_assets`); stylised CC0 people walk, talk, sit and carry props; the agent can build objects from parts or, where the deployment allows (`REEL_EXPLAINER3D_CUSTOM_CODE`), write components as code — see `examples/explainer3d/` | ffmpeg **and ffprobe**, Node ≥ 22 (HyperFrames runs through `npx`, pinned); cloud voices need a key |
 | `mapreel` | narrated world-map fact reels: an agent writes a script of country, highlight, rank, versus and regions segments; the camera flies to each place, fills it and pops in the brands, dishes and numbers the voice names. Three looks (satellite, flat, dark), Commons images with licences credited in `sources.md`, and a hook lint that refuses a weak opening. `storyboard` mode renders one still per segment first. See [docs/MAPREEL.md](docs/MAPREEL.md) | ffmpeg **and ffprobe**, Node ≥ 22 (HyperFrames); the macOS voice is free, cloud voices need a key |
 | `dialoguereel` | language-learning conversation reels for beginners (JLPT N5–N3, TOPIK 1, CEFR A1, any language): two cute characters act out a short dialogue, each line voiced and shown with furigana or a romanised reading, a meaning and underlined key words, then a recap card and a quiz. Characters are built-in SVGs, SVGs the agent writes, or images (OpenAI-generated poses with a quota, or PNGs you supply) via `make_cast`. Three looks (pop, pastel, night), a lint with a JLPT level check, `post.md` with a caption and hashtags, `captions.srt`, and `verify`. `storyboard` mode renders one sheet of stills first. See [docs/DIALOGUEREEL.md](docs/DIALOGUEREEL.md) | ffmpeg **and ffprobe**, Node ≥ 22 (HyperFrames); the macOS voices are free, cloud voices need a key; generated characters need `REEL_OPENAI_API_KEY` |
+| `techreel` | funny AI and tech explainer reels (a new tool, a news item, a concept) in any language the voice speaks (Hindi, English and Japanese tested): a conversational voice over dense motion graphics (app and terminal mock-ups, rolling counters, stamps, emoji gags, kinetic headings, word-by-word captions) with a recurring hero (orb, laptop, phone, robot). The agent researches and writes beats; the recipe lints, voices, animates and verifies. Four looks (mint, ember, violet, mono), designed sound effects, an optional music bed, `post.md` with sources and hashtags, `captions.srt`. `storyboard` mode renders one sheet of stills first. See [docs/TECHREEL.md](docs/TECHREEL.md) | ffmpeg **and ffprobe**, Node ≥ 22 (HyperFrames); a self-hosted Supertonic server is the recommended free voice; Devanagari needs a system font (`fonts-noto-core` on Linux) |
 
 The engine is a library. The CLI (`reel`) and the MCP server are both thin clients of it;
 an agent over MCP is a first-class caller.
@@ -94,6 +95,23 @@ Add `-i '{"mode": "full"}'` for the video, and `REEL_TTS=macos` with a voice per
 (`macos:Kyoko`, `macos:Yuna`) for real speech. The script model, the characters (built-in,
 agent-written SVG or image poses), the looks, the lint and `verify` are in
 [docs/DIALOGUEREEL.md](docs/DIALOGUEREEL.md).
+
+## Tech and AI explainers (`techreel`)
+
+A funny, fast explainer about a tool, a news item or a concept, narrated over motion
+graphics. One command renders a storyboard from the bundled English example (Hindi and
+Japanese ones sit beside it), free and with the fake voice:
+
+```bash
+REEL_TTS=fake REEL_HYPERFRAMES_WORKERS=1 uv run reel run techreel \
+  -i @reelmachine/recipes/techreel/examples/en-what-is-rag.json
+```
+
+Add `-i '{"mode": "full", "voice": "supertonic:M1"}'` and `REEL_TTS=supertonic` (a
+Supertonic server at `REEL_SUPERTONIC_URL`, default `http://127.0.0.1:8787`) for the
+video with real speech. Over MCP, ask your agent for "a techreel about <link or topic> in
+Hindi". The workflow, the script model, the components, the voice pitfalls, the fonts and
+the troubleshooting are in [docs/TECHREEL.md](docs/TECHREEL.md).
 
 ## The engine
 
@@ -246,6 +264,7 @@ reelmachine/
     explainer3d/    script → assets → narration → shots → prep (HyperFrames) → compose → render
     mapreel/        script → geo → images → narration → segments → prep (HyperFrames) → compose → render
     dialoguereel/   script → cast → narration → compose → preview → render (HyperFrames)
+    techreel/       script → assets → narration → compose → preview → render (HyperFrames)
   render/      the plain/karaoke ASS writer and the audio profiles
   mcp/         the MCP server (optional extra)
   align.py ffmpeg.py subtitles.py vocab.py …   the media machinery, moved not rewritten
@@ -254,7 +273,7 @@ reelmachine/
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the design of record
 - [docs/MCP.md](docs/MCP.md) — the agent interface, one example per tool
-- [docs/MAPREEL.md](docs/MAPREEL.md) · [docs/DIALOGUEREEL.md](docs/DIALOGUEREEL.md) — the map and conversation reel guides
+- [docs/MAPREEL.md](docs/MAPREEL.md) · [docs/DIALOGUEREEL.md](docs/DIALOGUEREEL.md) · [docs/TECHREEL.md](docs/TECHREEL.md) — the map, conversation and tech explainer reel guides
 - [docs/RECIPES.md](docs/RECIPES.md) — write your own recipe, provider or style pack
 - [docs/adr/](docs/adr/) — the load-bearing decisions
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) — vendored code and licences

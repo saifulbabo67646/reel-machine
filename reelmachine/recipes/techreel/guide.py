@@ -223,20 +223,20 @@ GUIDE: dict[str, Any] = {
             "Plan a callback: set a joke up in the pain beat and pay it off in the honest or cta beat.",
         ],
         "examples": [
-            "en: \"Then its knowledge freezes. Like my gym progress.\" (self-roast, the model's training cutoff)",
+            "en: \"Then its knowledge freezes, like my gym progress.\" (self-roast, the model's training cutoff)",
             "en: \"And it can cite its sources.\" / \"Unlike me in every argument.\" (self-roast)",
             ("en: \"Messy documents in, messy answers out.\" / \"So clean that folder called final final two.\" "
              "(self-roast, and the honest catch)"),
             "en: \"Your chatbot? Still confident. Now also right.\" (callback to the hook's confident lie)",
             ("hi: \"मेरा क्रेडिट कार्ड अब मुझसे बात नहीं करता।\" / \"Mera credit card ab mujhse baat nahi karta.\" "
             "(self-roast over a pile of receipts)"),
-            "hi: \"और प्राइवेसी? वो गई तेल लेने।\" / \"Aur privacy? Woh gayi *tel lene*.\" (deadpan, with a stamp)",
+            "hi: \"और प्राइवेसी, वो गई तेल लेने।\" / \"Aur privacy? Woh gayi *tel lene*.\" (deadpan, with a stamp)",
             ("hi: \"और हाँ, लैपटॉप का पंखा गाना ज़रूर गाएगा।\" / \"Aur haan, laptop ka pankha *gaana* zaroor gaayega.\" "
              "(the honest catch as a joke)"),
             ("hi: \"मेरे दोस्तों से ज़्यादा राज़ यही रखता है।\" / \"Mere doston se zyada *raaz* yahi rakhta hai.\" "
             "(everyday life, privacy)"),
             "ja: \"僕のスマホ、写真でもう満杯なのに。\" (self-roast: the phone is already full of photos)",
-            "ja: \"旅行の圧縮袋みたいなもの。\" / \"ちょっとシワになるけどね。\" (an everyday analogy that is technically right)",
+            "ja: \"旅行の*圧縮袋*みたいなもの。\" / \"ちょっとシワになるけどね。\" (an everyday analogy that is technically right)",
             "ja: \"冬はカイロ代わりに、どうぞ。\" (deadpan: a hot phone as a hand warmer)",
             "ja: \"これなら、写真を消さなくても入る。\" (callback to the full phone)",
         ],
@@ -289,7 +289,10 @@ GUIDE: dict[str, Any] = {
             "`say` are lint errors. `text` is the caption (any script; Hinglish in Latin for Hindi), keeps the "
             "digits, and marks accent words as `*word*`; it defaults to `say`. Word cues match caption words. "
             "Hindi voices do not spell Latin letters: \"AI\" in a Devanagari `say` comes out as a long \"एएएए\", so "
-            "write \"एआई\"; spell an acronym as spaced letters (\"एल एल एम\", not \"एलएलएम\", which runs together)."
+            "write \"एआई\"; spell an acronym as spaced letters (\"एल एल एम\", not \"एलएलएम\", which runs together). "
+            "A `?` or `.` inside a `say` makes the voice pause over a second (verify flags it): use a comma or a colon "
+            "in `say` and keep the `?` in `text`, or start a new line. An acronym said as a word goes in `say` as the "
+            "word (\"Rag\"; \"RAG\" came out \"Reg\"), the capitals in `text`."
         ),
         "english": "`text` is usually omitted (it defaults to `say`); give it only when the caption should show "
                    "digits or accents: say \"fourteen gigabytes\", text \"*14 GB*\".",

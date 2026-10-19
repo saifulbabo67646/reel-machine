@@ -14,8 +14,8 @@
     {
       "id": "hook", "kind": "hook", "kicker": "AI IN ONE MINUTE", "heading": "What is *RAG*?",
       "lines": [
-        {"say": "Your chatbot just lied to you. Confidently."},
-        {"say": "Three letters fix a lot of that: RAG.", "text": "Three letters fix a lot of that: *RAG*."}
+        {"say": "Your chatbot just lied to you, confidently.", "text": "Your chatbot just lied to you. Confidently."},
+        {"say": "Three letters fix a lot of that: rag.", "text": "Three letters fix a lot of that: *RAG*."}
       ],
       "visuals": [
         {"kind": "hero", "state": "center"},
@@ -28,7 +28,7 @@
       "id": "pain", "kind": "pain", "kicker": "PROBLEM?", "heading": "It *guesses*", "transition": "slide",
       "lines": [
         {"say": "A model reads a mountain of text, once."},
-        {"say": "Then its knowledge freezes. Like my gym progress.",
+        {"say": "Then its knowledge freezes, like my gym progress.",
          "text": "Then its knowledge *freezes*. Like my gym progress."},
         {"say": "Ask about your files? It guesses.", "text": "Ask about your files? It *guesses*."}
       ],
@@ -46,7 +46,7 @@
     {
       "id": "trick", "kind": "reveal", "kicker": "THE TRICK", "heading": "An *open-book* exam", "transition": "flash",
       "lines": [
-        {"say": "RAG turns every question into an open-book exam."},
+        {"say": "Rag turns every question into an open-book exam.", "text": "RAG turns every question into an open-book exam."},
         {"say": "Before it answers, it looks things up.", "text": "Before it answers, it *looks things up*."},
         {"say": "In your documents, not just its memory."}
       ],
@@ -99,7 +99,7 @@
     {
       "id": "honest", "kind": "honest", "kicker": "HONEST MOMENT", "heading": "The *catch*", "transition": "slide",
       "lines": [
-        {"say": "RAG is only as good as its search."},
+        {"say": "Rag is only as good as its search.", "text": "RAG is only as good as its search."},
         {"say": "Messy documents in, messy answers out.", "text": "*Messy* documents in, *messy* answers out."},
         {"say": "So clean that folder called final final two.",
          "text": "So clean that folder called *final_final_2*."}
@@ -113,9 +113,9 @@
     {
       "id": "cta", "kind": "cta", "kicker": "SAVE THIS", "heading": "Want the *cheat sheet*?", "transition": "slide",
       "lines": [
-        {"say": "Comment RAG for the cheat sheet.", "text": "Comment *RAG* for the cheat sheet."},
+        {"say": "Comment rag for the cheat sheet.", "text": "Comment *RAG* for the cheat sheet."},
         {"say": "Follow for more AI, minus the jargon.", "text": "*Follow* for more AI, minus the jargon."},
-        {"say": "Your chatbot? Still confident. Now also right."}
+        {"say": "Your chatbot: still confident, now also right.", "text": "Your chatbot? Still confident. Now also right."}
       ],
       "visuals": [
         {"kind": "hero", "state": "corner"},
