@@ -138,7 +138,7 @@
     {
       "id": "cta", "kind": "cta", "transition": "slide", "keyword": "POCKET", "dm": "Link bhej dunga",
       "lines": [
-        {"say": "लिंक चाहिए? नीचे पॉकेट लिखो।", "text": "Link chahiye? Neeche *POCKET* likho."},
+        {"say": "लिंक चाहिए, तो नीचे पॉकेट लिखो।", "text": "Link chahiye? Neeche *POCKET* likho."},
         {"say": "और फ़ॉलो करना मत भूलना।", "text": "Aur *follow* karna mat bhoolna."}
       ],
       "visuals": [{"kind": "hero", "state": "corner"}]

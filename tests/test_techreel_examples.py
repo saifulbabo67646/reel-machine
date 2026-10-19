@@ -43,6 +43,12 @@ def test_example_lints_spotless(path):
 
 
 @pytest.mark.parametrize("path", EXAMPLES, ids=lambda p: p.name)
+def test_example_says_no_sentence_end_inside_a_line(path):
+    # Supertonic pauses a second or more there, which fails verify's silence check
+    assert [f.path for f in check(load(path)) if f.rule == "say-pause"] == []
+
+
+@pytest.mark.parametrize("path", EXAMPLES, ids=lambda p: p.name)
 def test_example_runs_45_to_90_seconds(path):
     ms = estimate(load(path)).duration_ms
     assert 45_000 <= ms <= 90_000 and LENGTH_MS[0] <= ms <= LENGTH_MS[1]

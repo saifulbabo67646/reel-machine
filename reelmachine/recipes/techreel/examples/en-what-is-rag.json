@@ -30,7 +30,7 @@
         {"say": "A model reads a mountain of text, once."},
         {"say": "Then its knowledge freezes, like my gym progress.",
          "text": "Then its knowledge *freezes*. Like my gym progress."},
-        {"say": "Ask about your files? It guesses.", "text": "Ask about your files? It *guesses*."}
+        {"say": "Ask about your files, it guesses.", "text": "Ask about your files? It *guesses*."}
       ],
       "visuals": [
         {"kind": "svg", "size": "s", "exit": {"line": 2},

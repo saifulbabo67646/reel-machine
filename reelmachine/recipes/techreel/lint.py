@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from itertools import pairwise
 from typing import Literal
@@ -53,10 +54,14 @@ STAMP_MAX = 16              # characters: a longer stamp shrinks to fit the stag
 LENGTH_MS = (30_000, 150_000)
 TEXT_RATIO = (0.4, 2.5)
 _DEVANAGARI = range(0x0900, 0x0980)
+# a sentence end with more words after it, inside one `say`: Latin stops need a space after (so "Node.js" passes),
+# the full-width ones, the danda and the ellipsis do not
+_MID_STOP = re.compile(r"(?:[.?!।](?=\s+\w)|[…。？！](?=\s*\w))")
 
 
 def _timing(inputs: TechReelInputs):
-    """Per beat: its estimated slot, and each visual's estimated (enter, exit) ms."""
+    """Per beat: its estimated slot, and each visual's estimated (enter, exit) ms, the exit as cued (compose
+    clamps one before the enter to the enter)."""
     plan = estimate(inputs)
     out = []
     for b, beat in enumerate(inputs.beats):
@@ -67,9 +72,19 @@ def _timing(inputs: TechReelInputs):
         spans = []
         for v in beat.visuals:
             enter = cue_ms(v.at, slot, times, us)[0]
-            spans.append((enter, max(enter, exit_ms(v.exit, slot, nxt, times, us))))
+            spans.append((enter, exit_ms(v.exit, slot, nxt, times, us)))
         out.append((slot, spans))
     return plan, out
+
+
+def _resolves(visual, beat, language: str) -> bool:
+    """Whether every cue of the visual lands where it says (a cue-line or cue-word finding covers the others)."""
+    for _, cue in _cues(visual):
+        if cue.line >= len(beat.lines):
+            return False
+        if cue.word is not None and word_index(cue, units(beat.lines[cue.line].caption, language)) is None:
+            return False
+    return True
 
 
 def _bare_cta(beat) -> bool:
@@ -79,7 +94,14 @@ def _bare_cta(beat) -> bool:
 
 def _pacing(inputs: TechReelInputs, found: list[Finding]) -> None:
     plan, timing = _timing(inputs)
-    for b, (beat, (slot, spans)) in enumerate(zip(inputs.beats, timing, strict=True)):
+    for b, (beat, (slot, cued)) in enumerate(zip(inputs.beats, timing, strict=True)):
+        for v, (visual, (enter, leave)) in enumerate(zip(beat.visuals, cued, strict=True)):
+            if isinstance(visual.exit, Cue) and leave <= enter and _resolves(visual, beat, inputs.language):
+                found.append(Finding("exit-before-enter", "warning",
+                                     f"beats[{b}].visuals[{v}] leaves at or before the moment it enters",
+                                     "cue `exit` after `at` (a later line, word or frac), or drop it to leave with "
+                                     "the beat", f"beats[{b}].visuals[{v}].exit"))
+        spans = [(enter, max(enter, leave)) for enter, leave in cued]
         if b == 0:
             first = slot.lines[0].speech_ms
             if first > HOOK_MAX_MS or not beat.visuals:
@@ -152,9 +174,6 @@ def _assets(inputs: TechReelInputs, allow_local: bool, found: list[Finding]) -> 
 
 def check(inputs: TechReelInputs, bound_provider: str | None = None, *, allow_local: bool = True) -> list[Finding]:
     found: list[Finding] = []
-    if not inputs.beats:
-        found.append(Finding("no-beats", "error", "the reel has no beats",
-                             "add at least one beat with a line to say", "beats"))
     if bound_provider is not None and provider_for(inputs.voice) != bound_provider:
         found.append(Finding("voice-provider", "error",
                              f"voice {inputs.voice!r} is not from the bound provider {bound_provider!r}",
@@ -173,6 +192,11 @@ def check(inputs: TechReelInputs, bound_provider: str | None = None, *, allow_lo
             if "*" in line.say:
                 found.append(Finding("markup-in-say", "error", f"{path} contains `*`",
                                      "accent markup belongs in `text`; the voice would read it aloud", path))
+            if _MID_STOP.search(line.say.strip()):
+                found.append(Finding("say-pause", "warning", f"{path} ends a sentence and goes on",
+                                     "the voice (Supertonic) pauses about 1 to 1.4 s at a ?, ! or . inside a line, "
+                                     "which fails verify's silence check: use a comma or a colon in `say` (keep "
+                                     "the ? in `text`), or split the line", path))
             if line.text and line.say.strip():
                 ratio = len(plain(line.text)) / len(line.say.strip())
                 if not TEXT_RATIO[0] <= ratio <= TEXT_RATIO[1]:

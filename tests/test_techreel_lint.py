@@ -1,6 +1,7 @@
 import dataclasses
 
 import pytest
+from pydantic import ValidationError
 
 from reelmachine.recipes.techreel.lint import Finding, blocks, check
 from reelmachine.recipes.techreel.models import TechReelInputs
@@ -30,9 +31,9 @@ def test_clean_script_has_no_findings():
     assert _core(check(_inputs([_beat()]))) == []
 
 
-def test_no_beats():
-    f = _core(check(_inputs([])))
-    assert [(x.rule, x.severity, x.path) for x in f] == [("no-beats", "error", "beats")]
+def test_no_beats_is_a_schema_error_not_a_lint_finding():
+    with pytest.raises(ValidationError):
+        _inputs([])
     assert "no-beats" not in _rules(check(_inputs([_beat()])))
 
 
@@ -94,9 +95,9 @@ def test_cue_word_uses_caption_text():
 
 
 def test_blocks():
-    assert blocks(_inputs([], mode="full", lint="strict"))
-    assert not blocks(_inputs([], mode="full", lint="warn"))
-    assert not blocks(_inputs([], mode="storyboard", lint="strict"))
+    assert blocks(_inputs([_beat()], mode="full", lint="strict"))
+    assert not blocks(_inputs([_beat()], mode="full", lint="warn"))
+    assert not blocks(_inputs([_beat()], mode="storyboard", lint="strict"))
 
 
 def test_finding_is_frozen():
@@ -281,3 +282,32 @@ def test_stamp_long_warns_above_sixteen_characters():
     long = {"kind": "stamp", "text": "SEVENTEEN CHARS!!"}       # 17
     f = _core(check(_inputs([_beat(visuals=[long])])))
     assert [(x.rule, x.severity, x.path) for x in f] == [("stamp-long", "warning", "beats[0].visuals[0].text")]
+
+
+@pytest.mark.parametrize("say", ["Ask about your files? It guesses.", "Stop. Think again", "wait... what",
+                                 "Really! No way", "लिंक चाहिए? नीचे लिखो।", "हाँ। अब देखो", "小さい。でも速い",
+                                 "本当？すごい", "Wait… what"])
+def test_say_pause_warns_on_a_sentence_end_inside_a_line(say):
+    f = [x for x in check(_inputs([_beat(say)])) if x.rule == "say-pause"]
+    assert [(x.severity, x.path) for x in f] == [("warning", "beats[0].lines[0].say")]
+    assert "comma" in f[0].hint and "split" in f[0].hint
+
+
+@pytest.mark.parametrize("say", ["Ask about your files, it guesses.", "One rule: no digits.", "Is it fast?",
+                                 "Use Node.js today", "लिंक चाहिए, नीचे लिखो।", "小さいのに速い。", "Wow!", "Wait…"])
+def test_say_pause_leaves_line_ends_and_dotted_names_alone(say):
+    assert "say-pause" not in _rules(check(_inputs([_beat(say)])))
+
+
+def test_say_pause_reads_say_not_text():
+    line = {"say": "ask about it, it guesses", "text": "Ask about it? It *guesses*."}
+    assert "say-pause" not in _rules(check(_inputs([{"lines": [line]}])))
+
+
+def test_exit_before_enter_warns():
+    early = {"kind": "title", "text": "x", "at": {"line": 1}, "exit": {"line": 0}}
+    beat = {"lines": [{"say": "one two three"}, {"say": "four five six"}], "visuals": [early]}
+    f = [x for x in check(_inputs([beat])) if x.rule == "exit-before-enter"]
+    assert [(x.severity, x.path) for x in f] == [("warning", "beats[0].visuals[0].exit")]
+    fine = {**early, "exit": {"line": 1, "frac": 0.9}}
+    assert "exit-before-enter" not in _rules(check(_inputs([{**beat, "visuals": [fine]}])))

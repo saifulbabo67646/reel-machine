@@ -229,7 +229,8 @@ def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tupl
                 hero_states.append({"atMs": enter, "state": visual.state, "text": visual.text,
                                     "count": visual.count, "labels": list(visual.labels)})
                 continue
-            leave = exit_ms(visual.exit, slot, next_start, times[b], us)
+            # an exit cued before the enter would leave a visual with a negative life (lint `exit-before-enter`)
+            leave = max(enter, exit_ms(visual.exit, slot, next_start, times[b], us))
             moves = [cue_ms(m.at, slot, times[b], us)[0] for m in getattr(visual, "cursor", [])]
             stage.append(_visual(visual, f"b{b}v{v}", enter, leave, moves, slot, times[b], us, images,
                                  f"beats[{b}].visuals[{v}]"))

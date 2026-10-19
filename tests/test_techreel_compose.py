@@ -398,3 +398,13 @@ def test_partial_word_accents_reach_the_document_as_spans():
                                           {"t": "Augmented", "a": False, "accentSpans": [[0, 1]]}]
     words = doc["captions"][0]["words"]
     assert words[0]["accentSpans"] == [[0, 1]] and "accentSpans" not in words[1]
+
+
+def test_an_exit_before_the_enter_is_clamped_to_the_enter():
+    inputs = TechReelInputs.model_validate({"title": "t", "beats": [
+        {"lines": [{"say": "one two three"}, {"say": "four five six"}],
+         "visuals": [{"kind": "title", "text": "x", "at": {"line": 1}, "exit": {"line": 0}}]},
+    ]})
+    plan = schedule(inputs.beats, [[600, 600]])
+    v = reel_document(inputs, plan, _times(inputs))["beats"][0]["visuals"][0]
+    assert v["enterMs"] == plan.beats[0].lines[1].start_ms and v["exitMs"] == v["enterMs"]

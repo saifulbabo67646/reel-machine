@@ -291,7 +291,7 @@ GUIDE: dict[str, Any] = {
             "Hindi voices do not spell Latin letters: \"AI\" in a Devanagari `say` comes out as a long \"एएएए\", so "
             "write \"एआई\"; spell an acronym as spaced letters (\"एल एल एम\", not \"एलएलएम\", which runs together). "
             "A `?` or `.` inside a `say` makes the voice pause over a second (verify flags it): use a comma or a colon "
-            "in `say` and keep the `?` in `text`, or start a new line. An acronym said as a word goes in `say` as the "
+            "in `say` and keep the `?` in `text`, or start a new line (lint `say-pause`). An acronym said as a word goes in `say` as the "
             "word (\"Rag\"; \"RAG\" came out \"Reg\"), the capitals in `text`."
         ),
         "english": "`text` is usually omitted (it defaults to `say`); give it only when the caption should show "
@@ -392,8 +392,8 @@ GUIDE: dict[str, Any] = {
         ),
         "patterns": {
             "en": ["\"Comment RAG and I'll send you the cheat sheet.\" / \"Follow for more AI, minus the jargon.\"",
-                   "\"Want the link? Comment TINY.\" / \"Follow, part two drops this week.\""],
-            "hi": ["\"लिंक चाहिए? नीचे पॉकेट लिखो।\" / \"Link chahiye? Neeche *POCKET* likho.\"",
+                   "\"Want the link? Comment TINY.\" (say \"Want the link, comment tiny.\") / \"Follow, part two drops this week.\""],
+            "hi": ["\"लिंक चाहिए, तो नीचे पॉकेट लिखो।\" / \"Link chahiye? Neeche *POCKET* likho.\"",
                    "\"कमेंट करो डॉट्स, लिंक डीएम कर दूँगा।\" / \"Comment karo *DOTS*, link DM kar dunga.\"",
                    "\"और फ़ॉलो कर लो, अगला वीडियो और भी मज़ेदार है।\" / \"Aur *follow* kar lo, agla video aur bhi mazedaar hai.\""],
             "ja": ["\"もっと知りたい人は、コメントにタイニーって書いてね。\" / text \"…コメントに*TINY*って書いてね。\"",
