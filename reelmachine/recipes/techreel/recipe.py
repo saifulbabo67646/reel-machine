@@ -99,9 +99,9 @@ class TechReelRecipe:
         checks.append(CheckResult(name="lint", ok=not blocking,
                                   detail="; ".join(errors) if blocking else _lint_counts(found)))
         try:
-            check_music(inputs, allow_local=config.local_files)
             assets.check_svgs(inputs)
             assets.check_sources(inputs, allow_local=config.local_files)
+            check_music(inputs, allow_local=config.local_files)
             count = sum(1 for _ in assets.image_sources(inputs))
             checks.append(CheckResult(name="assets", ok=True,
                                       detail=f"{count} image{'s' * (count != 1)} to fetch" if count else "no images"))

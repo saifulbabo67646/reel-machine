@@ -458,10 +458,11 @@ class RenderStage:
                             style_ref="techreel.caption")
                     for start, end, text in caption_cues(doc)]
         srt = write_srt(captions, work / f"{name}.srt")
+        music_name = (inputs.music if inputs.music == "auto" else Path(inputs.music).name) if inputs.music else None
         manifest = {"reel": str(video), "recipe": "techreel", "mode": inputs.mode,
                     "created": datetime.now(UTC).isoformat(), "durationMs": total_ms,
                     "look": inputs.look, "voice": inputs.voice, "renderer": getattr(renderer, "name", ""),
-                    "music": (inputs.music if inputs.music == "auto" else Path(inputs.music).name) if inputs.music else None,
+                    "music": music_name,
                     "sources": list(inputs.sources)}
         manifest_path = outdir / f"{name}.json"
         manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
