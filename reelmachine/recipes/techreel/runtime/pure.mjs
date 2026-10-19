@@ -214,6 +214,86 @@ export function terminalStarts(v) {
   return out;
 }
 
+// ------------------------------------------------------------ people and nodes
+
+/** A people grid: about 1.6× as many columns as rows (never more columns than people), each cell `cell` px,
+    smaller when that would make the grid wider than `maxW`. */
+export function gridOf(total, maxW, cell) {
+  const n = Math.max(1, total);
+  const cols = Math.min(n, Math.ceil(Math.sqrt(n * 1.6)));
+  return { cols, rows: Math.ceil(n / cols), size: Math.min(cell, Math.floor(maxW / cols)) };
+}
+
+/** Which `lit` of `total` people light up: one at a seeded place inside each of `lit` equal runs of the grid
+    (in reading order), so they are spread over it and never bunch up. */
+export function litSet(total, lit, seed) {
+  const rand = mulberry32(seed);
+  const out = new Set();
+  const k = Math.max(0, Math.min(lit, total));
+  for (let i = 0; i < k; i++) {
+    const lo = Math.floor((i * total) / k), hi = Math.floor(((i + 1) * total) / k);
+    out.add(lo + Math.floor(rand() * (hi - lo)));
+  }
+  return out;
+}
+
+/** Where a `w`×`h` cell badge can sit over people who are all unlit: `{col, row}` of its top-left cell, the
+    free spot nearest the grid's middle (ties to the upper, then the left one); null when there is none. */
+export function emptySpot(cols, rows, total, lit, w, h) {
+  let best = null, bestD = Infinity;
+  for (let row = 0; row + h <= rows; row++) {
+    for (let col = 0; col + w <= cols; col++) {
+      let free = true;
+      for (let r = row; r < row + h && free; r++) {
+        for (let c = col; c < col + w; c++) {
+          const i = r * cols + c;
+          if (i >= total || lit.has(i)) { free = false; break; }
+        }
+      }
+      if (!free) continue;
+      const d = Math.hypot(col + w / 2 - cols / 2, row + h / 2 - rows / 2);
+      if (d < bestD - 1e-9) [best, bestD] = [{ col, row }, d];
+    }
+  }
+  return best;
+}
+
+// a triangle's corners first (top, bottom-left, bottom-right), then its edges' midpoints; `PERIM` is each slot's
+// place going round the edge (top 0, left side 1, bottom-left 2, base 3, bottom-right 4, right side 5)
+const TRI = { top: [0.5, 0.08], bl: [0.08, 0.92], br: [0.92, 0.92] };
+const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+const TRI_SLOTS = {
+  3: [[TRI.top, 0], [TRI.bl, 2], [TRI.br, 4]],
+  4: [[TRI.top, 0], [TRI.bl, 2], [TRI.br, 4], [mid(TRI.bl, TRI.br), 3]],
+  5: [[TRI.top, 0], [TRI.bl, 2], [TRI.br, 4], [mid(TRI.top, TRI.bl), 1], [mid(TRI.top, TRI.br), 5]],
+  6: [[TRI.top, 0], [TRI.bl, 2], [TRI.br, 4], [mid(TRI.top, TRI.bl), 1], [mid(TRI.bl, TRI.br), 3], [mid(TRI.top, TRI.br), 5]],
+};
+const RING_R = 0.42;
+
+/** `n` nodes' centres as fractions of their box: `row`/`flow` evenly across the middle, `ring` round a circle
+    from the top clockwise, `triangle` on a triangle's corners then its edges (fewer than 3 make a row). */
+export function nodeLayout(n, layout) {
+  if (layout === "ring" && n > 1) {
+    return Array.from({ length: n }, (_, i) => {
+      const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
+      return { x: 0.5 + RING_R * Math.cos(a), y: 0.5 + RING_R * Math.sin(a) };
+    });
+  }
+  if (layout === "triangle" && TRI_SLOTS[n]) return TRI_SLOTS[n].map(([[x, y]]) => ({ x, y }));
+  return Array.from({ length: n }, (_, i) => ({ x: (i + 0.5) / n, y: 0.5 }));
+}
+
+/** Which nodes a line joins, `[from, to]`: each to the next for `row`/`flow` (a flow's arrows point that way),
+    round the loop for `ring` and `triangle` (two nodes are joined once). */
+export function nodeLinks(n, layout) {
+  let order = Array.from({ length: n }, (_, i) => i);
+  if (layout === "triangle" && TRI_SLOTS[n]) order = order.sort((a, b) => TRI_SLOTS[n][a][1] - TRI_SLOTS[n][b][1]);
+  const loop = (layout === "ring" || (layout === "triangle" && TRI_SLOTS[n])) && n > 2;
+  const links = order.slice(1).map((b, k) => [order[k], b]);
+  if (loop) links.push([order[n - 1], order[0]]);
+  return links;
+}
+
 // ------------------------------------------------------------ captions, hero, beats
 
 /** The latest caption started by `t`, held across the short gaps between chunks (up to CAPTION_HOLD_MS past

@@ -105,8 +105,38 @@ beats = [
              {"say": "mera laptop toh museum mein hai", "text": "mera laptop toh *museum* mein hai"}],
    "visuals": [{"kind": "bars", "unit": "tok/s", "highlight": 0, "items": [
                    {"label": "RTX 4090", "value": 142}, {"label": "M3 Max", "value": 61.5}, {"label": "My laptop", "value": 3}]}]},
+  # the social and analogy visuals (social.mjs)
+  {"id": "office", "kind": "explain", "heading": "mixture of *experts*", "kicker": "TWIST 🤓", "transition": "cut",
+   "lines": [{"say": "matlab office jaisa company mein ek sau pachchees log", "text": "matlab *office* jaisa, company mein 125 log"},
+             {"say": "kaam sirf chhe karte hain baaki meeting mein", "text": "kaam sirf *6* karte hain, baaki *meeting* mein"}],
+   "visuals": [{"kind": "people", "total": 125, "lit": 6, "label": "OFFICE MEIN 125 LOG", "badge": "MEETING 💤"}]},
+  {"id": "team", "kind": "explain", "heading": "teen *dots*, ek team", "kicker": "HOW IT WORKS", "transition": "slide",
+   "lines": [{"say": "researcher writer aur reviewer", "text": "researcher, writer aur *reviewer*"},
+             {"say": "teeno aapas mein baat karte hain", "text": "teeno aapas mein *baat* karte hain"}],
+   "visuals": [{"kind": "nodes", "layout": "triangle", "items": [
+                   {"label": "Researcher", "icon": "🔎"}, {"label": "Writer", "icon": "✍️"}, {"label": "Reviewer", "icon": "🧐"}]}]},
+  {"id": "pipe", "kind": "explain", "heading": "*RAG* kaise chalta hai", "kicker": "PIPELINE", "transition": "cut",
+   "lines": [{"say": "sawaal aaya documents dhoondhe", "text": "sawaal aaya, *documents* dhoondhe"},
+             {"say": "phir model ne jawab likha", "text": "phir model ne *jawab* likha"}],
+   "visuals": [{"kind": "nodes", "layout": "flow", "items": [
+                   {"label": "Question", "icon": "❓"}, {"label": "Search", "icon": "📚"}, {"label": "Model"}, {"label": "Answer", "icon": "💬"}]},
+               {"kind": "nodes", "layout": "ring", "at": {"line": 1}, "items": [
+                   {"label": "Plan"}, {"label": "Act", "icon": "⚡"}, {"label": "Check"}, {"label": "Learn", "icon": "🧠"}, {"label": "Repeat"}]}]},
+  {"id": "alive", "kind": "honest", "heading": "laptop *zinda* hai", "kicker": "STATUS", "transition": "zoom",
+   "lines": [{"say": "aur sabse badi baat", "text": "aur sabse badi baat"},
+             {"say": "laptop abhi tak zinda hai", "text": "laptop abhi tak *zinda* hai"}],
+   "visuals": [{"kind": "heartbeat", "label": "LAPTOP STATUS: ZINDA", "at": {"line": 0, "frac": 0.3}}]},
+  {"id": "free", "kind": "reveal", "heading": "MIT *license*", "kicker": "FEATURE 04/04", "transition": "flash",
+   "lines": [{"say": "mit license", "text": "MIT license,"}, {"say": "yaani free", "text": "yaani *free*"}],
+   "visuals": [{"kind": "flash", "text": "yaani *free*", "at": {"line": 1}}]},
+  {"id": "cta", "kind": "cta", "heading": "ai ki emi se *pareshaan*?", "kicker": "", "transition": "cut",
+   "lines": [{"say": "toh comment karo strata", "text": "toh comment karo *STRATA*"},
+             {"say": "link dm kar dunga aur follow kar lo", "text": "link DM kar dunga, aur *follow* kar lo"}],
+   "visuals": [{"kind": "comment", "keyword": "STRATA", "reply": "link DM kar dunga", "at": {"line": 0, "word": "comment"}},
+               {"kind": "follow", "at": {"line": 1, "word": "follow"}}]},
 ]
-inputs = TechReelInputs(title="techreel runtime fixture", language="hi", look="mint", hero={"kind": "orb"}, beats=beats)
+inputs = TechReelInputs(title="techreel runtime fixture", language="hi", look="mint", hero={"kind": "orb"}, beats=beats,
+                        creator={"name": "Aryan Patel", "handle": "@aryanpatel.tech"})
 # the estimate is a slow reader; the references speak about twice as fast
 plan = estimate(inputs)
 plan = schedule(inputs.beats, [[round(ln.speech_ms * 0.52) for ln in b.lines] for b in plan.beats])

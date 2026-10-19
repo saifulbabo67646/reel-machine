@@ -4,6 +4,7 @@ import {
   ENTER_MS, EXIT_MS, GLIDE_MS, COUNTER_MS, HERO_MOVE_MS, TYPE_CPS, STAGE, STACK_GAP, MIN_SCALE, HERO_STACKING,
   backOut, clamp01, enterP, exitP, alive, stackLayout, counterValue, typed, terminalStarts, captionAt, wordPhase,
   heroAt, heroSpan, beatAt, transitionP, progress, blob, seedOf, CAPTION_HOLD_MS, staggerP, winner, numberParts,
+  gridOf, litSet, nodeLayout, nodeLinks, emptySpot,
 } from "../pure.mjs";
 
 const block = (id, enterMs, exitMs = 99999, place = "stack") => ({ id, kind: "title", class: "block", enterMs, exitMs, place });
@@ -305,4 +306,81 @@ test("a number with a prefix and suffix splits for counterValue, which then give
   }
   // text counterValue cannot give back (grouping it would rewrite, no digits, too many decimals) is not a number
   for (const text of ["2,000", "12 000", "free", "", "1.234", "19900"]) assert.equal(numberParts(text), null, text);
+});
+
+// ------------------------------------------------------------ social and analogy helpers
+
+test("a people grid is about 1.6 times wider than tall and fits its width", () => {
+  assert.deepEqual(gridOf(125, 888, 52), { cols: 15, rows: 9, size: 52 });
+  const big = gridOf(200, 888, 52);
+  assert.equal(big.cols, 18);
+  assert.equal(big.rows, 12);
+  assert.ok(big.cols * big.size <= 888, "200 people fit in 888 px");
+  assert.ok(big.cols * big.rows >= 200);
+  assert.deepEqual(gridOf(1, 888, 52), { cols: 1, rows: 1, size: 52 }, "never wider than the people in it");
+  for (let n = 1; n <= 200; n++) {
+    const g = gridOf(n, 888, 60);
+    assert.ok(g.cols * g.rows >= n && g.cols * g.size <= 888 && (g.rows - 1) * g.cols < n, `total ${n}`);
+  }
+});
+
+test("the lit set is seeded, of its size and spread over the grid", () => {
+  const a = litSet(125, 6, 42);
+  assert.equal(a.size, 6);
+  assert.deepEqual([...a], [...litSet(125, 6, 42)], "the same seed, the same set");
+  assert.notDeepEqual([...a].sort(), [...litSet(125, 6, 43)].sort(), "another seed, another set");
+  for (const i of a) assert.ok(Number.isInteger(i) && i >= 0 && i < 125);
+  const sorted = [...a].sort((x, y) => x - y);
+  // one in each sixth of the grid: never bunched up
+  sorted.forEach((i, k) => assert.ok(i >= Math.floor((k * 125) / 6) && i < Math.floor(((k + 1) * 125) / 6)));
+  assert.equal(litSet(10, 0, 1).size, 0);
+  assert.equal(litSet(10, 10, 1).size, 10);
+  assert.equal(litSet(200, 77, 9).size, 77);
+});
+
+test("node layouts place n nodes inside the unit box", () => {
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  for (const layout of ["row", "flow", "triangle", "ring"]) {
+    for (let n = 2; n <= 6; n++) {
+      const pts = nodeLayout(n, layout);
+      assert.equal(pts.length, n, `${layout} ${n}`);
+      for (const p of pts) assert.ok(p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1, `${layout} ${n} in the box`);
+      const keys = new Set(pts.map((p) => `${p.x.toFixed(3)},${p.y.toFixed(3)}`));
+      assert.equal(keys.size, n, `${layout} ${n}: no two nodes on one spot`);
+    }
+  }
+  const row = nodeLayout(4, "row");
+  assert.ok(row.every((p) => near(p.y, 0.5)) && row.every((p, i) => i === 0 || p.x > row[i - 1].x));
+  const tri = nodeLayout(3, "triangle");
+  assert.ok(near(tri[0].x, 0.5) && tri[0].y < tri[1].y && near(tri[1].y, tri[2].y) && tri[1].x < tri[2].x);
+  const ring = nodeLayout(4, "ring");
+  assert.ok(near(ring[0].x, 0.5) && ring[0].y < 0.5, "a ring starts at the top");
+  assert.ok(ring.every((p) => near(Math.hypot(p.x - 0.5, p.y - 0.5), Math.hypot(ring[0].x - 0.5, ring[0].y - 0.5))));
+});
+
+test("node links: a chain for row and flow, a closed loop for ring and triangle", () => {
+  assert.deepEqual(nodeLinks(4, "row"), [[0, 1], [1, 2], [2, 3]]);
+  assert.deepEqual(nodeLinks(3, "flow"), [[0, 1], [1, 2]]);
+  assert.deepEqual(nodeLinks(4, "ring"), [[0, 1], [1, 2], [2, 3], [3, 0]]);
+  assert.deepEqual(nodeLinks(3, "triangle"), [[0, 1], [1, 2], [2, 0]]);
+  assert.deepEqual(nodeLinks(2, "ring"), [[0, 1]], "two nodes are linked once");
+  // a triangle's links run round its edge: every node has two neighbours
+  for (let n = 3; n <= 6; n++) {
+    const deg = new Array(n).fill(0);
+    for (const [a, b] of nodeLinks(n, "triangle")) { deg[a]++; deg[b]++; }
+    assert.ok(deg.every((d) => d === 2), `triangle ${n}`);
+  }
+});
+
+test("the badge finds a spot with no lit person under it", () => {
+  const lit = litSet(125, 6, 42);
+  const { cols, rows } = gridOf(125, 888, 52);
+  const spot = emptySpot(cols, rows, 125, lit, 5, 2);
+  assert.ok(spot);
+  for (let r = spot.row; r < spot.row + 2; r++) {
+    for (let c = spot.col; c < spot.col + 5; c++) assert.ok(!lit.has(r * cols + c), `cell ${r},${c} is dim`);
+  }
+  assert.ok(spot.col >= 0 && spot.col + 5 <= cols && spot.row >= 0 && spot.row + 2 <= rows);
+  assert.deepEqual(emptySpot(cols, rows, 125, lit, 5, 2), spot, "the same every frame");
+  assert.equal(emptySpot(4, 1, 4, new Set([0, 1, 2, 3]), 2, 1), null, "nowhere free");
 });

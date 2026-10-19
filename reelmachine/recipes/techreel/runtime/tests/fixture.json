@@ -2,7 +2,7 @@
  "mode": "reel",
  "width": 1080,
  "height": 1920,
- "duration": 41.63,
+ "duration": 55.75,
  "language": "hi",
  "look": {
   "bg": "#06100f",
@@ -22,7 +22,11 @@
   "kind": "orb",
   "text": null
  },
- "creator": null,
+ "creator": {
+  "name": "Aryan Patel",
+  "handle": "@aryanpatel.tech",
+  "avatar": null
+ },
  "heroStates": [
   {
    "atMs": 0,
@@ -760,7 +764,310 @@
      "highlight": 0,
      "id": "b13v0",
      "enterMs": 37710,
-     "exitMs": 41630,
+     "exitMs": 40580,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "office",
+   "kind": "explain",
+   "startMs": 40580,
+   "endMs": 44100,
+   "transition": "cut",
+   "heading": [
+    {
+     "t": "mixture",
+     "a": false
+    },
+    {
+     "t": "of",
+     "a": false
+    },
+    {
+     "t": "experts",
+     "a": true
+    }
+   ],
+   "kicker": "TWIST 🤓",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "people",
+     "total": 125,
+     "lit": 6,
+     "label": "OFFICE MEIN 125 LOG",
+     "badge": "MEETING 💤",
+     "id": "b14v0",
+     "enterMs": 40580,
+     "exitMs": 44350,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "team",
+   "kind": "explain",
+   "startMs": 44350,
+   "endMs": 46470,
+   "transition": "slide",
+   "heading": [
+    {
+     "t": "teen",
+     "a": false
+    },
+    {
+     "t": "dots,",
+     "a": true
+    },
+    {
+     "t": "ek",
+     "a": false
+    },
+    {
+     "t": "team",
+     "a": false
+    }
+   ],
+   "kicker": "HOW IT WORKS",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "nodes",
+     "items": [
+      {
+       "label": "Researcher",
+       "icon": "🔎"
+      },
+      {
+       "label": "Writer",
+       "icon": "✍️"
+      },
+      {
+       "label": "Reviewer",
+       "icon": "🧐"
+      }
+     ],
+     "layout": "triangle",
+     "id": "b15v0",
+     "enterMs": 44350,
+     "exitMs": 46620,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "pipe",
+   "kind": "explain",
+   "startMs": 46620,
+   "endMs": 48540,
+   "transition": "cut",
+   "heading": [
+    {
+     "t": "RAG",
+     "a": true
+    },
+    {
+     "t": "kaise",
+     "a": false
+    },
+    {
+     "t": "chalta",
+     "a": false
+    },
+    {
+     "t": "hai",
+     "a": false
+    }
+   ],
+   "kicker": "PIPELINE",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "nodes",
+     "items": [
+      {
+       "label": "Question",
+       "icon": "❓"
+      },
+      {
+       "label": "Search",
+       "icon": "📚"
+      },
+      {
+       "label": "Model",
+       "icon": ""
+      },
+      {
+       "label": "Answer",
+       "icon": "💬"
+      }
+     ],
+     "layout": "flow",
+     "id": "b16v0",
+     "enterMs": 46620,
+     "exitMs": 48840,
+     "class": "block"
+    },
+    {
+     "place": "stack",
+     "kind": "nodes",
+     "items": [
+      {
+       "label": "Plan",
+       "icon": ""
+      },
+      {
+       "label": "Act",
+       "icon": "⚡"
+      },
+      {
+       "label": "Check",
+       "icon": ""
+      },
+      {
+       "label": "Learn",
+       "icon": "🧠"
+      },
+      {
+       "label": "Repeat",
+       "icon": ""
+      }
+     ],
+     "layout": "ring",
+     "id": "b16v1",
+     "enterMs": 47540,
+     "exitMs": 48840,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "alive",
+   "kind": "honest",
+   "startMs": 48840,
+   "endMs": 50760,
+   "transition": "zoom",
+   "heading": [
+    {
+     "t": "laptop",
+     "a": false
+    },
+    {
+     "t": "zinda",
+     "a": true
+    },
+    {
+     "t": "hai",
+     "a": false
+    }
+   ],
+   "kicker": "STATUS",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "heartbeat",
+     "label": "LAPTOP STATUS: ZINDA",
+     "id": "b17v0",
+     "enterMs": 49080,
+     "exitMs": 50960,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "free",
+   "kind": "reveal",
+   "startMs": 50960,
+   "endMs": 51880,
+   "transition": "flash",
+   "heading": [
+    {
+     "t": "MIT",
+     "a": false
+    },
+    {
+     "t": "license",
+     "a": true
+    }
+   ],
+   "kicker": "FEATURE 04/04",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "flash",
+     "text": "yaani *free*",
+     "id": "b18v0",
+     "enterMs": 51480,
+     "exitMs": 52030,
+     "class": "overlay"
+    }
+   ]
+  },
+  {
+   "id": "cta",
+   "kind": "cta",
+   "startMs": 52030,
+   "endMs": 54550,
+   "transition": "cut",
+   "heading": [
+    {
+     "t": "ai",
+     "a": false
+    },
+    {
+     "t": "ki",
+     "a": false
+    },
+    {
+     "t": "emi",
+     "a": false
+    },
+    {
+     "t": "se",
+     "a": false
+    },
+    {
+     "t": "pareshaan?",
+     "a": true
+    }
+   ],
+   "kicker": "",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "comment",
+     "keyword": "STRATA",
+     "reply": "link DM kar dunga",
+     "id": "b19v0",
+     "enterMs": 52150,
+     "exitMs": 55750,
+     "class": "block"
+    },
+    {
+     "place": "stack",
+     "kind": "follow",
+     "id": "b19v1",
+     "enterMs": 53943,
+     "exitMs": 55750,
      "class": "block"
     }
    ]
@@ -2066,6 +2373,456 @@
      "a": false,
      "startMs": 40292,
      "endMs": 40430
+    }
+   ]
+  },
+  {
+   "startMs": 40580,
+   "endMs": 41506,
+   "words": [
+    {
+     "t": "matlab",
+     "a": false,
+     "startMs": 40580,
+     "endMs": 40889
+    },
+    {
+     "t": "office",
+     "a": true,
+     "startMs": 40889,
+     "endMs": 41197
+    },
+    {
+     "t": "jaisa,",
+     "a": false,
+     "startMs": 41197,
+     "endMs": 41506
+    }
+   ]
+  },
+  {
+   "startMs": 41506,
+   "endMs": 42380,
+   "words": [
+    {
+     "t": "company",
+     "a": false,
+     "startMs": 41506,
+     "endMs": 41866
+    },
+    {
+     "t": "mein",
+     "a": false,
+     "startMs": 41866,
+     "endMs": 42071
+    },
+    {
+     "t": "125",
+     "a": false,
+     "startMs": 42071,
+     "endMs": 42226
+    },
+    {
+     "t": "log",
+     "a": false,
+     "startMs": 42226,
+     "endMs": 42380
+    }
+   ]
+  },
+  {
+   "startMs": 42500,
+   "endMs": 43369,
+   "words": [
+    {
+     "t": "kaam",
+     "a": false,
+     "startMs": 42500,
+     "endMs": 42683
+    },
+    {
+     "t": "sirf",
+     "a": false,
+     "startMs": 42683,
+     "endMs": 42866
+    },
+    {
+     "t": "6",
+     "a": true,
+     "startMs": 42866,
+     "endMs": 42911
+    },
+    {
+     "t": "karte",
+     "a": false,
+     "startMs": 42911,
+     "endMs": 43140
+    },
+    {
+     "t": "hain,",
+     "a": false,
+     "startMs": 43140,
+     "endMs": 43369
+    }
+   ]
+  },
+  {
+   "startMs": 43369,
+   "endMs": 44100,
+   "words": [
+    {
+     "t": "baaki",
+     "a": false,
+     "startMs": 43369,
+     "endMs": 43597
+    },
+    {
+     "t": "meeting",
+     "a": true,
+     "startMs": 43597,
+     "endMs": 43917
+    },
+    {
+     "t": "mein",
+     "a": false,
+     "startMs": 43917,
+     "endMs": 44100
+    }
+   ]
+  },
+  {
+   "startMs": 44350,
+   "endMs": 45150,
+   "words": [
+    {
+     "t": "researcher,",
+     "a": false,
+     "startMs": 44350,
+     "endMs": 44664
+    },
+    {
+     "t": "writer",
+     "a": false,
+     "startMs": 44664,
+     "endMs": 44836
+    },
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 44836,
+     "endMs": 44921
+    },
+    {
+     "t": "reviewer",
+     "a": true,
+     "startMs": 44921,
+     "endMs": 45150
+    }
+   ]
+  },
+  {
+   "startMs": 45270,
+   "endMs": 46470,
+   "words": [
+    {
+     "t": "teeno",
+     "a": false,
+     "startMs": 45270,
+     "endMs": 45492
+    },
+    {
+     "t": "aapas",
+     "a": false,
+     "startMs": 45492,
+     "endMs": 45714
+    },
+    {
+     "t": "mein",
+     "a": false,
+     "startMs": 45714,
+     "endMs": 45892
+    },
+    {
+     "t": "baat",
+     "a": true,
+     "startMs": 45892,
+     "endMs": 46070
+    },
+    {
+     "t": "karte",
+     "a": false,
+     "startMs": 46070,
+     "endMs": 46292
+    },
+    {
+     "t": "hain",
+     "a": false,
+     "startMs": 46292,
+     "endMs": 46470
+    }
+   ]
+  },
+  {
+   "startMs": 46620,
+   "endMs": 46934,
+   "words": [
+    {
+     "t": "sawaal",
+     "a": false,
+     "startMs": 46620,
+     "endMs": 46791
+    },
+    {
+     "t": "aaya,",
+     "a": false,
+     "startMs": 46791,
+     "endMs": 46934
+    }
+   ]
+  },
+  {
+   "startMs": 46934,
+   "endMs": 47420,
+   "words": [
+    {
+     "t": "documents",
+     "a": true,
+     "startMs": 46934,
+     "endMs": 47191
+    },
+    {
+     "t": "dhoondhe",
+     "a": false,
+     "startMs": 47191,
+     "endMs": 47420
+    }
+   ]
+  },
+  {
+   "startMs": 47540,
+   "endMs": 48540,
+   "words": [
+    {
+     "t": "phir",
+     "a": false,
+     "startMs": 47540,
+     "endMs": 47730
+    },
+    {
+     "t": "model",
+     "a": false,
+     "startMs": 47730,
+     "endMs": 47969
+    },
+    {
+     "t": "ne",
+     "a": false,
+     "startMs": 47969,
+     "endMs": 48064
+    },
+    {
+     "t": "jawab",
+     "a": true,
+     "startMs": 48064,
+     "endMs": 48302
+    },
+    {
+     "t": "likha",
+     "a": false,
+     "startMs": 48302,
+     "endMs": 48540
+    }
+   ]
+  },
+  {
+   "startMs": 48840,
+   "endMs": 49640,
+   "words": [
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 48840,
+     "endMs": 48990
+    },
+    {
+     "t": "sabse",
+     "a": false,
+     "startMs": 48990,
+     "endMs": 49240
+    },
+    {
+     "t": "badi",
+     "a": false,
+     "startMs": 49240,
+     "endMs": 49440
+    },
+    {
+     "t": "baat",
+     "a": false,
+     "startMs": 49440,
+     "endMs": 49640
+    }
+   ]
+  },
+  {
+   "startMs": 49760,
+   "endMs": 50760,
+   "words": [
+    {
+     "t": "laptop",
+     "a": false,
+     "startMs": 49760,
+     "endMs": 50046
+    },
+    {
+     "t": "abhi",
+     "a": false,
+     "startMs": 50046,
+     "endMs": 50236
+    },
+    {
+     "t": "tak",
+     "a": false,
+     "startMs": 50236,
+     "endMs": 50379
+    },
+    {
+     "t": "zinda",
+     "a": true,
+     "startMs": 50379,
+     "endMs": 50617
+    },
+    {
+     "t": "hai",
+     "a": false,
+     "startMs": 50617,
+     "endMs": 50760
+    }
+   ]
+  },
+  {
+   "startMs": 50960,
+   "endMs": 51360,
+   "words": [
+    {
+     "t": "MIT",
+     "a": false,
+     "startMs": 50960,
+     "endMs": 51069
+    },
+    {
+     "t": "license,",
+     "a": false,
+     "startMs": 51069,
+     "endMs": 51360
+    }
+   ]
+  },
+  {
+   "startMs": 51480,
+   "endMs": 51880,
+   "words": [
+    {
+     "t": "yaani",
+     "a": false,
+     "startMs": 51480,
+     "endMs": 51702
+    },
+    {
+     "t": "free",
+     "a": true,
+     "startMs": 51702,
+     "endMs": 51880
+    }
+   ]
+  },
+  {
+   "startMs": 52030,
+   "endMs": 52830,
+   "words": [
+    {
+     "t": "toh",
+     "a": false,
+     "startMs": 52030,
+     "endMs": 52150
+    },
+    {
+     "t": "comment",
+     "a": false,
+     "startMs": 52150,
+     "endMs": 52430
+    },
+    {
+     "t": "karo",
+     "a": false,
+     "startMs": 52430,
+     "endMs": 52590
+    },
+    {
+     "t": "STRATA",
+     "a": true,
+     "startMs": 52590,
+     "endMs": 52830
+    }
+   ]
+  },
+  {
+   "startMs": 52950,
+   "endMs": 53778,
+   "words": [
+    {
+     "t": "link",
+     "a": false,
+     "startMs": 52950,
+     "endMs": 53171
+    },
+    {
+     "t": "DM",
+     "a": false,
+     "startMs": 53171,
+     "endMs": 53281
+    },
+    {
+     "t": "kar",
+     "a": false,
+     "startMs": 53281,
+     "endMs": 53447
+    },
+    {
+     "t": "dunga,",
+     "a": false,
+     "startMs": 53447,
+     "endMs": 53778
+    }
+   ]
+  },
+  {
+   "startMs": 53778,
+   "endMs": 54550,
+   "words": [
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 53778,
+     "endMs": 53943
+    },
+    {
+     "t": "follow",
+     "a": true,
+     "startMs": 53943,
+     "endMs": 54274
+    },
+    {
+     "t": "kar",
+     "a": false,
+     "startMs": 54274,
+     "endMs": 54440
+    },
+    {
+     "t": "lo",
+     "a": false,
+     "startMs": 54440,
+     "endMs": 54550
     }
    ]
   }

@@ -328,6 +328,127 @@ html, body { margin: 0; background: #000; }
 .drawing { display: flex; align-items: center; justify-content: center; transform-origin: 50% 50%; }
 .drawing svg { display: block; overflow: visible; }
 
+/* ------------------------------------------------------------ social and analogy (social.mjs) */
+/* people: an office of little people, a few lit in the accent, the rest dim; a badge over the dim ones */
+.people { position: relative; display: flex; flex-direction: column; align-items: center; gap: 26px; }
+.pgrid { display: block; overflow: visible; }
+.pp { fill: var(--text); }
+.pp.lit.on { fill: var(--accent); filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 70%, transparent)); }
+.plabel {
+  font-family: var(--mono); font-size: 30px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text); white-space: nowrap; text-align: center; font-variant-numeric: tabular-nums;
+}
+.pbadge {
+  position: absolute; left: 0; top: 0; white-space: nowrap; font-family: var(--mono); font-size: 30px; font-weight: 800;
+  letter-spacing: 0.14em; text-transform: uppercase; line-height: 1; padding: 16px 26px; border-radius: 999px;
+  color: var(--bg); background: var(--text); box-shadow: 0 16px 40px -8px rgba(0,0,0,0.65); opacity: 0;
+}
+
+/* nodes: accent discs joined by lines that draw in */
+.nodes { position: relative; }
+.nlinks { position: absolute; left: 0; top: 0; overflow: visible; }
+.nline { stroke: color-mix(in srgb, var(--accent) 75%, transparent); stroke-width: 4; stroke-linecap: round; fill: none; }
+.narrow { fill: var(--accent); }
+.ndot { fill: #fff; filter: drop-shadow(0 0 8px var(--accent)); }
+.nnode { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.ndisc {
+  flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  border: 3px solid var(--accent);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 34%, transparent), color-mix(in srgb, var(--accent) 8%, var(--bg)) 75%);
+  box-shadow: 0 0 34px color-mix(in srgb, var(--accent) 40%, transparent), inset 0 2px 0 rgba(255,255,255,0.18);
+}
+.nicon { line-height: 1; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.45)); }
+.ncore { width: 30%; height: 30%; border-radius: 50%; background: var(--accent); box-shadow: 0 0 22px var(--accent); }
+.nlabel {
+  font-family: var(--mono); font-size: 24px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text); text-align: center; line-height: 1.25;
+  /* a backing, so a link passing under a label never strikes through it */
+  padding: 4px 10px; border-radius: 8px; background: color-mix(in srgb, var(--bg) 78%, transparent);
+}
+
+/* heartbeat: an ECG trace on monitor paper, a blip sweeping it */
+.heartbeat { display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.ecg { display: block; overflow: visible; }
+.egrid { stroke: color-mix(in srgb, var(--accent) 9%, transparent); stroke-width: 1.5; }
+.eline {
+  fill: none; stroke: var(--accent); stroke-width: 6; stroke-linejoin: round; stroke-linecap: round;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 65%, transparent));
+}
+.etrail { fill: none; stroke: #fff; stroke-width: 7; stroke-linejoin: round; stroke-linecap: round; filter: drop-shadow(0 0 12px var(--accent)); }
+.edot { fill: #fff; filter: drop-shadow(0 0 14px var(--accent)) drop-shadow(0 0 4px #fff); }
+.elabel {
+  display: flex; align-items: center; gap: 16px; font-family: var(--mono); font-size: 30px; font-weight: 800;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--text); white-space: nowrap;
+}
+.elabel i { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 14px var(--accent); }
+
+/* flash: the whole frame in the accent, its text in the ink */
+.flashv {
+  position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  background-image: radial-gradient(70% 45% at 50% 47%, rgba(255,255,255,0.16), transparent 70%);
+}
+.ftext {
+  /* centred on the stage's middle (y 910), not the frame's */
+  margin-top: -100px; max-width: 952px; text-align: center; font-family: var(--display); font-size: 150px; font-weight: 900;
+  font-synthesis: weight; line-height: 1.02; letter-spacing: -0.01em; color: var(--accentInk); text-wrap: balance;
+}
+.ftext .accent { color: var(--accentInk); text-decoration: underline; text-decoration-thickness: 12px; text-underline-offset: 14px; text-shadow: none; }
+
+/* comment: an Instagram-style comment field typing the keyword, a send arrow, the reply chip */
+.comment { width: 860px; display: flex; flex-direction: column; align-items: flex-end; gap: 22px; }
+.cmbox {
+  width: 100%; display: flex; align-items: center; gap: 22px; padding: 16px 16px 16px 18px; border-radius: 999px;
+  border: 2.5px solid color-mix(in srgb, var(--text) 30%, transparent); background: rgba(255,255,255,0.04);
+  box-shadow: 0 30px 70px -24px rgba(0,0,0,0.7);
+}
+.cmbox.active { border-color: color-mix(in srgb, var(--text) 80%, transparent); }
+.cavatar {
+  flex: none; width: 64px; height: 64px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--glow1), var(--glow3)); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.18);
+}
+.cfield { flex: 1; min-width: 0; display: flex; align-items: center; white-space: nowrap; overflow: hidden; height: 64px; }
+.cplace { font-family: var(--mono); font-size: 30px; color: var(--muted); }
+.ctyped { font-family: var(--mono); font-size: 44px; font-weight: 800; letter-spacing: 0.1em; color: var(--accent); }
+.ccaret { display: inline-block; width: 4px; height: 46px; margin: 0 2px 0 4px; background: var(--text); }
+.csend {
+  flex: none; width: 72px; height: 72px; border-radius: 50%; padding: 16px; color: var(--accentInk);
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.csend.on { background: var(--accent); box-shadow: 0 0 26px color-mix(in srgb, var(--accent) 60%, transparent); }
+.csend svg { display: block; width: 100%; height: 100%; }
+.creply {
+  font-family: var(--sans); font-size: 32px; font-weight: 800; line-height: 1; white-space: nowrap; padding: 16px 24px;
+  border-radius: 14px; color: var(--bg); background: var(--text); box-shadow: 0 16px 36px -10px rgba(0,0,0,0.6);
+}
+
+/* follow: the creator's card, its Follow button flipping to Following ✓ */
+.follow { width: 800px; padding: 36px 40px 40px; display: flex; flex-direction: column; gap: 34px; }
+/* no creator: nothing drawn, a block of no size */
+.follow.none { display: block; width: 0; height: 0; padding: 0; overflow: hidden; }
+.ftop { display: flex; align-items: center; gap: 28px; }
+.favatar {
+  flex: none; width: 136px; height: 136px; border-radius: 50%; overflow: hidden;
+  box-shadow: 0 0 0 4px var(--bg), 0 0 0 8px var(--accent), 0 0 30px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.favatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.favatar.initial {
+  display: flex; align-items: center; justify-content: center; font-family: var(--display); font-size: 64px; font-weight: 900;
+  color: var(--accentInk); background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 40%, #fff), var(--accent) 55%);
+}
+.fwho { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.fname { font-family: var(--sans); font-size: 48px; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fhandle { font-family: var(--mono); font-size: 28px; color: var(--muted); white-space: nowrap; }
+.fbutton {
+  position: relative; display: grid; place-items: center; height: 116px; border-radius: 999px;
+  font-family: var(--display); font-size: 50px; font-weight: 900; font-synthesis: weight; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--accentInk); background: var(--accent); border: 3px solid var(--accent);
+  box-shadow: 0 18px 50px -10px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+.fbutton.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--bg)); box-shadow: 0 0 40px color-mix(in srgb, var(--accent) 40%, transparent); }
+.flab { grid-area: 1 / 1; white-space: nowrap; }
+.fburst { position: absolute; inset: -6px; border-radius: 999px; border: 4px solid var(--accent); opacity: 0; pointer-events: none; }
+
 /* ------------------------------------------------------------ hero */
 .hero { position: absolute; left: 0; top: 0; transform-origin: 50% 50%; will-change: transform, opacity; }
 .hero svg { display: block; overflow: visible; }

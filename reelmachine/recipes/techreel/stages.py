@@ -49,6 +49,7 @@ from .words import unit_times
 COUNTER_MS = 900          # runtime/pure.mjs COUNTER_MS: a counter lands this long after it enters
 TYPE_CPS = 28             # runtime/pure.mjs TYPE_CPS
 TERM_CMD_GAP_MS = 250     # runtime/pure.mjs: the pause before the next command starts typing
+FOLLOW_FLIP_MS = 900      # runtime/social.mjs FLIP_MS: the follow button turns to Following this long after it enters
 MAX_SFX = 80
 # what goes first when a reel has too many cues: the pops are the most and the least missed
 _DROP_ORDER = ("pop", "tick", "ding", "thud", "whoosh")
@@ -126,20 +127,30 @@ def _cap(cues: list[tuple[int, str]]) -> list[tuple[int, str]]:
 
 
 def sfx_cues(doc: dict[str, Any]) -> list[tuple[int, str]]:
-    """When each sound effect plays, from the reel document: a whoosh into every beat but the first, a pop as each
-    block visual enters, a thud per stamp, a ding as each counter lands and a tick as each terminal command starts
-    typing. None when the reel turns sound effects off."""
+    """When each sound effect plays, from the reel document: a whoosh into every beat but the first and as a flash
+    wipes in, a pop as each block visual enters, a thud per stamp and error box, a ding as each counter lands and
+    as the follow button flips, a tick as each terminal command or the comment's keyword starts typing. A follow
+    card with no creator draws nothing, so it is silent. None when the reel turns sound effects off."""
     if not doc.get("sfx", True):
         return []
     cues: list[tuple[int, str]] = []
+    creator = bool(doc.get("creator"))
     for b, beat in enumerate(doc["beats"]):
         if b:
             cues.append((beat["startMs"], "whoosh"))
         for v in beat["visuals"]:
+            if v["kind"] == "follow" and not creator:
+                continue
             if v["class"] == "block":
                 cues.append((v["enterMs"], "pop"))
-            if v["kind"] == "stamp":
+            if v["kind"] in ("stamp", "error"):
                 cues.append((v["enterMs"], "thud"))
+            elif v["kind"] == "flash":
+                cues.append((v["enterMs"], "whoosh"))
+            elif v["kind"] == "follow":
+                cues.append((v["enterMs"] + FOLLOW_FLIP_MS, "ding"))
+            elif v["kind"] == "comment":
+                cues.append((v["enterMs"], "tick"))
             elif v["kind"] == "counter":
                 cues.append((v["enterMs"] + COUNTER_MS, "ding"))
             elif v["kind"] == "terminal":
