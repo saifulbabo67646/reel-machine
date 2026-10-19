@@ -88,7 +88,7 @@ def test_full_makes_a_reel_with_sound_and_captions(tmp_path):
     engine_manifest = next(a for a in job.result.artifacts if a.name == "manifest.json")
     verification = json.loads(Path(engine_manifest.path).read_text(encoding="utf-8"))["verification"]
     assert verification["ok"], verification
-    assert {c["name"] for c in verification["checks"]} == {"format", "duration", "audio"}
+    assert {c["name"] for c in verification["checks"]} == {"format", "duration", "audio", "silence", "visible", "renderer"}
 
 
 def test_full_with_auto_music_mixes_a_bed(tmp_path, monkeypatch):
