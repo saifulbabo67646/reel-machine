@@ -66,7 +66,7 @@ def plain(text: str) -> str:
 
 
 def norm(token: str) -> str:
-    """A token reduced to what the aligner compares: casefolded, no accent marks, no punctuation."""
+    """A token reduced to what the aligner compares: casefolded, without `*` or punctuation."""
     return "".join(ch for ch in token.casefold() if ch != "*" and not unicodedata.category(ch).startswith("P"))
 
 
