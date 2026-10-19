@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   ENTER_MS, EXIT_MS, GLIDE_MS, COUNTER_MS, HERO_MOVE_MS, TYPE_CPS, STAGE, STACK_GAP, MIN_SCALE, HERO_STACKING,
   backOut, clamp01, enterP, exitP, alive, stackLayout, counterValue, typed, terminalStarts, captionAt, wordPhase,
-  heroAt, heroSpan, beatAt, transitionP, progress, blob, seedOf, CAPTION_HOLD_MS,
+  heroAt, heroSpan, beatAt, transitionP, progress, blob, seedOf, CAPTION_HOLD_MS, staggerP, winner, numberParts,
 } from "../pure.mjs";
 
 const block = (id, enterMs, exitMs = 99999, place = "stack") => ({ id, kind: "title", class: "block", enterMs, exitMs, place });
@@ -251,4 +251,38 @@ test("seeds are stable per string", () => {
   assert.equal(seedOf("hook"), seedOf("hook"));
   assert.notEqual(seedOf("hook"), seedOf("cta"));
   assert.equal(seedOf(""), 0x811c9dc5);
+});
+
+test("staggered items: item i starts gapMs after item i-1 and takes durMs", () => {
+  assert.equal(staggerP(0, 1000, 999, 200, 250), 0);
+  assert.equal(staggerP(0, 1000, 1125, 200, 250), 0.5);
+  assert.equal(staggerP(0, 1000, 1250, 200, 250), 1);
+  assert.equal(staggerP(2, 1000, 1400, 200, 250), 0);
+  assert.equal(staggerP(2, 1000, 1525, 200, 250), 0.5);
+  assert.equal(staggerP(2, 1000, 99999, 200, 250), 1);
+  assert.equal(staggerP(1, 0, 300, 100, 0), 1, "a zero duration is a step");
+  assert.equal(staggerP(1, 0, 99, 100, 0), 0);
+});
+
+test("the winner is the higher number, else the right", () => {
+  assert.equal(winner("1", "0"), "left");
+  assert.equal(winner("0", "1"), "right");
+  assert.equal(winner("19.9K", "0"), "left");
+  assert.equal(winner("₹2,000", "₹500"), "left");
+  assert.equal(winner("-3", "-1"), "right");
+  assert.equal(winner("5", "5"), "right", "a tie goes right");
+  assert.equal(winner("lots", "1"), "right", "a side that is no number never wins");
+  assert.equal(winner("9", "many"), "right");
+  assert.equal(winner("", ""), "right");
+});
+
+test("a number with a prefix and suffix splits for counterValue, which then gives it back", () => {
+  assert.deepEqual(numberParts("176B"), { prefix: "", to: 176, decimals: 0, suffix: "B" });
+  assert.deepEqual(numberParts("$19.99/mo"), { prefix: "$", to: 19.99, decimals: 2, suffix: "/mo" });
+  assert.deepEqual(numberParts("-4%"), { prefix: "", to: -4, decimals: 0, suffix: "%" });
+  for (const text of ["176B", "$19.99/mo", "-4%", "= 172B", "6B / 125B"]) {
+    assert.equal(counterValue({ ...numberParts(text), enterMs: 0 }, Infinity), text);
+  }
+  // text counterValue cannot give back (grouping it would rewrite, no digits, too many decimals) is not a number
+  for (const text of ["2,000", "12 000", "free", "", "1.234", "19900"]) assert.equal(numberParts(text), null, text);
 });

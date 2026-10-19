@@ -158,6 +158,35 @@ export function counterValue(v, t) {
   return `${v.prefix ?? ""}${sign}${text}${v.suffix ?? ""}`;
 }
 
+/** `text` as `{prefix, to, decimals, suffix}` for counterValue when it is one number (at most 2 decimals) with
+    non-digit text round it, and counterValue's final text gives it back exactly; else null (the caller slams the
+    text instead of rolling it, so "2,000" or "free" are never rewritten). */
+export function numberParts(text) {
+  const m = /^(\D*?)(-?\d+(?:\.\d{1,2})?)(.*)$/su.exec(String(text ?? ""));
+  // a separator then more digits after the number ("2,000", "12 000", "1.234") is not one number
+  if (!m || /^[.,\s]?\d/u.test(m[3])) return null;
+  const decimals = m[2].includes(".") ? m[2].split(".")[1].length : 0;
+  const parts = { prefix: m[1], to: Number(m[2]), decimals, suffix: m[3] };
+  return counterValue({ ...parts, enterMs: 0 }, Infinity) === text ? parts : null;
+}
+
+/** Item `i` of a staggered run, 0..1: it starts `gapMs` after item i-1 (item 0 at `enterMs`) and takes `durMs`. */
+export function staggerP(i, enterMs, t, gapMs, durMs) {
+  const start = enterMs + i * gapMs;
+  if (durMs <= 0) return t >= start ? 1 : 0;
+  return clamp01((t - start) / durMs);
+}
+
+/** Which of two score values wins: the higher number; a tie, or a side that is not a number, goes right. */
+export function winner(left, right) {
+  const num = (text) => {
+    const m = /-?\d+(?:\.\d+)?/.exec(String(text ?? "").replace(/(\d)[,\s](?=\d{3}\b)/g, "$1"));
+    return m ? Number(m[0]) : null;
+  };
+  const a = num(left), b = num(right);
+  return a !== null && b !== null && a > b ? "left" : "right";
+}
+
 /** The first floor((t - startMs) / 1000 * TYPE_CPS) characters of `text` (code points), all of it after. */
 export function typed(text, startMs, t) {
   const chars = [...(text ?? "")];

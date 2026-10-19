@@ -8,6 +8,7 @@ import {
   captionAt, wordPhase, heroAt, heroSpan, beatAt, transitionP, progress, blob, seedOf,
 } from "./pure.mjs";
 import { COMPONENTS, STAMP_FROM, el, wordSpans, slam } from "./components.mjs";
+import { CARDS } from "./cards.mjs";
 import { HERO_SIZE, buildHero, updateHero } from "./hero.mjs";
 
 const done = () => window.__reelResolve && window.__reelResolve();
@@ -25,6 +26,7 @@ const STAGE_CX = (STAGE.left + STAGE.right) / 2, STAGE_CY = (STAGE.top + STAGE.b
 const GRAIN = "data:image/svg+xml;utf8," + encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="240" height="240" filter="url(#n)"/></svg>`);
 
+const KINDS = { ...COMPONENTS, ...CARDS };
 const px = (v) => `${v.toFixed(1)}px`;
 const switchAt = (beat) => beat.startMs - (TRANSITION_LEN[beat.transition] ?? 0);
 
@@ -41,7 +43,7 @@ function buildBeat(ui, beat, index, doc) {
   const over = el("div", "layer beat-over", ui.overLayer);
   const blocks = [], overlays = [];
   for (const v of beat.visuals) {
-    const comp = COMPONENTS[v.kind];
+    const comp = KINDS[v.kind];
     if (!comp) { console.warn(`techreel: no component for visual kind "${v.kind}", skipped`); continue; }
     const node = comp.build(v, doc);
     if (v.class === "overlay") {
@@ -257,6 +259,10 @@ function applyStage(ui, doc, b, ms) {
       // perched just above the block's top corner, so it covers none of the block's content
       cx = o.v.place === "left" ? box.x + o.w / 2 : box.x + box.w - o.w / 2;
       cy = box.y - o.h / 2 + 12;
+    } else if (o.v.kind === "error") {
+      // an OS error box pops up over the middle of the stage, whatever is under it
+      cx = STAGE_CX;
+      cy = STAGE_CY;
     } else {
       cx = box.x + box.w / 2;
       cy = box.y + box.h / 2;
@@ -418,7 +424,8 @@ try {
     // for everything the page laid out, so fit() measures real metrics
     const text = (doc.captions || []).flatMap((c) => c.words.map((w) => w.t)).join(" ");
     // the display face at the heavy weight the headings, titles and numbers ask for, with their own text
-    const display = doc.beats.flatMap((b) => [...b.heading.map((w) => w.t), ...b.visuals.flatMap((v) => [v.text, v.label])])
+    const display = doc.beats.flatMap((b) => [...b.heading.map((w) => w.t), ...b.visuals.flatMap((v) => [
+      v.text, v.label, v.result, ...(v.rows || []), v.left?.value, v.right?.value, v.kind === "versus" ? "VS" : null])])
       .filter(Boolean).join(" ").toUpperCase() + " 0123456789";
     const css = getComputedStyle(document.documentElement);
     const face = (name) => css.getPropertyValue(name);
