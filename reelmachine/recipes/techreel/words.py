@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
+
 from reelmachine.core.timeline import WordSpan
 
 from .markup import Unit
@@ -37,7 +39,7 @@ def unit_times(spans: list[WordSpan], us: list[Unit], speech_ms: int) -> list[tu
         end_ms = speech_ms
 
     def at(x: float) -> float:
-        for (x0, t0), (x1, t1) in zip(pts, pts[1:]):
+        for (x0, t0), (x1, t1) in pairwise(pts):
             if x <= x1:
                 return t0 if x1 == x0 else t0 + (t1 - t0) * (x - x0) / (x1 - x0)
         return pts[-1][1]
