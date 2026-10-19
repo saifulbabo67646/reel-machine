@@ -210,3 +210,34 @@ def test_trim_clip_keeps_a_silent_clip_whole(tmp_path, ms):
 def test_word_spans_follow_the_trim():
     words = [WordSpan(text="a", start_ms=400, end_ms=700), WordSpan(text="b", start_ms=900, end_ms=1500)]
     assert [(w.start_ms, w.end_ms) for w in shift_words(words, 440, 920)] == [(0, 260), (460, 920)]
+
+
+def test_a_missing_music_file_is_refused_at_the_script_stage(tmp_path):
+    with pytest.raises(InvalidInput) as exc:
+        ScriptStage().run(_ctx(tmp_path), SCRIPT | {"music": str(tmp_path / "nope.mp3")})
+    assert exc.value.details == {"path": "music"} and exc.value.stage == "script"
+
+
+def test_local_music_needs_local_files(tmp_path):
+    track = tmp_path / "bed.wav"
+    track.write_bytes(b"x")
+    ctx = _ctx(tmp_path)
+    on = dataclasses.replace(ctx, config=dataclasses.replace(ctx.config, local_files=True))
+    off = dataclasses.replace(ctx, config=dataclasses.replace(ctx.config, local_files=False))
+    assert ScriptStage().run(on, SCRIPT | {"music": str(track)}).inputs.music == str(track)
+    with pytest.raises(InvalidInput) as exc:
+        ScriptStage().run(off, SCRIPT | {"music": str(track)})
+    assert exc.value.details == {"path": "music"} and exc.value.hint
+    assert ScriptStage().run(off, SCRIPT | {"music": "auto"}).inputs.music == "auto"
+
+
+def test_the_probe_reports_a_missing_music_file(tmp_path):
+    from reelmachine.core.recipe import ProbeContext
+    from reelmachine.recipes.techreel.models import TechReelInputs
+    from reelmachine.recipes.techreel.recipe import TechReelRecipe
+
+    ctx = _ctx(tmp_path)
+    report = TechReelRecipe().probe(TechReelInputs.model_validate(SCRIPT | {"music": "/nope/x.mp3"}),
+                                    ProbeContext(config=ctx.config, providers=ctx.providers))
+    assets = next(c for c in report.checks if c.name == "assets")
+    assert not assets.ok and assets.detail.startswith("music:")

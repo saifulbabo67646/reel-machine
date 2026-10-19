@@ -28,8 +28,10 @@ from ...render.captions import write_srt
 from ..dialoguereel.verify import parse_silences
 from ..doodle.narration import provider_for
 from ..explainer3d.audio import mix, pad_speech, silence, synth_sfx
+from ..explainer3d.music import synth_music
 from ..explainer3d.stages import speak_line
 from ..explainer3d.video import mux
+from ..mapreel.stages import check_music
 from . import assets, compose, lint
 from .markup import is_unspaced, units
 from .models import (
@@ -204,6 +206,11 @@ class ScriptStage:
                 if finding["severity"] == "error":
                     raise InvalidInput(finding["message"], hint=finding["hint"], stage=self.id,
                                        details={"path": finding["path"], "rule": finding["rule"]})
+        try:
+            check_music(inputs, allow_local=ctx.config.local_files)
+        except InvalidInput as exc:
+            exc.stage = self.id
+            raise
         warnings = [f"{f['rule']}: {f['message']}" for f in found]
         return ScriptOutput(inputs=inputs, lint=found, warnings=warnings)
 
@@ -438,7 +445,11 @@ class RenderStage:
         planned = sfx_cues(doc)
         sfx = {n: synth_sfx(n, work / "sfx" / f"{n}.wav", settings=settings, designed=True)
                for n in sorted({n for _, n in planned})}
-        audio = mix(ctx.assets.get(narration.audio_asset), [(at, sfx[n]) for at, n in planned], None,
+        if inputs.music == "auto":
+            music = synth_music(work / "music.wav", total_ms=total_ms)
+        else:
+            music = Path(inputs.music).expanduser() if inputs.music else None  # checked by the script stage
+        audio = mix(ctx.assets.get(narration.audio_asset), [(at, sfx[n]) for at, n in planned], music,
                     work / "audio.wav", total_ms=total_ms, settings=settings, profile="studio", cancel=ctx.cancel)
         video = mux(cached, audio, outdir / f"{name}.mp4", total_ms=total_ms, settings=settings, cancel=ctx.cancel)
         captions = [Caption(start_ms=start, end_ms=end, text=text, lang=inputs.language,
@@ -448,6 +459,7 @@ class RenderStage:
         manifest = {"reel": str(video), "recipe": "techreel", "mode": inputs.mode,
                     "created": datetime.now(UTC).isoformat(), "durationMs": total_ms,
                     "look": inputs.look, "voice": inputs.voice, "renderer": getattr(renderer, "name", ""),
+                    "music": (inputs.music if inputs.music == "auto" else Path(inputs.music).name) if inputs.music else None,
                     "sources": list(inputs.sources)}
         manifest_path = outdir / f"{name}.json"
         manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")

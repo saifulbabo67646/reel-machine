@@ -142,8 +142,13 @@ def _faded(place: dict[str, Any], wrap: int) -> dict[str, Any]:
     return out
 
 
-def check_music(inputs: MapReelInputs) -> None:
-    """`music` is "auto" (a synthesised bed) or an existing local audio file."""
+def check_music(inputs: Any, *, allow_local: bool = True) -> None:
+    """`music` is "auto" (a synthesised bed) or an existing local audio file (only where local files are allowed;
+    techreel passes its config's `local_files`)."""
+    if inputs.music and inputs.music != "auto" and not allow_local:
+        raise InvalidInput(f"a local music file is not allowed here: {inputs.music}",
+                           hint='use "auto" for a synthesised bed, or leave music out',
+                           details={"path": "music"})
     if inputs.music and inputs.music != "auto" and not Path(inputs.music).expanduser().is_file():
         raise InvalidInput(f"music file not found: {inputs.music}",
                            hint='give a local audio file, "auto" for a synthesised bed, or leave music out',

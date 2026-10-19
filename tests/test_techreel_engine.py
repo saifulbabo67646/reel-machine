@@ -89,3 +89,27 @@ def test_full_makes_a_reel_with_sound_and_captions(tmp_path):
     verification = json.loads(Path(engine_manifest.path).read_text(encoding="utf-8"))["verification"]
     assert verification["ok"], verification
     assert {c["name"] for c in verification["checks"]} == {"format", "duration", "audio"}
+
+
+def test_full_with_auto_music_mixes_a_bed(tmp_path, monkeypatch):
+    import wave
+
+    import numpy as np
+
+    from reelmachine.recipes.techreel import stages
+
+    seen = {}
+    real = stages.mix
+
+    def spy(narration, cues, music, *args, **kw):
+        if music is not None:
+            with wave.open(str(music)) as w:
+                seen["peak"] = int(np.abs(np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)).max())
+        seen["music"] = music
+        return real(narration, cues, music, *args, **kw)
+
+    monkeypatch.setattr(stages, "mix", spy)
+    job = run(tmp_path, EXAMPLE | {"mode": "full", "music": "auto"})
+    assert job.state == JobState.SUCCEEDED, job.error
+    assert seen["music"] is not None and seen["peak"] > 100
+    assert json.loads(artifact(job, "reel.json").read_text(encoding="utf-8"))["music"] == "auto"

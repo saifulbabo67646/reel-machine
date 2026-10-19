@@ -19,6 +19,7 @@ from ...core.recipe import (
 )
 from ...core.stage import StageContext
 from ..doodle.narration import provider_for
+from ..mapreel.stages import check_music
 from . import assets, lint
 from .guide import GUIDE
 from .models import TechReelInputs
@@ -98,6 +99,7 @@ class TechReelRecipe:
         checks.append(CheckResult(name="lint", ok=not blocking,
                                   detail="; ".join(errors) if blocking else _lint_counts(found)))
         try:
+            check_music(inputs, allow_local=config.local_files)
             assets.check_svgs(inputs)
             assets.check_sources(inputs, allow_local=config.local_files)
             count = sum(1 for _ in assets.image_sources(inputs))
