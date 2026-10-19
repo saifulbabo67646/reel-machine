@@ -4,7 +4,8 @@ import {
   ENTER_MS, EXIT_MS, GLIDE_MS, COUNTER_MS, HERO_MOVE_MS, TYPE_CPS, STAGE, STACK_GAP, MIN_SCALE, HERO_STACKING,
   backOut, clamp01, enterP, exitP, alive, stackLayout, counterValue, typed, terminalStarts, captionAt, wordPhase,
   heroAt, heroSpan, beatAt, transitionP, progress, blob, seedOf, CAPTION_HOLD_MS, staggerP, winner, numberParts,
-  gridOf, litSet, nodeLayout, nodeLinks, emptySpot,
+  gridOf, litSet, nodeLayout, nodeLinks, emptySpot, effectiveHeroState, heroTimeline, splitPoints, blinkAt,
+  HERO_PINNED,
 } from "../pure.mjs";
 
 const block = (id, enterMs, exitMs = 99999, place = "stack") => ({ id, kind: "title", class: "block", enterMs, exitMs, place });
@@ -15,7 +16,8 @@ test("the constants are the spec's", () => {
   assert.deepEqual([ENTER_MS, EXIT_MS, GLIDE_MS, COUNTER_MS, HERO_MOVE_MS, TYPE_CPS, STACK_GAP, MIN_SCALE],
     [260, 200, 300, 900, 450, 28, 32, 0.6]);
   assert.deepEqual(STAGE, { top: 440, bottom: 1380, left: 64, right: 1016 });
-  assert.deepEqual([...HERO_STACKING].sort(), ["center", "pulse", "rings", "screen", "shake", "sleep", "small-top"]);
+  assert.deepEqual([...HERO_STACKING].sort(), 
+    ["center", "locked", "pulse", "rings", "screen", "shake", "sleep", "small-top", "split"]);
 });
 
 test("easing and clamping", () => {
@@ -384,4 +386,80 @@ test("the badge finds a spot with no lit person under it", () => {
   assert.ok(spot.col >= 0 && spot.col + 5 <= cols && spot.row >= 0 && spot.row + 2 <= rows);
   assert.deepEqual(emptySpot(cols, rows, 125, lit, 5, 2), spot, "the same every frame");
   assert.equal(emptySpot(4, 1, 4, new Set([0, 1, 2, 3]), 2, 1), null, "nowhere free");
+});
+
+test("the hero in the centre makes room once anything else is on the stage; pinned states keep their scale", () => {
+  assert.equal(effectiveHeroState("center", true), "small-top");
+  assert.equal(effectiveHeroState("center", false), "center");
+  for (const s of ["pulse", "shake", "rings", "screen", "sleep", "locked"]) {
+    assert.ok(HERO_PINNED.has(s));
+    assert.equal(effectiveHeroState(s, true), s);
+  }
+  for (const s of ["small-top", "corner", "hidden", "split"]) assert.equal(effectiveHeroState(s, true), s);
+});
+
+test("the hero timeline gains small-top while blocks are live, and centre again after", () => {
+  const states = [{ atMs: 0, state: "center", text: null }, { atMs: 5000, state: "pulse", text: null },
+    { atMs: 8000, state: "center", text: null }];
+  const lives = [{ enterMs: 1000, exitMs: 2000 }, { enterMs: 6000, exitMs: 9000 }];
+  const got = heroTimeline(states, lives).map((s) => [s.atMs, s.state]);
+  assert.deepEqual(got, [[0, "center"], [1000, "small-top"], [2000 + EXIT_MS, "center"], [5000, "pulse"],
+    [8000, "small-top"], [9000 + EXIT_MS, "center"]]);
+  // what the hero does and whether it stacks are read from the same timeline
+  const tl = heroTimeline(states, lives);
+  assert.equal(heroAt(tl, 1500).state, "small-top");
+  assert.deepEqual(heroSpan(tl, 1500), { id: "hero" });
+});
+
+test("a short gap between blocks does not bounce the hero back to the centre", () => {
+  const states = [{ atMs: 0, state: "center" }];
+  const lives = [{ enterMs: 100, exitMs: 1000 }, { enterMs: 1000 + EXIT_MS + HERO_MOVE_MS - 1, exitMs: 3000 }];
+  assert.deepEqual(heroTimeline(states, lives).map((s) => [s.atMs, s.state]),
+    [[0, "center"], [100, "small-top"], [3000 + EXIT_MS, "center"]]);
+  const apart = [{ enterMs: 100, exitMs: 1000 }, { enterMs: 1000 + EXIT_MS + HERO_MOVE_MS, exitMs: 3000 }];
+  assert.equal(heroTimeline(states, apart).length, 5);
+});
+
+test("the hero timeline keeps each state's fields, starts with blocks already live and leaves no-block reels alone", () => {
+  const states = [{ atMs: 0, state: "center", text: "x", count: 4, labels: ["a"] }];
+  assert.deepEqual(heroTimeline(states, [{ enterMs: 0 }]), [{ atMs: 0, state: "small-top", text: "x", count: 4, labels: ["a"] }]);
+  assert.deepEqual(heroTimeline(states, []), states);
+  assert.deepEqual(heroTimeline([], [{ enterMs: 0, exitMs: 10 }]), []);
+  // a block before the hero's first state changes nothing before it
+  assert.deepEqual(heroTimeline([{ atMs: 500, state: "corner" }], [{ enterMs: 0, exitMs: 1000 }]).map((s) => s.state), ["corner"]);
+});
+
+test("split dots fly out from the hero's centre to a triangle (a row for two)", () => {
+  assert.deepEqual(splitPoints(3, 600, 400, 0), [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }]);
+  const at1 = splitPoints(3, 600, 400, 1);
+  const tri = nodeLayout(3, "triangle");
+  at1.forEach((p, i) => {
+    assert.ok(Math.abs(p.x - (tri[i].x - 0.5) * 600) < 1e-9);
+    assert.ok(Math.abs(p.y - (tri[i].y - 0.5) * 400) < 1e-9);
+  });
+  assert.ok(at1[0].y < 0 && at1[1].x < 0 && at1[2].x > 0, "top, bottom-left, bottom-right");
+  const two = splitPoints(2, 600, 400, 1);
+  assert.deepEqual(two.map((p) => p.y), [0, 0]);
+  assert.deepEqual(two.map((p) => p.x), [-150, 150]);
+  assert.equal(splitPoints(6, 600, 400, 1).length, 6);
+  const mid = splitPoints(3, 600, 400, 0.5)[1];
+  assert.ok(mid.x < 0 && mid.x > at1[1].x * 1.2, "on its way, overshooting a little at most");
+});
+
+test("the robot blinks every 3 to 5 seconds, from the seed alone", () => {
+  const closed = [];
+  for (let t = 0; t < 30000; t += 10) if (blinkAt(t, 7) < 0.5) closed.push(t);
+  const starts = closed.filter((t, i) => i === 0 || t - closed[i - 1] > 10);
+  assert.ok(starts.length >= 5 && starts.length <= 10, `${starts.length} blinks`);
+  for (let i = 1; i < starts.length; i++) {
+    const gap = starts[i] - starts[i - 1];
+    assert.ok(gap >= 3000 - 20 && gap <= 5000 + 20, `gap ${gap}`);
+  }
+  assert.equal(blinkAt(0, 7), 1);
+  assert.equal(blinkAt(12345, 7), blinkAt(12345, 7));
+  assert.notDeepEqual(starts, (() => {
+    const c = [];
+    for (let t = 0; t < 30000; t += 10) if (blinkAt(t, 8) < 0.5) c.push(t);
+    return c.filter((t, i) => i === 0 || t - c[i - 1] > 10);
+  })());
 });

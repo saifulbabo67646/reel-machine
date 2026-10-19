@@ -5,12 +5,12 @@
 // index.html?t=3.2 shows the frame at 3.2 s.
 import {
   ENTER_MS, GLIDE_MS, HERO_MOVE_MS, HERO_STACKING, STAGE, backOut, clamp01, enterP, exitP, alive, stackLayout,
-  captionAt, wordPhase, heroAt, heroSpan, beatAt, transitionP, progress, blob, seedOf,
+  captionAt, wordPhase, heroAt, heroSpan, heroTimeline, beatAt, transitionP, progress, blob, seedOf,
 } from "./pure.mjs";
 import { COMPONENTS, STAMP_FROM, el, wordSpans, slam } from "./components.mjs";
 import { CARDS } from "./cards.mjs";
 import { SOCIAL } from "./social.mjs";
-import { HERO_SIZE, buildHero, updateHero } from "./hero.mjs";
+import { HERO_SIZE, SPLITS, buildHero, updateHero } from "./hero.mjs";
 
 const done = () => window.__reelResolve && window.__reelResolve();
 const lerp = (a, b, p) => a + (b - a) * p;
@@ -64,6 +64,7 @@ function buildBeat(ui, beat, index, doc) {
 
 function build(doc, root) {
   for (const [key, value] of Object.entries(doc.look || {})) document.documentElement.style.setProperty(`--${key}`, value);
+  // the hero's states as authored; fit() adds the automatic small-top moves once the blocks are measured
   const ui = { root, sizes: new Map(), states: doc.heroStates || [] };
   const bg = el("div", "layer bg", root);
   ui.blobs = [0, 1, 2].map((i) => el("div", `blob b${i}`, bg));
@@ -87,6 +88,8 @@ function build(doc, root) {
     // kinds the runtime cannot draw yet fall back to the orb rather than crash
     if (!HERO_SIZE[doc.hero.kind]) console.warn(`techreel: hero kind "${doc.hero.kind}" is not drawn yet, using orb`);
     ui.heroKind = HERO_SIZE[doc.hero.kind] ? doc.hero.kind : "orb";
+    // only the orb and the robot split into dots; the rest stay whole, in the centre
+    if (!SPLITS.has(ui.heroKind)) ui.states = ui.states.map((s) => (s.state === "split" ? { ...s, state: "center" } : s));
     ui.hero = buildHero(ui.heroKind, doc);
     ui.heroSize = HERO_SIZE[ui.heroKind];
     ui.heroLayer.appendChild(ui.hero);
@@ -129,6 +132,14 @@ function fit(ui) {
       o.h = o.node.offsetHeight;
     }
   }
+  // while other blocks are on the stage the centred hero sits small at the top (spec §5.2); heroAt and heroSpan
+  // both read this one timeline, so what the hero does and whether it stacks agree. A block of no size takes
+  // no room, so it makes none
+  const lives = ui.beats.flatMap((b) => b.blocks.map((blk) => blk.v)).filter((v) => {
+    const s = ui.sizes.get(v.id);
+    return s && (s.w > 0 || s.h > 0);
+  });
+  ui.states = heroTimeline(ui.states, lives);
   for (const cap of ui.captions) {
     let size = 54;
     while (cap.node.offsetHeight > CAPTION_ROOM && size > 30) {
@@ -196,6 +207,15 @@ function poseOf(ui, doc, state, ms, kScale, other) {
   return { ...slot, o: state === "sleep" ? 0.45 : 1 };
 }
 
+/** The split state the hero is in or leaving at `ms` (its count and labels), or null. */
+function splitInPlay(states, ms) {
+  let i = -1;
+  for (let k = 0; k < states.length; k++) if (states[k].atMs <= ms) i = k;
+  if (i < 0) return null;
+  if (states[i].state === "split") return states[i];
+  return i > 0 && states[i - 1].state === "split" ? states[i - 1] : null;
+}
+
 function applyHero(ui, doc, ms) {
   if (!ui.hero) return;
   const h = heroAt(ui.states, ms);
@@ -226,7 +246,7 @@ function applyHero(ui, doc, ms) {
   const { w, h: hh } = ui.heroSize;
   ui.hero.style.opacity = pose.o.toFixed(3);
   ui.hero.style.transform = `translate(${px(pose.cx - w / 2)}, ${px(pose.cy - hh / 2)}) scale(${pose.s.toFixed(4)})`;
-  updateHero(ui.hero, h, ms, doc);
+  updateHero(ui.hero, h, ms, doc, splitInPlay(ui.states, ms));
 }
 
 // ------------------------------------------------------------ one beat's stage

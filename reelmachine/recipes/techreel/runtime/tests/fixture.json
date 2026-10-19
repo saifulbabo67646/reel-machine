@@ -31,52 +31,72 @@
   {
    "atMs": 0,
    "state": "center",
-   "text": null
+   "text": null,
+   "count": 3,
+   "labels": []
   },
   {
    "atMs": 3970,
    "state": "small-top",
-   "text": null
+   "text": null,
+   "count": 3,
+   "labels": []
   },
   {
    "atMs": 6750,
    "state": "shake",
-   "text": null
+   "text": null,
+   "count": 3,
+   "labels": []
   },
   {
    "atMs": 7490,
    "state": "corner",
-   "text": null
+   "text": null,
+   "count": 3,
+   "labels": []
   },
   {
    "atMs": 10510,
    "state": "hidden",
-   "text": null
+   "text": null,
+   "count": 3,
+   "labels": []
   },
   {
    "atMs": 13980,
    "state": "pulse",
-   "text": null
+   "text": null,
+   "count": 3,
+   "labels": []
   },
   {
    "atMs": 15100,
    "state": "rings",
-   "text": null
+   "text": null,
+   "count": 3,
+   "labels": []
   },
   {
    "atMs": 16750,
    "state": "screen",
-   "text": "LOCAL ✓"
+   "text": "LOCAL ✓",
+   "count": 3,
+   "labels": []
   },
   {
    "atMs": 19699,
    "state": "sleep",
-   "text": null
+   "text": null,
+   "count": 3,
+   "labels": []
   },
   {
    "atMs": 20420,
    "state": "hidden",
-   "text": null
+   "text": null,
+   "count": 3,
+   "labels": []
   }
  ],
  "beats": [

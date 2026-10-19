@@ -15,7 +15,7 @@ from reelmachine.recipes.techreel.compose import (
     write_project,
 )
 from reelmachine.recipes.techreel.markup import units
-from reelmachine.recipes.techreel.models import TechReelInputs
+from reelmachine.recipes.techreel.models import HeroVisual, TechReelInputs
 from reelmachine.recipes.techreel.schedule import schedule
 
 
@@ -66,8 +66,8 @@ def test_hero_states():
     _, plan, doc = _doc()
     line0 = plan.beats[0].lines[0].start_ms
     assert doc["heroStates"] == [
-        {"atMs": 0, "state": "center", "text": None},
-        {"atMs": line0 + 200, "state": "pulse", "text": None},
+        {"atMs": 0, "state": "center", "text": None, "count": 3, "labels": []},
+        {"atMs": line0 + 200, "state": "pulse", "text": None, "count": 3, "labels": []},
     ]
     assert all(v["kind"] != "hero" for v in doc["beats"][0]["visuals"])
 
@@ -79,7 +79,7 @@ def test_hero_states_without_hero_spec_and_hero_at_zero():
     inputs = _inputs()
     inputs.beats[0].visuals[0].at = None
     doc = reel_document(inputs, plan, _times(inputs))
-    assert doc["heroStates"] == [{"atMs": 0, "state": "pulse", "text": None}]
+    assert doc["heroStates"] == [{"atMs": 0, "state": "pulse", "text": None, "count": 3, "labels": []}]
 
 
 def test_visual_times_ids_and_fields():
@@ -214,3 +214,72 @@ def test_new_overlays_and_nested_camel():
 def test_creator_absent_is_null():
     _, _, doc = _doc()
     assert doc["creator"] is None
+
+
+def test_hero_states_carry_split_count_and_labels():
+    inputs = _inputs()
+    inputs.beats[0].visuals[0] = HeroVisual(kind="hero", state="split", count=4, labels=["a", "b"])
+    plan = schedule(inputs.beats, [[1200, 600], [500]])
+    doc = reel_document(inputs, plan, _times(inputs))
+    assert doc["heroStates"] == [{"atMs": 0, "state": "split", "text": None, "count": 4, "labels": ["a", "b"]}]
+
+
+def test_hero_art_reaches_the_document():
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle id="c" cx="5" cy="5" r="4"/></svg>'
+    inputs = _inputs(hero={"kind": "svg", "svg": svg})
+    plan = schedule(inputs.beats, [[1200, 600], [500]])
+    hero = reel_document(inputs, plan, _times(inputs))["hero"]
+    assert hero["kind"] == "svg" and "<circle" in hero["svg"] and 'id="c_hero.c"' in hero["svg"]
+    assert "file" not in hero
+    inputs = _inputs(hero={"kind": "image", "src": "https://x.test/bot.png"})
+    hero = reel_document(inputs, plan, _times(inputs), images={"https://x.test/bot.png": "img-1.png"})["hero"]
+    assert hero == {"kind": "image", "text": None, "file": "assets/img-1.png"}
+
+
+def _cta(beat, creator=True, title="Strata: local AI"):
+    beats = [{"lines": [{"say": "first"}]}, {"kind": "cta", **beat}]
+    data = {"title": title, "hero": {"kind": "orb"}, "beats": beats}
+    if creator:
+        data["creator"] = {"name": "N", "handle": "@h"}
+    inputs = TechReelInputs.model_validate(data)
+    plan = schedule(inputs.beats, [[300], [400] * len(inputs.beats[1].lines)])
+    return plan, reel_document(inputs, plan, _times(inputs))
+
+
+def test_cta_beat_without_visuals_gets_the_standard_ending():
+    lines = [{"say": "comment strata now"}, {"say": "follow for more"}, {"say": "see you"}]
+    plan, doc = _cta({"lines": lines, "keyword": "STRATA", "dm": "link DM kar dunga", "next": "part *two*"})
+    comment, follow, title = doc["beats"][1]["visuals"]
+    s = plan.beats[1].lines
+    assert (comment["id"], comment["kind"], comment["keyword"], comment["reply"]) == ("b1v0", "comment", "STRATA", "link DM kar dunga")
+    assert comment["enterMs"] == s[0].start_ms and comment["class"] == "block"
+    assert (follow["id"], follow["kind"], follow["enterMs"]) == ("b1v1", "follow", s[1].start_ms)
+    assert (title["id"], title["kind"], title["text"], title["enterMs"]) == ("b1v2", "title", "part *two*", s[2].start_ms)
+    assert comment["exitMs"] == plan.duration_ms
+
+
+def test_cta_defaults_without_creator_keyword_or_next():
+    _, doc = _cta({"lines": [{"say": "comment now"}]}, creator=False)
+    (comment,) = doc["beats"][1]["visuals"]
+    assert (comment["keyword"], comment["reply"]) == ("STRATA", "")
+
+
+def test_cta_one_line_puts_follow_part_way_in():
+    plan, doc = _cta({"lines": [{"say": "comment and follow"}], "next": "more"})
+    comment, follow, title = doc["beats"][1]["visuals"]
+    s = plan.beats[1].lines[0]
+    assert comment["enterMs"] == s.start_ms
+    assert follow["enterMs"] == s.start_ms + round(0.6 * s.speech_ms)
+    assert s.start_ms < title["enterMs"] and title["enterMs"] != follow["enterMs"]
+
+
+def test_cta_with_its_own_visuals_is_left_alone_and_hero_moves_do_not_count():
+    _, doc = _cta({"lines": [{"say": "x"}], "visuals": [{"kind": "title", "text": "mine"}]})
+    assert [v["kind"] for v in doc["beats"][1]["visuals"]] == ["title"]
+    _, doc = _cta({"lines": [{"say": "x"}], "visuals": [{"kind": "hero", "state": "small-top"}]})
+    assert [(v["id"], v["kind"]) for v in doc["beats"][1]["visuals"]] == [("b1v1", "comment"), ("b1v2", "follow")]
+
+
+def test_cta_keyword_from_a_title_strips_punctuation_and_fits():
+    _, doc = _cta({"lines": [{"say": "x"}]}, creator=False, title="«Supercalifragilisticexpialidocious-ish» rocks")
+    assert doc["beats"][1]["visuals"][0]["keyword"] == "SUPERCALIFRAGILISTICEXPI"

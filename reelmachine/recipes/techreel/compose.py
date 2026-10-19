@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 from collections.abc import Mapping, Sequence
 from html import escape
@@ -16,7 +17,16 @@ from typing import Any
 
 from ..dialoguereel.svg import inline_svg
 from .markup import Unit, chunks, units
-from .models import HeroVisual, TechReelInputs, Visual
+from .models import (
+    Beat,
+    CommentVisual,
+    Cue,
+    FollowVisual,
+    HeroVisual,
+    TechReelInputs,
+    TitleVisual,
+    Visual,
+)
 from .schedule import BeatSlot, Plan, cue_ms, exit_ms
 
 HERE = Path(__file__).resolve().parent
@@ -125,6 +135,31 @@ def _hero(inputs: TechReelInputs, images: Mapping[str, str]) -> dict[str, Any] |
     return out
 
 
+_KEYWORD_MAX = CommentVisual.model_fields["keyword"].metadata[0].max_length
+_FOLLOW_FRAC, _TITLE_FRAC = 0.6, 0.8    # a line shared with an earlier generated visual: how far into it
+
+
+def _cta_visuals(beat: Beat, inputs: TechReelInputs) -> list[Visual]:
+    """The standard ending a `cta` beat gets when it has no stage visuals of its own (hero moves do not count):
+    the comment box at the first line, the creator's follow card at the second (part way into the first when
+    there is one line), the next-reel tease as a title at the last line."""
+    if beat.kind != "cta" or any(not isinstance(v, HeroVisual) for v in beat.visuals):
+        return []
+    # the keyword falls back to the title's first word: "Strata: local AI" asks for "STRATA"
+    first = re.search(r"\w+", inputs.title)
+    keyword = beat.keyword or (first.group(0).upper()[:_KEYWORD_MAX] if first else "LINK")
+    out: list[Visual] = [CommentVisual(kind="comment", keyword=keyword, reply=beat.dm or "", at=Cue(line=0))]
+    last, used = len(beat.lines) - 1, {0}
+    if inputs.creator is not None:
+        at = Cue(line=1) if last >= 1 else Cue(line=0, frac=_FOLLOW_FRAC)
+        out.append(FollowVisual(kind="follow", at=at))
+        used.add(at.line)
+    if beat.next:
+        at = Cue(line=last, frac=_TITLE_FRAC) if last in used else Cue(line=last)
+        out.append(TitleVisual(kind="title", text=beat.next, at=at))
+    return out
+
+
 def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tuple[int, int]]]],
                   images: Mapping[str, str] | None = None) -> dict[str, Any]:
     """`times[b][l]` are beat b line l's unit times, line-relative; here they move to reel time. `images` maps
@@ -138,10 +173,12 @@ def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tupl
         us = [units(ln.caption, inputs.language) for ln in beat.lines]
         next_start = plan.beats[b + 1].start_ms if b + 1 < len(plan.beats) else None
         stage: list[dict[str, Any]] = []
-        for v, visual in enumerate(beat.visuals):
+        # generated visuals follow the authored ones, so their ids continue b{beat}v{n}
+        for v, visual in enumerate([*beat.visuals, *_cta_visuals(beat, inputs)]):
             enter, _ = cue_ms(visual.at, slot, times[b], us)
             if isinstance(visual, HeroVisual):
-                hero_states.append({"atMs": enter, "state": visual.state, "text": visual.text})
+                hero_states.append({"atMs": enter, "state": visual.state, "text": visual.text,
+                                    "count": visual.count, "labels": list(visual.labels)})
                 continue
             leave = exit_ms(visual.exit, slot, next_start, times[b], us)
             moves = [cue_ms(m.at, slot, times[b], us)[0] for m in getattr(visual, "cursor", [])]
@@ -169,7 +206,8 @@ def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tupl
     if inputs.hero is None:
         hero_states = []
     elif not hero_states or hero_states[0]["atMs"] > 0:
-        hero_states.insert(0, {"atMs": 0, "state": "center", "text": None})
+        hero_states.insert(0, {"atMs": 0, "state": "center", "text": None,
+                                "count": HeroVisual.model_fields["count"].default, "labels": []})
     return {
         "mode": "reel", "width": WIDTH, "height": HEIGHT, "duration": plan.duration_ms / 1000,
         "language": inputs.language, "look": look_tokens(inputs),

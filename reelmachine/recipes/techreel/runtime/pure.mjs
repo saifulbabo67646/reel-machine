@@ -14,7 +14,10 @@ export const MIN_SCALE = 0.6;
 export const CAPTION_HOLD_MS = 300;
 
 // hero states that take a slot in the stage stack; `corner` and `hidden` float outside it
-export const HERO_STACKING = new Set(["center", "small-top", "pulse", "shake", "rings", "screen", "sleep"]);
+export const HERO_STACKING = new Set(["center", "small-top", "pulse", "shake", "rings", "screen", "sleep", "locked", "split"]);
+// states that keep the hero at its own size while other blocks share the stage (only `center` makes room)
+export const HERO_PINNED = new Set(["pulse", "shake", "rings", "screen", "sleep", "locked"]);
+const BLINK_MS = 180;
 
 // a beat's transition length; the schedule's gap before a beat is at least this long (a cut's gap is silence)
 const TRANSITION_LEN = { cut: 0, slide: 250, flash: 200, zoom: 300 };
@@ -338,6 +341,60 @@ export function heroSpan(states, t) {
   if (first > 0) span.enterMs = states[first].atMs;
   if (after) span.exitMs = after.atMs;
   return span;
+}
+
+/** What the hero shows for an authored `state`: in the centre it moves to small-top while any other block is
+    live in the stack (spec §5.2); every other state, pinned or placed, is kept. */
+export const effectiveHeroState = (state, othersLive) => (state === "center" && othersLive ? "small-top" : state);
+
+/** The authored hero states with the automatic small-top moves added: a state at each time the stage gains or
+    loses its last other block (`lives` are those blocks' `{enterMs, exitMs}`, live until their exit has played)
+    where the effective state changes. Gaps shorter than a hero move are bridged, so the hero does not bounce
+    to the centre and straight back between two blocks. heroAt and heroSpan both read the result, so what the
+    hero does and whether it stacks agree. */
+export function heroTimeline(states, lives) {
+  if (!states || !states.length) return [];
+  const spans = lives.map((v) => [enterOf(v), endOf(v)]).sort((a, b) => a[0] - b[0]);
+  const windows = [];
+  for (const [a, b] of spans) {
+    const last = windows[windows.length - 1];
+    if (last && a - last[1] < HERO_MOVE_MS) last[1] = Math.max(last[1], b);
+    else windows.push([a, b]);
+  }
+  const liveAt = (t) => windows.some(([a, b]) => a <= t && t < b);
+  const edges = windows.flat().filter(Number.isFinite);
+  const times = [...new Set([...states.map((s) => s.atMs), ...edges])].sort((a, b) => a - b);
+  const out = [];
+  let authored = null;
+  for (const t of times) {
+    const here = states.filter((s) => s.atMs === t);
+    if (here.length) {
+      for (const s of here) out.push({ ...s, state: effectiveHeroState(s.state, liveAt(t)) });
+      authored = here[here.length - 1];
+    } else if (authored) {
+      const state = effectiveHeroState(authored.state, liveAt(t));
+      if (state !== out[out.length - 1].state) out.push({ ...authored, atMs: t, state });
+    }
+  }
+  return out;
+}
+
+/** Where `count` split dots are at move progress `p`, as px offsets from the hero's centre: out from the centre
+    (back-out, so they overshoot a touch) to nodeLayout's triangle (a row for two) over a `w`×`h` box. */
+export function splitPoints(count, w, h, p) {
+  const e = p <= 0 ? 0 : p >= 1 ? 1 : backOut(p);
+  return nodeLayout(count, count >= 3 ? "triangle" : "row")
+    // + 0 turns -0 into 0
+    .map(({ x, y }) => ({ x: (x - 0.5) * w * e + 0, y: (y - 0.5) * h * e + 0 }));
+}
+
+/** How open the robot's eyes are at `t`, 0..1: a BLINK_MS blink every 3–5 s, the gaps drawn from `seed`. */
+export function blinkAt(t, seed) {
+  const rand = mulberry32(seed);
+  const gap = () => 3000 + 2000 * rand();
+  let start = gap();
+  while (start + BLINK_MS <= t) start += gap();
+  return t < start ? 1 : 1 - Math.sin((Math.PI * (t - start)) / BLINK_MS);
 }
 
 const transitionLen = (beat) => TRANSITION_LEN[beat.transition] ?? 0;

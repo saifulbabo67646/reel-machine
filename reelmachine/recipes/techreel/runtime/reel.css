@@ -473,6 +473,25 @@ html, body { margin: 0; background: #000; }
 /* filling the box, contained: a small logo grows to the hero's size (max-* alone left it at its own pixels) */
 .hero .heroart img { display: block; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 24px 40px rgba(0,0,0,0.55)); }
 .hero .ring { position: absolute; border-radius: 50%; border: 3px solid var(--accent); opacity: 0; }
+/* locked: frosted glass over the object (it blurs what is behind it), a padlock on its front */
+.hero .glass {
+  position: absolute; display: none; border-radius: 44px; border: 2px solid var(--cardEdge);
+  background: linear-gradient(160deg, rgba(255,255,255,0.16), rgba(255,255,255,0.04) 45%, rgba(255,255,255,0.08));
+  backdrop-filter: blur(7px) saturate(1.2);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 30px 80px -20px rgba(0,0,0,0.6);
+}
+.hero .padlock { position: absolute; display: none; }
+/* split: the object's dots, each a small glowing accent ball with its label under it */
+.hero .splitdot {
+  position: absolute; display: none; width: 96px; height: 96px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff 0, color-mix(in srgb, var(--accent) 55%, #fff) 16%, var(--accent) 52%, color-mix(in srgb, var(--accent) 45%, #000) 100%);
+  box-shadow: 0 0 40px color-mix(in srgb, var(--accent) 60%, transparent), 0 0 0 3px rgba(239,234,228,0.5);
+}
+.hero .splitlabel {
+  position: absolute; left: 50%; top: 112px; transform: translateX(-50%); white-space: nowrap;
+  font-family: var(--mono); font-size: 30px; font-weight: 800; letter-spacing: 0.06em; color: var(--text);
+  background: var(--card); border: 1.5px solid var(--cardEdge); padding: 6px 18px; border-radius: 999px;
+}
 .hero .zzz { position: absolute; font-family: var(--display); color: var(--accent); opacity: 0; text-shadow: 0 0 24px color-mix(in srgb, var(--accent) 60%, transparent); }
 
 /* ------------------------------------------------------------ captions (y 1420–1640) */
