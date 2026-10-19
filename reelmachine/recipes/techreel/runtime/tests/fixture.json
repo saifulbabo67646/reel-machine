@@ -23,8 +23,8 @@
   "text": null
  },
  "creator": {
-  "name": "Aryan Patel",
-  "handle": "@aryanpatel.tech",
+  "name": "Your Name",
+  "handle": "@yourhandle",
   "avatar": null
  },
  "heroStates": [
@@ -210,7 +210,7 @@
      "a": false
     },
     {
-     "t": "strata",
+     "t": "pocket",
      "a": true
     }
    ],
@@ -222,7 +222,7 @@
     {
      "place": "stack",
      "kind": "repo",
-     "name": "strata-ai/strata",
+     "name": "pocket-llm/pocket-llm",
      "description": "Run a 176B mixture-of-experts model on any laptop. One-click install.",
      "stars": 19900,
      "license": "MIT",
@@ -500,7 +500,7 @@
      "channel": "launch-team",
      "messages": [
       {
-       "from": "Aryan",
+       "from": "Riya",
        "text": "@Dot iska summary bana do 🙏",
        "bot": false
       },
@@ -1075,7 +1075,7 @@
     {
      "place": "stack",
      "kind": "comment",
-     "keyword": "STRATA",
+     "keyword": "POCKET",
      "reply": "link DM kar dunga",
      "id": "b19v0",
      "enterMs": 52150,
@@ -1363,7 +1363,7 @@
      "endMs": 8321
     },
     {
-     "t": "Strata",
+     "t": "Pocket",
      "a": true,
      "startMs": 8321,
      "endMs": 8598
@@ -2737,7 +2737,7 @@
      "endMs": 52590
     },
     {
-     "t": "STRATA",
+     "t": "POCKET",
      "a": true,
      "startMs": 52590,
      "endMs": 52830

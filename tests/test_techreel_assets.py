@@ -210,11 +210,11 @@ def test_an_image_with_no_file_is_an_error_not_a_blank():
 def test_the_creator_avatar_is_fetched_like_an_image(tmp_path):
     face = tmp_path / "face.png"
     face.write_bytes(_png((300, 300)))
-    inputs = _inputs([{"kind": "follow"}], creator={"name": "Aryan", "handle": "@aryan", "avatar": str(face)})
+    inputs = _inputs([{"kind": "follow"}], creator={"name": "Your Name", "handle": "@yourhandle", "avatar": str(face)})
     names = assets.fetch_images(inputs, tmp_path / "out", allow_local=True)
     assert names == {str(face): _name(str(face))}
     doc = _doc(inputs, names)
-    assert doc["creator"] == {"name": "Aryan", "handle": "@aryan", "avatar": f"assets/{_name(str(face))}"}
+    assert doc["creator"] == {"name": "Your Name", "handle": "@yourhandle", "avatar": f"assets/{_name(str(face))}"}
     assert compose.asset_files(doc) == [_name(str(face))]
     with pytest.raises(InvalidInput) as exc:
         assets.check_sources(inputs, allow_local=False)

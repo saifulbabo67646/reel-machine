@@ -32,12 +32,12 @@ beats = [
                {"kind": "chips", "items": ["ChatGPT Plus", "Claude Pro", "Gemini Adv"], "style": "filled", "at": {"line": 0, "word": "chatgpt"}},
                {"kind": "stamp", "text": "EMI", "tone": "red", "rotate": -10, "at": {"line": 1, "word": "emi"}},
                {"kind": "hero", "state": "shake", "at": {"line": 1, "frac": 0.7}}]},
-  {"id": "reveal", "kind": "reveal", "heading": "milo *strata*", "kicker": "TOH MERE DOSTON", "transition": "flash",
-   "lines": [{"say": "toh mere doston milo strata se", "text": "toh mere doston, milo *Strata* se"},
+  {"id": "reveal", "kind": "reveal", "heading": "milo *pocket*", "kicker": "TOH MERE DOSTON", "transition": "flash",
+   "lines": [{"say": "toh mere doston milo pocket se", "text": "toh mere doston, milo *Pocket* se"},
              {"say": "bees hazaar stars aur license bhi free", "text": "*20 hazaar* stars, aur license bhi *free*"}],
    "visuals": [{"kind": "hero", "state": "corner"},
-               {"kind": "repo", "name": "strata-ai/strata", "description": "Run a 176B mixture-of-experts model on any laptop. One-click install.",
-                "stars": 19900, "license": "MIT", "language": "Python", "at": {"line": 0, "word": "strata"}},
+               {"kind": "repo", "name": "pocket-llm/pocket-llm", "description": "Run a 176B mixture-of-experts model on any laptop. One-click install.",
+                "stars": 19900, "license": "MIT", "language": "Python", "at": {"line": 0, "word": "pocket"}},
                {"kind": "stamp", "text": "FREE ✓", "tone": "green", "rotate": 8, "at": {"line": 1, "word": "free"}}]},
   {"id": "explain", "kind": "explain", "heading": "*apna* computer", "kicker": "FEATURE 01/04", "transition": "zoom",
    "lines": [{"say": "har dot ka apna computer files terminal sab", "text": "har dot ka apna *computer*, files, terminal, sab"},
@@ -72,7 +72,7 @@ beats = [
    "lines": [{"say": "slack mein dot ko tag karo", "text": "Slack mein *Dot* ko tag karo"},
              {"say": "wahin reply karega bina chai break ke", "text": "wahin *reply* karega, bina chai break ke"}],
    "visuals": [{"kind": "chat", "channel": "launch-team", "messages": [
-                   {"from": "Aryan", "text": "@Dot iska summary bana do 🙏"},
+                   {"from": "Riya", "text": "@Dot iska summary bana do 🙏"},
                    {"from": "Dot", "text": "Done! Three key points + next steps 👇", "bot": True},
                    {"from": "Meera", "text": "bhai ye intern kab so ta hai?"}]}]},
   {"id": "ask", "kind": "feature", "heading": "pehle *poochega*", "kicker": "PERMISSION", "transition": "cut",
@@ -130,13 +130,13 @@ beats = [
    "lines": [{"say": "mit license", "text": "MIT license,"}, {"say": "yaani free", "text": "yaani *free*"}],
    "visuals": [{"kind": "flash", "text": "yaani *free*", "at": {"line": 1}}]},
   {"id": "cta", "kind": "cta", "heading": "ai ki emi se *pareshaan*?", "kicker": "", "transition": "cut",
-   "lines": [{"say": "toh comment karo strata", "text": "toh comment karo *STRATA*"},
+   "lines": [{"say": "toh comment karo pocket", "text": "toh comment karo *POCKET*"},
              {"say": "link dm kar dunga aur follow kar lo", "text": "link DM kar dunga, aur *follow* kar lo"}],
-   "visuals": [{"kind": "comment", "keyword": "STRATA", "reply": "link DM kar dunga", "at": {"line": 0, "word": "comment"}},
+   "visuals": [{"kind": "comment", "keyword": "POCKET", "reply": "link DM kar dunga", "at": {"line": 0, "word": "comment"}},
                {"kind": "follow", "at": {"line": 1, "word": "follow"}}]},
 ]
 inputs = TechReelInputs(title="techreel runtime fixture", language="hi", look="mint", hero={"kind": "orb"}, beats=beats,
-                        creator={"name": "Aryan Patel", "handle": "@aryanpatel.tech"})
+                        creator={"name": "Your Name", "handle": "@yourhandle"})
 # the estimate is a slow reader; the references speak about twice as fast
 plan = estimate(inputs)
 plan = schedule(inputs.beats, [[round(ln.speech_ms * 0.52) for ln in b.lines] for b in plan.beats])

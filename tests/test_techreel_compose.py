@@ -238,7 +238,7 @@ def test_hero_art_reaches_the_document():
     assert hero == {"kind": "image", "text": None, "file": "assets/img-1.png"}
 
 
-def _cta(beat, creator=True, title="Strata: local AI"):
+def _cta(beat, creator=True, title="Pocket: local AI"):
     beats = [{"lines": [{"say": "first"}]}, {"kind": "cta", **beat}]
     data = {"title": title, "hero": {"kind": "orb"}, "beats": beats}
     if creator:
@@ -249,11 +249,11 @@ def _cta(beat, creator=True, title="Strata: local AI"):
 
 
 def test_cta_beat_without_visuals_gets_the_standard_ending():
-    lines = [{"say": "comment strata now"}, {"say": "follow for more"}, {"say": "see you"}]
-    plan, doc = _cta({"lines": lines, "keyword": "STRATA", "dm": "link DM kar dunga", "next": "part *two*"})
+    lines = [{"say": "comment pocket now"}, {"say": "follow for more"}, {"say": "see you"}]
+    plan, doc = _cta({"lines": lines, "keyword": "POCKET", "dm": "link DM kar dunga", "next": "part *two*"})
     comment, follow, title = doc["beats"][1]["visuals"]
     s = plan.beats[1].lines
-    assert (comment["id"], comment["kind"], comment["keyword"], comment["reply"]) == ("b1v0", "comment", "STRATA", "link DM kar dunga")
+    assert (comment["id"], comment["kind"], comment["keyword"], comment["reply"]) == ("b1v0", "comment", "POCKET", "link DM kar dunga")
     assert comment["enterMs"] == s[0].start_ms and comment["class"] == "block"
     assert (follow["id"], follow["kind"], follow["enterMs"]) == ("b1v1", "follow", s[1].start_ms)
     assert (title["id"], title["kind"], title["text"], title["enterMs"]) == ("b1v2", "title", "part *two*", s[2].start_ms)
@@ -263,7 +263,7 @@ def test_cta_beat_without_visuals_gets_the_standard_ending():
 def test_cta_defaults_without_creator_keyword_or_next():
     _, doc = _cta({"lines": [{"say": "comment now"}]}, creator=False)
     (comment,) = doc["beats"][1]["visuals"]
-    assert (comment["keyword"], comment["reply"]) == ("STRATA", "")
+    assert (comment["keyword"], comment["reply"]) == ("POCKET", "")
 
 
 def test_cta_one_line_puts_follow_part_way_in():

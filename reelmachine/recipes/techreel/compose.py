@@ -145,7 +145,7 @@ def _cta_visuals(beat: Beat, inputs: TechReelInputs) -> list[Visual]:
     there is one line), the next-reel tease as a title at the last line."""
     if beat.kind != "cta" or any(not isinstance(v, HeroVisual) for v in beat.visuals):
         return []
-    # the keyword falls back to the title's first word: "Strata: local AI" asks for "STRATA"
+    # the keyword falls back to the title's first word: "Pocket: local AI" asks for "POCKET"
     # (a number is no keyword: "5 AI tools" asks for "AI")
     first = next((w for w in re.findall(r"\w+", inputs.title) if not w.isdigit()), None)
     keyword = beat.keyword or (first.upper()[:KEYWORD_MAX] if first else "LINK")
