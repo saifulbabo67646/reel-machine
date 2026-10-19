@@ -1468,7 +1468,7 @@
   },
   {
    "startMs": 11372,
-   "endMs": 11987,
+   "endMs": 12110,
    "words": [
     {
      "t": "files,",
@@ -1481,13 +1481,7 @@
      "a": false,
      "startMs": 11618,
      "endMs": 11987
-    }
-   ]
-  },
-  {
-   "startMs": 11987,
-   "endMs": 12110,
-   "words": [
+    },
     {
      "t": "sab",
      "a": false,
@@ -1498,7 +1492,7 @@
   },
   {
    "startMs": 12230,
-   "endMs": 13624,
+   "endMs": 13830,
    "words": [
     {
      "t": "aur",
@@ -1535,13 +1529,7 @@
      "a": false,
      "startMs": 13469,
      "endMs": 13624
-    }
-   ]
-  },
-  {
-   "startMs": 13624,
-   "endMs": 13830,
-   "words": [
+    },
     {
      "t": "le",
      "a": false,
@@ -1600,7 +1588,7 @@
   },
   {
    "startMs": 15100,
-   "endMs": 16389,
+   "endMs": 16500,
    "words": [
     {
      "t": "matlab",
@@ -1637,13 +1625,7 @@
      "a": true,
      "startMs": 16132,
      "endMs": 16389
-    }
-   ]
-  },
-  {
-   "startMs": 16389,
-   "endMs": 16500,
-   "words": [
+    },
     {
      "t": "hai",
      "a": false,
@@ -1654,7 +1636,7 @@
   },
   {
    "startMs": 16750,
-   "endMs": 18050,
+   "endMs": 18150,
    "words": [
     {
      "t": "सच",
@@ -1691,13 +1673,7 @@
      "a": false,
      "startMs": 17700,
      "endMs": 18050
-    }
-   ]
-  },
-  {
-   "startMs": 18050,
-   "endMs": 18150,
-   "words": [
+    },
     {
      "t": "है",
      "a": false,
@@ -2008,7 +1984,7 @@
   },
   {
    "startMs": 28880,
-   "endMs": 29213,
+   "endMs": 29680,
    "words": [
     {
      "t": "Claude",
@@ -2021,13 +1997,7 @@
      "a": false,
      "startMs": 29080,
      "endMs": 29213
-    }
-   ]
-  },
-  {
-   "startMs": 29213,
-   "endMs": 29680,
-   "words": [
+    },
     {
      "t": "Gemini",
      "a": false,
@@ -2302,7 +2272,7 @@
   },
   {
    "startMs": 37710,
-   "endMs": 38804,
+   "endMs": 39110,
    "words": [
     {
      "t": "achhi",
@@ -2339,13 +2309,7 @@
      "a": false,
      "startMs": 38672,
      "endMs": 38804
-    }
-   ]
-  },
-  {
-   "startMs": 38804,
-   "endMs": 39110,
-   "words": [
+    },
     {
      "t": "chahiye",
      "a": false,
@@ -2584,7 +2548,7 @@
   },
   {
    "startMs": 46620,
-   "endMs": 46934,
+   "endMs": 47420,
    "words": [
     {
      "t": "sawaal",
@@ -2597,13 +2561,7 @@
      "a": false,
      "startMs": 46791,
      "endMs": 46934
-    }
-   ]
-  },
-  {
-   "startMs": 46934,
-   "endMs": 47420,
-   "words": [
+    },
     {
      "t": "documents",
      "a": true,

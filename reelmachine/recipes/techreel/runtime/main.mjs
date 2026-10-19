@@ -5,7 +5,7 @@
 // index.html?t=3.2 shows the frame at 3.2 s.
 import {
   ENTER_MS, GLIDE_MS, HERO_MOVE_MS, HERO_STACKING, STAGE, backOut, clamp01, enterP, exitP, alive, stackLayout,
-  captionAt, wordPhase, heroAt, heroSpan, heroTimeline, beatAt, transitionP, progress, blob, seedOf,
+  captionAt, wordPhase, pillAt, heroAt, heroSpan, heroTimeline, beatAt, transitionP, progress, blob, seedOf,
 } from "./pure.mjs";
 import { COMPONENTS, STAMP_FROM, el, wordSpans, slam } from "./components.mjs";
 import { CARDS } from "./cards.mjs";
@@ -104,7 +104,7 @@ function build(doc, root) {
       if (i < c.words.length - 1) text.appendChild(document.createTextNode(" "));
       return span;
     });
-    return { c, node, words };
+    return { c, node, text, words, sizes: [], runs: [] };
   });
   return ui;
 }
@@ -146,13 +146,22 @@ function fit(ui) {
       size -= 2;
       cap.node.style.fontSize = `${size}px`;
     }
-    // the pill keeps the whole chunk's size while its words appear, so it neither jumps nor sits off-centre
-    // rounded up (offsetWidth rounds down: a fractional width would push the last word onto a line the fixed
-    // height has no room for), plus a pixel of slack for the flex layout's own rounding
-    const box = cap.node.getBoundingClientRect();
-    cap.node.style.width = `${Math.ceil(box.width) + 1}px`;
-    cap.node.style.height = `${Math.ceil(box.height) + 1}px`;
+    // the pill grows with the words said so far: measure it once per revealed word (it needs the words laid out
+    // to wrap), then applyCaptions eases between those sizes. Rounded up (offsetWidth rounds down: a fractional
+    // width would push the last word onto a line the height has no room for), plus a pixel of slack for the
+    // flex layout's own rounding
     cap.node.classList.add("held");
+    cap.node.style.width = "";
+    cap.node.style.height = "";
+    cap.sizes = [];
+    cap.runs = [];
+    cap.words.forEach((_, i) => {
+      cap.words.forEach((span, j) => span.classList.toggle("future", j > i));
+      cap.text.style.width = "";
+      const box = cap.node.getBoundingClientRect();
+      cap.sizes.push({ w: Math.ceil(box.width) + 1, h: Math.ceil(box.height) + 1 });
+      cap.runs.push(Math.ceil(cap.text.getBoundingClientRect().width) + 1);
+    });
   }
 }
 
@@ -407,6 +416,14 @@ function applyCaptions(ui, doc, ms) {
     const p = clamp01((ms - cap.c.startMs) / CAPTION_POP_MS);
     cap.node.style.opacity = clamp01(p * 2).toFixed(3);
     cap.node.style.transform = `translateY(${px(10 * (1 - easeOut(p)))}) scale(${lerp(0.94, 1, backOut(p)).toFixed(4)})`;
+    const pill = pillAt(cap.sizes, cap.c.words, ms);
+    if (pill) {
+      cap.node.style.width = `${pill.w.toFixed(2)}px`;
+      cap.node.style.height = `${pill.h.toFixed(2)}px`;
+      // the text keeps the width it wraps at for the newest word, centred in the pill as it grows
+      cap.text.style.width = `${cap.runs[pill.k]}px`;
+      cap.text.style.flexShrink = "0";
+    }
     cap.words.forEach((span, i) => {
       const phase = wordPhase(cap.c.words[i], ms);
       span.classList.toggle("future", phase === "future");

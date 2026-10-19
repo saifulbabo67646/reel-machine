@@ -5,7 +5,7 @@ import {
   backOut, clamp01, enterP, exitP, alive, stackLayout, counterValue, typed, terminalStarts, captionAt, wordPhase,
   heroAt, heroSpan, beatAt, transitionP, progress, blob, seedOf, CAPTION_HOLD_MS, staggerP, winner, numberParts,
   gridOf, litSet, nodeLayout, nodeLinks, emptySpot, effectiveHeroState, heroTimeline, splitPoints, blinkAt,
-  HERO_PINNED,
+  HERO_PINNED, PILL_EASE_MS, pillAt,
 } from "../pure.mjs";
 
 const block = (id, enterMs, exitMs = 99999, place = "stack") => ({ id, kind: "title", class: "block", enterMs, exitMs, place });
@@ -462,4 +462,20 @@ test("the robot blinks every 3 to 5 seconds, from the seed alone", () => {
     for (let t = 0; t < 30000; t += 10) if (blinkAt(t, 8) < 0.5) c.push(t);
     return c.filter((t, i) => i === 0 || t - c[i - 1] > 10);
   })());
+});
+
+test("the caption pill grows with the revealed words, eased over 120 ms", () => {
+  const words = [{ startMs: 1000 }, { startMs: 1300 }, { startMs: 1600 }];
+  const sizes = [{ w: 100, h: 50 }, { w: 200, h: 50 }, { w: 300, h: 100 }];
+  assert.equal(PILL_EASE_MS, 120);
+  assert.deepEqual(pillAt(sizes, words, 500), { w: 100, h: 50, k: 0 });
+  assert.deepEqual(pillAt(sizes, words, 1100), { w: 100, h: 50, k: 0 });
+  const start = pillAt(sizes, words, 1300);
+  assert.deepEqual(start, { w: 100, h: 50, k: 1 });
+  const mid = pillAt(sizes, words, 1360);
+  assert.ok(mid.w > 100 && mid.w < 200 && mid.k === 1);
+  assert.deepEqual(pillAt(sizes, words, 1420), { w: 200, h: 50, k: 1 });
+  assert.deepEqual(pillAt(sizes, words, 9000), { w: 300, h: 100, k: 2 });
+  assert.deepEqual(pillAt(sizes, words, 1360), pillAt(sizes, words, 1360));
+  assert.equal(pillAt([], [], 5), null);
 });

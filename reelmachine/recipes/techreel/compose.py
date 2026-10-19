@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from ..dialoguereel.svg import inline_svg
-from .markup import Unit, chunks, units
+from .markup import Unit, chunks, is_unspaced, merge_short, units
 from .models import (
     Beat,
     CommentVisual,
@@ -193,6 +193,8 @@ def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tupl
         })
         for line_slot, line_us, line_times in zip(slot.lines, us, times[b], strict=True):
             groups = chunks(line_us, inputs.language)
+            # a chunk that would flash by joins its neighbour; characters are the cap in unspaced scripts
+            groups = merge_short(groups, line_times, us=line_us if is_unspaced(inputs.language) else None)
             starts = [line_slot.start_ms + line_times[g[0]][0] for g in groups]
             for n, group in enumerate(groups):
                 end = min(starts[n + 1], line_slot.end_ms) if n + 1 < len(groups) else line_slot.end_ms

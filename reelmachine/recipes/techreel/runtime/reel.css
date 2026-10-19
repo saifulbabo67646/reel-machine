@@ -505,8 +505,8 @@ html, body { margin: 0; background: #000; }
   visibility: hidden;
 }
 .cap.on { visibility: visible; }
-/* main.mjs holds the pill at the whole chunk's size, centred; the words said so far sit centred inside it */
-.cap.held { display: flex; align-items: center; justify-content: center; }
+/* main.mjs sizes the pill to the words said so far (centred, so it grows from the middle); the text sits centred inside it */
+.cap.held { overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .cap .w { display: inline; }
 .cap .w.future { display: none; }
 .cap .w.past { color: rgba(255,255,255,0.85); }

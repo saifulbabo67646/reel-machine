@@ -14,7 +14,7 @@ from reelmachine.recipes.techreel.compose import (
     reel_document,
     write_project,
 )
-from reelmachine.recipes.techreel.markup import units
+from reelmachine.recipes.techreel.markup import merge_short, units
 from reelmachine.recipes.techreel.models import HeroVisual, TechReelInputs
 from reelmachine.recipes.techreel.schedule import schedule
 
@@ -111,7 +111,9 @@ def test_last_beat_exit_is_end_plus_outro():
 
 
 def test_captions_cover_lines_without_overlap():
-    _, plan, doc = _doc()
+    inputs = _inputs()
+    plan = schedule(inputs.beats, [[1200, 600], [500]])
+    doc = reel_document(inputs, plan, _times(inputs, step=200))      # 200 ms a word: no chunk flashes
     caps = doc["captions"]
     assert caps == sorted(caps, key=lambda c: c["startMs"])
     for a, b in itertools.pairwise(caps):
@@ -120,8 +122,8 @@ def test_captions_cover_lines_without_overlap():
     s0 = plan.beats[0].lines[0]
     assert first["startMs"] == s0.start_ms
     assert [w["t"] for w in first["words"]] == ["one", "two", "three", "four", "five", "six"]
-    assert first["endMs"] == s0.start_ms + 600                # the next chunk's first start
-    assert first["words"][0] == {"t": "one", "a": False, "startMs": s0.start_ms, "endMs": s0.start_ms + 100}
+    assert first["endMs"] == s0.start_ms + 1200                # the next chunk's first start
+    assert first["words"][0] == {"t": "one", "a": False, "startMs": s0.start_ms, "endMs": s0.start_ms + 200}
     second = caps[1]
     assert second["endMs"] == s0.end_ms                       # a line's last chunk ends with the line
     assert caps[-1]["words"][-1]["a"] is True and caps[-1]["endMs"] == plan.beats[1].lines[0].end_ms
@@ -283,3 +285,41 @@ def test_cta_with_its_own_visuals_is_left_alone_and_hero_moves_do_not_count():
 def test_cta_keyword_from_a_title_strips_punctuation_and_fits():
     _, doc = _cta({"lines": [{"say": "x"}]}, creator=False, title="«Supercalifragilisticexpialidocious-ish» rocks")
     assert doc["beats"][1]["visuals"][0]["keyword"] == "SUPERCALIFRAGILISTICEXPI"
+
+
+def test_merge_short_joins_a_flash_chunk_to_the_next():
+    times = [(0, 400), (400, 520), (520, 900), (900, 1300)]
+    assert merge_short([[0], [1], [2, 3]], times) == [[0], [1, 2, 3]]
+
+
+def test_merge_short_last_chunk_joins_the_previous():
+    times = [(0, 500), (500, 900), (900, 1000)]
+    assert merge_short([[0, 1], [2]], times) == [[0, 1, 2]]
+
+
+def test_merge_short_never_exceeds_the_cap():
+    times = [(i * 100, i * 100 + 100) for i in range(12)]
+    chunks_in = [[i] for i in range(12)]
+    out = merge_short(chunks_in, times)
+    assert [i for c in out for i in c] == list(range(12))
+    assert all(len(c) <= 8 for c in out)
+    # a short chunk whose merge would break the cap stays alone
+    assert merge_short([[0, 1, 2, 3, 4, 5, 6], [7, 8, 9]], [(i * 10, i * 10 + 10) for i in range(10)]) == [
+        [0, 1, 2, 3, 4, 5, 6], [7, 8, 9]]
+
+
+def test_merge_short_unspaced_counts_characters():
+    us = units("あいうえおかきくけこさしすせそたちつてと", "ja")
+    times = [(i * 10, i * 10 + 10) for i in range(len(us))]
+    out = merge_short([[i] for i in range(len(us))], times, us=us)
+    assert [i for c in out for i in c] == list(range(len(us)))
+    assert all(sum(len(us[i].text) for i in c) <= 18 for c in out)
+
+
+
+def test_a_flash_chunk_in_the_document_is_merged():
+    inputs = _inputs()
+    plan = schedule(inputs.beats, [[1200, 600], [500]])
+    doc = reel_document(inputs, plan, _times(inputs))     # 100 ms a word: "seven eight" would flash alone
+    assert [w["t"] for w in doc["captions"][0]["words"]][-2:] == ["seven", "eight"]
+    assert len(doc["captions"][0]["words"]) == 8
