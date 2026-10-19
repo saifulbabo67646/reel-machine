@@ -505,9 +505,10 @@ html, body { margin: 0; background: #000; }
   visibility: hidden;
 }
 .cap.on { visibility: visible; }
-/* the pill clips its sides (the newest word is wider than it while it grows) but not above or below, where the word's glow reaches */
-/* main.mjs sizes the pill to the words said so far (centred, so it grows from the middle); the text sits centred inside it */
-.cap.held { clip-path: inset(-40px 0); display: flex; align-items: center; justify-content: center; }
+/* main.mjs sizes the pill to the words said so far (centred, so it grows from the middle); the text sits centred inside it.
+   Nothing is clipped: for the pill's 120 ms ease the text already holds the newest word and spills past the pill
+   background a little, which reads as the pill catching up; clipping it cut the words already said */
+.cap.held { display: flex; align-items: center; justify-content: center; }
 .cap .w { display: inline; }
 .cap .w.future { display: none; }
 .cap .w.past { color: rgba(255,255,255,0.85); }

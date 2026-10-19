@@ -5,7 +5,7 @@ import {
   backOut, clamp01, enterP, exitP, alive, stackLayout, counterValue, typed, terminalStarts, captionAt, wordPhase,
   heroAt, heroSpan, beatAt, transitionP, progress, blob, seedOf, CAPTION_HOLD_MS, staggerP, winner, numberParts,
   gridOf, litSet, nodeLayout, nodeLinks, emptySpot, effectiveHeroState, heroTimeline, splitPoints, blinkAt,
-  PILL_EASE_MS, pillAt,
+  PILL_EASE_MS, pillAt, isUnspaced, accentUnits, accentPieces,
 } from "../pure.mjs";
 
 const block = (id, enterMs, exitMs = 99999, place = "stack") => ({ id, kind: "title", class: "block", enterMs, exitMs, place });
@@ -487,4 +487,31 @@ test("the caption pill grows with the revealed words, eased over 120 ms", () => 
   assert.deepEqual(pillAt(sizes, words, 9000), { w: 300, h: 100, k: 2 });
   assert.deepEqual(pillAt(sizes, words, 1360), pillAt(sizes, words, 1360));
   assert.equal(pillAt([], [], 5), null);
+});
+
+test("unspaced scripts are told from the language, like markup.is_unspaced", () => {
+  assert.deepEqual(["ja", "ja-JP", "zh", "th", "ZH-hant"].map(isUnspaced), [true, true, true, true, true]);
+  assert.deepEqual(["en", "hi", "ko", "", undefined, null].map(isUnspaced), [false, false, false, false, false, false]);
+});
+
+test("accent markup splits into words; a partly accented word stays one word with its accented runs", () => {
+  assert.deepEqual(accentUnits("desi *jugaad* 😎"), [{ t: "desi", a: false }, { t: "jugaad", a: true }, { t: "😎", a: false }]);
+  assert.deepEqual(accentUnits("*R*etrieval *A*ugmented"),
+    [{ t: "Retrieval", a: false, accentSpans: [[0, 1]] }, { t: "Augmented", a: false, accentSpans: [[0, 1]] }]);
+  assert.deepEqual(accentUnits("*two words* here"), [{ t: "two", a: true }, { t: "words", a: true }, { t: "here", a: false }]);
+  // punctuation outside the stars keeps a whole-word accent; a lone `*` is literal
+  assert.deepEqual(accentUnits("*ChatGPT*, 5 * 3"),
+    [{ t: "ChatGPT,", a: true }, { t: "5", a: false }, { t: "*", a: false }, { t: "3", a: false }]);
+  // Japanese has no spaces: one word, the accented run inside it
+  assert.deepEqual(accentUnits("小さい*モデル*"), [{ t: "小さいモデル", a: false, accentSpans: [[3, 6]] }]);
+  assert.deepEqual(accentUnits(""), []);
+});
+
+test("a word's pieces: plain and accented runs in order", () => {
+  assert.deepEqual(accentPieces({ t: "Retrieval", a: false, accentSpans: [[0, 1]] }),
+    [{ t: "R", a: true }, { t: "etrieval", a: false }]);
+  assert.deepEqual(accentPieces({ t: "remarkable", a: false, accentSpans: [[2, 6]] }),
+    [{ t: "re", a: false }, { t: "mark", a: true }, { t: "able", a: false }]);
+  assert.deepEqual(accentPieces({ t: "zinda", a: true }), [{ t: "zinda", a: true }]);
+  assert.deepEqual(accentPieces({ t: "hai", a: false }), [{ t: "hai", a: false }]);
 });

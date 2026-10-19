@@ -19,9 +19,9 @@
       ],
       "visuals": [
         {"kind": "hero", "state": "center"},
-        {"kind": "hero", "state": "pulse", "at": {"line": 0, "frac": 0.4}},
+        {"kind": "hero", "state": "pulse", "at": {"line": 0, "word": "AI"}},
         {"kind": "hero", "state": "screen", "text": "OFFLINE ✓", "at": {"line": 1}},
-        {"kind": "emoji", "emoji": "📵", "at": {"line": 1, "frac": 0.6}}
+        {"kind": "emoji", "emoji": "📵", "at": {"line": 1, "word": "ネットなし"}}
       ]
     },
     {
@@ -36,7 +36,7 @@
         {"kind": "counter", "to": 14, "suffix": " GB", "label": "7Bモデル · 16ビット", "at": {"line": 1},
          "exit": {"line": 2}},
         {"kind": "hero", "state": "shake", "at": {"line": 2}},
-        {"kind": "stamp", "text": "容量不足", "tone": "red", "at": {"line": 2, "frac": 0.7}}
+        {"kind": "stamp", "text": "容量不足", "tone": "red", "at": {"line": 2, "word": "満杯"}}
       ]
     },
     {
@@ -47,9 +47,9 @@
       ],
       "visuals": [
         {"kind": "hero", "state": "hidden"},
-        {"kind": "flash", "text": "*量子化*", "at": {"line": 0, "frac": 0.5}, "exit": {"line": 1}},
+        {"kind": "flash", "text": "*量子化*", "at": {"line": 0, "word": "量子化"}, "exit": {"line": 1}},
         {"kind": "chips", "items": ["3.14159265", "→", "3.14"], "style": "filled", "at": {"line": 1}},
-        {"kind": "emoji", "emoji": "🤏", "at": {"line": 1, "frac": 0.6}}
+        {"kind": "emoji", "emoji": "🤏", "at": {"line": 1, "word": "ざっくり"}}
       ]
     },
     {
@@ -62,8 +62,8 @@
       "visuals": [
         {"kind": "svg", "size": "m",
          "svg": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 170'><rect x='14' y='30' width='160' height='120' rx='20' fill='none' stroke='currentColor' stroke-width='6'/><line x1='14' y1='54' x2='174' y2='54' stroke-width='5' stroke-dasharray='10 7' style='stroke:var(--accent)'/><g fill='none' stroke='currentColor' stroke-width='4' stroke-linejoin='round'><path d='M38 76 h112 l-6 14 h-100 z'/><path d='M38 100 h112 l-6 14 h-100 z'/><path d='M38 124 h112 l-6 14 h-100 z'/></g><circle cx='150' cy='30' r='12' fill='none' stroke-width='5' style='stroke:var(--accent)'/><g fill='none' stroke-width='5' stroke-linecap='round' style='stroke:var(--accent)'><path d='M170 16 q14 -8 26 0 t26 0'/><path d='M176 34 q12 -8 24 0 t24 0'/><path d='M214 8 l10 8 l-10 8'/></g></svg>"},
-        {"kind": "emoji", "emoji": "👕", "at": {"line": 1, "frac": 0.3}},
-        {"kind": "stamp", "text": "ちょいシワ", "tone": "accent", "at": {"line": 2, "frac": 0.5}}
+        {"kind": "emoji", "emoji": "👕", "at": {"line": 1, "word": "服"}},
+        {"kind": "stamp", "text": "ちょいシワ", "tone": "accent", "at": {"line": 2, "word": "シワ"}}
       ]
     },
     {
@@ -90,8 +90,8 @@
       ],
       "visuals": [
         {"kind": "hero", "state": "screen", "text": "圏外 · OK"},
-        {"kind": "emoji", "emoji": "✈️", "at": {"line": 0, "frac": 0.35}},
-        {"kind": "hero", "state": "locked", "at": {"line": 1, "frac": 0.3}}
+        {"kind": "emoji", "emoji": "✈️", "at": {"line": 0, "word": "飛行機"}},
+        {"kind": "hero", "state": "locked", "at": {"line": 1, "word": "スマホ"}}
       ]
     },
     {
@@ -105,8 +105,8 @@
         {"kind": "hero", "state": "hidden"},
         {"kind": "chips", "items": ["速い", "軽い", "ちょい天然"], "style": "filled", "exit": {"line": 1}},
         {"kind": "heartbeat", "label": "スマホの温度：上昇中", "at": {"line": 1}},
-        {"kind": "emoji", "emoji": "🔥", "at": {"line": 1, "frac": 0.7}},
-        {"kind": "stamp", "text": "冬限定", "tone": "accent", "at": {"line": 2, "frac": 0.4}}
+        {"kind": "emoji", "emoji": "🔥", "at": {"line": 1, "word": "熱く"}},
+        {"kind": "stamp", "text": "冬限定", "tone": "accent", "at": {"line": 2, "word": "カイロ"}}
       ]
     },
     {

@@ -84,3 +84,28 @@ def test_word_index():
     assert word_index(Cue(line=0, word="BIG now"), us) == 1
     assert word_index(Cue(line=0, word="nope"), us) is None
     assert word_index(Cue(line=0, frac=0.5), us) is None
+
+
+def test_word_index_matches_a_run_of_japanese_characters():
+    from reelmachine.recipes.techreel.schedule import word_index
+
+    us = units("小さいパラメータ、すごい。", "ja")
+    assert word_index(Cue(line=0, word="パラメータ"), us) == 3
+    assert word_index(Cue(line=0, word="すごい"), us) == 8
+    assert word_index(Cue(line=0, word="パラメ"), us) == 3     # a run need not be a whole word
+    assert word_index(Cue(line=0, word="メモリ"), us) is None
+
+
+def test_word_index_prefers_a_single_unit_and_runs_skip_punctuation():
+    from reelmachine.recipes.techreel.schedule import word_index
+
+    us = units("AI、AIだ", "ja")      # units: A, I、, A, I, だ
+    assert word_index(Cue(line=0, word="AI"), us) == 0
+    assert word_index(Cue(line=0, word="だ"), us) == 4
+
+
+def test_cue_word_on_a_japanese_run_lands_on_its_first_character():
+    us = [units("小さいパラメータ", "ja")]
+    times = [[(i * 100, i * 100 + 100) for i in range(len(us[0]))]]
+    beat = BeatSlot(1000, 1800, (LineSlot(1000, 800, 1800),))
+    assert cue_ms(Cue(line=0, word="パラメータ"), beat, times, us) == (1300, True)

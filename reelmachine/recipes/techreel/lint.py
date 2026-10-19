@@ -49,6 +49,7 @@ STATIC_MAX_MS = 3500        # a stretch of one beat with nothing new on screen
 BEAT_MAX_MS = 9000
 BEAT_MAX_LINES = 4
 LIVE_MAX = 4                # non-hero visuals on screen at once
+STAMP_MAX = 16              # characters: a longer stamp shrinks to fit the stage and stops reading as a stamp
 LENGTH_MS = (30_000, 150_000)
 TEXT_RATIO = (0.4, 2.5)
 _DEVANAGARI = range(0x0900, 0x0980)
@@ -186,6 +187,12 @@ def check(inputs: TechReelInputs, bound_provider: str | None = None, *, allow_lo
                                      "a Hindi voice reads Devanagari: write `say` in Devanagari, the Latin goes in `text`",
                                      path))
         for v, visual in enumerate(beat.visuals):
+            if visual.kind == "stamp" and len(visual.text.strip()) > STAMP_MAX:
+                spath = f"beats[{b}].visuals[{v}].text"
+                found.append(Finding("stamp-long", "warning",
+                                     f"{spath} is {len(visual.text.strip())} characters",
+                                     f"keep a stamp to one or two short words (at most {STAMP_MAX} characters)",
+                                     spath))
             if visual.kind == "window" and not 0 <= visual.active < max(len(visual.tabs), 1):
                 apath = f"beats[{b}].visuals[{v}].active"
                 found.append(Finding("active-tab", "warning", f"{apath} is {visual.active}, not one of the tabs",

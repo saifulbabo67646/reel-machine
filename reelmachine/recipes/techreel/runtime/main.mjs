@@ -5,9 +5,9 @@
 // index.html?t=3.2 shows the frame at 3.2 s.
 import {
   ENTER_MS, GLIDE_MS, HERO_MOVE_MS, HERO_STACKING, STAGE, backOut, clamp01, enterP, exitP, alive, stackLayout,
-  captionAt, wordPhase, pillAt, heroAt, heroSpan, heroTimeline, beatAt, transitionP, progress, blob, seedOf,
+  captionAt, wordPhase, pillAt, heroAt, heroSpan, heroTimeline, beatAt, transitionP, progress, blob, seedOf, isUnspaced,
 } from "./pure.mjs";
-import { COMPONENTS, STAMP_FROM, el, wordSpans, slam } from "./components.mjs";
+import { COMPONENTS, STAMP_FROM, STAMP_TILT, el, fillWord, wordSpans, slam } from "./components.mjs";
 import { CARDS } from "./cards.mjs";
 import { SOCIAL } from "./social.mjs";
 import { HERO_SIZE, SPLITS, buildHero, updateHero } from "./hero.mjs";
@@ -22,7 +22,6 @@ const HEADING_STAGGER_MS = 70, HEADING_OUT_MS = 150;
 const HEADING_ROOM = 300, HEADING_GAP = 22, HEADING_PX = 96, TEXT_W = 952;
 const CAPTION_ROOM = 220, CAPTION_POP_MS = 160;
 const SMALL_TOP = 0.45, CORNER = 0.3;
-const STAMP_TILT = 9; // the most a stamp's slam turns it past its own rotation (components.mjs: -9° → 4°)
 const STAGE_CX = (STAGE.left + STAGE.right) / 2, STAGE_CY = (STAGE.top + STAGE.bottom) / 2;
 const GRAIN = "data:image/svg+xml;utf8," + encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="240" height="240" filter="url(#n)"/></svg>`);
@@ -37,7 +36,7 @@ function buildBeat(ui, beat, index, doc) {
   const heading = el("div", "heading", ui.headings);
   const kicker = beat.kicker ? el("div", "kicker", heading, beat.kicker) : null;
   const htitle = beat.heading.length ? el("div", "htitle", heading) : null;
-  const words = htitle ? wordSpans(htitle, beat.heading) : [];
+  const words = htitle ? wordSpans(htitle, beat.heading, doc) : [];
   if (!kicker && !htitle) heading.style.display = "none";
 
   const stage = el("div", "layer beat-stage", ui.stageLayer);
@@ -99,9 +98,10 @@ function build(doc, root) {
     if (doc.language && /^(ar|he|fa|ur)\b/.test(doc.language)) node.dir = "rtl";
     // one inline run inside the pill, so the pill can centre it as a block
     const text = el("span", "ct", node);
+    const gap = isUnspaced(doc.language) ? "" : " ";   // Japanese units are characters: no gap between them
     const words = c.words.map((w, i) => {
-      const span = el("span", w.a ? "w accent" : "w", text, w.t);
-      if (i < c.words.length - 1) text.appendChild(document.createTextNode(" "));
+      const span = fillWord(el("span", w.a ? "w accent" : "w", text), w);
+      if (gap && i < c.words.length - 1) text.appendChild(document.createTextNode(gap));
       return span;
     });
     return { c, node, text, words, sizes: [], runs: [] };

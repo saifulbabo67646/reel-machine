@@ -40,6 +40,14 @@ _OVERLAYS = ("stamp", "emoji", "error", "flash")
 _KEYS = ("bg", "glow1", "glow2", "glow3", "text", "muted", "accent", "accentInk", "card", "cardEdge", "red", "green")
 
 
+def _unit(u: Unit) -> dict[str, Any]:
+    """A heading or caption word as the page reads it; a partly accented word carries its accented runs."""
+    out: dict[str, Any] = {"t": u.text, "a": u.accent}
+    if u.accent_spans:
+        out["accentSpans"] = [list(span) for span in u.accent_spans]
+    return out
+
+
 def _look(*values: str) -> dict[str, str]:
     return dict(zip(_KEYS, values, strict=True))
 
@@ -188,7 +196,7 @@ def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tupl
         beats.append({
             "id": beat.id or f"b{b}", "kind": beat.kind, "startMs": slot.start_ms, "endMs": slot.end_ms,
             "transition": beat.transition,
-            "heading": [{"t": u.text, "a": u.accent} for u in units(beat.heading, inputs.language)] if beat.heading else [],
+            "heading": [_unit(u) for u in units(beat.heading, inputs.language)] if beat.heading else [],
             "kicker": beat.kicker or "", "keyword": beat.keyword or "", "dm": beat.dm or "",
             "next": beat.next or "", "visuals": stage,
         })
@@ -201,7 +209,7 @@ def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tupl
                 end = min(starts[n + 1], line_slot.end_ms) if n + 1 < len(groups) else line_slot.end_ms
                 captions.append({
                     "startMs": starts[n], "endMs": max(starts[n], end),
-                    "words": [{"t": line_us[i].text, "a": line_us[i].accent,
+                    "words": [{**_unit(line_us[i]),
                                "startMs": line_slot.start_ms + line_times[i][0],
                                "endMs": line_slot.start_ms + line_times[i][1]} for i in group],
                 })

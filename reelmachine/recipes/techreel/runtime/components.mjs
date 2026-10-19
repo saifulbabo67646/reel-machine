@@ -2,7 +2,7 @@
 // One builder per stage visual: build(v, doc) makes its DOM once, update(node, v, t, doc) sets it for time t
 // (ms). `fit` (optional) sizes it once the fonts are in, before main.mjs measures it; `ownEnter` means the
 // component animates its own entrance, so main.mjs only applies the generic exit.
-import { clamp01, backOut, counterValue, typed, terminalStarts, ENTER_MS } from "./pure.mjs";
+import { clamp01, backOut, counterValue, typed, terminalStarts, accentUnits, accentPieces, isUnspaced, ENTER_MS } from "./pure.mjs";
 
 const lerp = (a, b, p) => a + (b - a) * p;
 const easeOut = (p) => 1 - Math.pow(1 - p, 3);
@@ -11,6 +11,7 @@ const MAX_W = 952;
 const CURSOR_MS = 350, PRESS_MS = 260, CHIP_STAGGER_MS = 120, WORD_STAGGER_MS = 60;
 const WOBBLE_MS = 700, ROW_STAGGER_MS = 220;
 export const STAMP_FROM = 1.8; // a stamp slams down from this scale (main.mjs may start it lower to stay in the stage)
+export const STAMP_TILT = 9; // the most a stamp's slam turns it past its own rotation (stamp.update: -9° → 4°)
 
 export function el(tag, className, parent, text) {
   const node = document.createElement(tag);
@@ -20,22 +21,29 @@ export function el(tag, className, parent, text) {
   return node;
 }
 
-/** `*accent*` text as word spans (the heading and the caption come pre-split from compose.py). */
-export function accentWords(text) {
-  const out = [];
-  let on = false;
-  for (const part of String(text || "").split("*")) {
-    for (const w of part.split(/\s+/).filter(Boolean)) out.push({ t: w, a: on });
-    on = !on;
+/** `*accent*` text as words (the heading and the caption come pre-split from compose.py). */
+export const accentWords = accentUnits;
+
+/** A word's text into `span`: a partly accented word gets its accented runs as inner accent spans. */
+export function fillWord(span, w) {
+  if (!w.accentSpans || !w.accentSpans.length) {
+    span.textContent = w.t;
+    return span;
   }
-  return out;
+  for (const piece of accentPieces(w)) {
+    if (piece.a) el("span", "accent", span, piece.t);
+    else span.appendChild(document.createTextNode(piece.t));
+  }
+  return span;
 }
 
-/** Word spans with a space between, inside `parent`. */
-export function wordSpans(parent, words) {
+/** Word spans inside `parent`, a space between them; none in an unspaced script (`doc.language`), whose units
+    are characters. */
+export function wordSpans(parent, words, doc) {
+  const gap = isUnspaced(doc?.language) ? "" : " ";
   return words.map((w, i) => {
-    const span = el("span", w.a ? "word accent" : "word", parent, w.t);
-    if (i < words.length - 1) parent.appendChild(document.createTextNode(" "));
+    const span = fillWord(el("span", w.a ? "word accent" : "word", parent), w);
+    if (gap && i < words.length - 1) parent.appendChild(document.createTextNode(gap));
     return span;
   });
 }
@@ -62,9 +70,9 @@ function fitWidth(node, room, minPx = 40) {
 
 const title = {
   ownEnter: true,
-  build(v) {
+  build(v, doc) {
     const node = el("div", `title ${v.size || "l"}`);
-    node._words = wordSpans(node, accentWords(v.text));
+    node._words = wordSpans(node, accentWords(v.text), doc);
     return node;
   },
   fit(node) {
@@ -108,6 +116,17 @@ const stamp = {
   build(v) {
     const node = el("div", `stamp ${v.tone || "red"}`, null, v.text);
     return node;
+  },
+  /** A stamp wider than the stage (measured as main.mjs measures it: tilted by its rotation plus the slam's
+      overshoot) shrinks its font until it fits. */
+  fit(node, v) {
+    const a = ((Math.abs(v.rotate ?? -8) + STAMP_TILT) * Math.PI) / 180;
+    const tilted = () => node.offsetWidth * Math.cos(a) + node.offsetHeight * Math.sin(a);
+    let px = parseFloat(getComputedStyle(node).fontSize);
+    while (tilted() > MAX_W && px > 32) {
+      px -= 4;
+      node.style.fontSize = `${px}px`;
+    }
   },
   /** Slams from STAMP_FROM× (or `node._from`, set by main.mjs) with the rotation overshooting, then settles.
       Main positions and rotates the wrapper. */

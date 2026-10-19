@@ -10,6 +10,7 @@ from pathlib import Path
 
 import httpx
 
+from ... import __version__
 from ...config import Settings
 from ...core.assets import Licence
 from ...core.errors import ProviderUnavailable
@@ -17,7 +18,8 @@ from ...core.errors import ProviderUnavailable
 NE_VERSION = "v5.1.2"
 _NE = f"https://raw.githubusercontent.com/nvkelso/natural-earth-vector/{NE_VERSION}/geojson"
 _BM = "https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73909"
-USER_AGENT = "reel-machine/mapreel"
+# Wikimedia refuses (403) a UA without a contact URL; techreel and dialoguereel fetch images with this one too
+USER_AGENT = f"reel-machine/{__version__} (+https://github.com/saifulbabo67646/reel-machine)"
 
 #: key -> (file name in the cache, URL)
 FILES: dict[str, tuple[str, str]] = {

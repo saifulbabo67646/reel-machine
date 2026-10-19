@@ -62,12 +62,28 @@ def estimate(inputs: TechReelInputs) -> Plan:
 
 
 def word_index(cue: Cue, us: Sequence[Unit]) -> int | None:
-    """Index of the first unit matching the cue word's first token; the one matcher lint and cue_ms share."""
+    """Index of the first unit matching the cue word's first token; the one matcher lint and cue_ms share.
+    Failing a single unit, the first run of consecutive units whose texts joined match it: in an unspaced
+    script the units are characters, so "パラメータ" is a run of five."""
     tokens = (cue.word or "").split()
     want = norm(tokens[0]) if tokens else ""
     if not want:
         return None
-    return next((k for k, u in enumerate(us) if norm(u.text) == want), None)
+    keys = [norm(u.text) for u in us]
+    hit = next((k for k, key in enumerate(keys) if key == want), None)
+    if hit is not None:
+        return hit
+    for k, key in enumerate(keys):
+        if not key or not want.startswith(key):
+            continue
+        run = ""
+        for nxt in keys[k:]:
+            run += nxt
+            if run == want:
+                return k
+            if not want.startswith(run):
+                break
+    return None
 
 
 def cue_ms(

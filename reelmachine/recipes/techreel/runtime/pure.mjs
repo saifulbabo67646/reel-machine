@@ -23,6 +23,63 @@ const TERM_CMD_GAP_MS = 250;
 // floor() guard: (1000 / 28) * 2 ms must type exactly two characters despite float rounding
 const EPS = 1e-9;
 
+const UNSPACED = new Set(["ja", "zh", "th"]);
+
+/** Whether a language writes without spaces between words (markup.is_unspaced's mirror): its heading and
+    caption units are characters, set with no gap between them. */
+export const isUnspaced = (language) => UNSPACED.has(String(language || "").split("-")[0].toLowerCase());
+
+const PUNCT = /^\p{P}$/u;
+
+/** `*accent*` text as words (markup.units' spaced-script rule, for the text visuals carry raw): `*` pairs toggle
+    the accent and a lone trailing `*` stays literal. A word accented in every letter (punctuation outside the
+    stars aside) is `a: true`; a partly accented one keeps `accentSpans`, [start, end) code-point offsets. */
+export function accentUnits(text) {
+  const chars = Array.from(String(text || ""));
+  const stars = chars.flatMap((ch, i) => (ch === "*" ? [i] : []));
+  const paired = new Set(stars.slice(0, stars.length - (stars.length % 2)));
+  const out = [];
+  let on = false, word = [];
+  const flush = () => {
+    if (!word.length) return;
+    const t = word.map(([ch]) => ch).join("");
+    const letters = word.filter(([ch]) => !PUNCT.test(ch));
+    if ((letters.length ? letters : word).every(([, a]) => a)) out.push({ t, a: true });
+    else {
+      const spans = [];
+      word.forEach(([, a], i) => {
+        if (!a) return;
+        if (spans.length && spans[spans.length - 1][1] === i) spans[spans.length - 1][1] = i + 1;
+        else spans.push([i, i + 1]);
+      });
+      out.push(spans.length ? { t, a: false, accentSpans: spans } : { t, a: false });
+    }
+    word = [];
+  };
+  chars.forEach((ch, i) => {
+    if (paired.has(i)) on = !on;
+    else if (/\s/.test(ch)) flush();
+    else word.push([ch, on]);
+  });
+  flush();
+  return out;
+}
+
+/** A word's text as runs to colour: [{t, a}], the accented spans (code-point offsets) as `a: true`. */
+export function accentPieces(word) {
+  if (!word.accentSpans || !word.accentSpans.length) return [{ t: word.t, a: !!word.a }];
+  const chars = Array.from(word.t);
+  const out = [];
+  let at = 0;
+  for (const [start, end] of word.accentSpans) {
+    if (start > at) out.push({ t: chars.slice(at, start).join(""), a: false });
+    out.push({ t: chars.slice(start, end).join(""), a: true });
+    at = end;
+  }
+  if (at < chars.length) out.push({ t: chars.slice(at).join(""), a: false });
+  return out;
+}
+
 export const clamp01 = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x);
 const lerp = (a, b, p) => a + (b - a) * p;
 const easeOutCubic = (p) => 1 - Math.pow(1 - p, 3);

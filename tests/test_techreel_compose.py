@@ -343,3 +343,14 @@ def test_a_flash_chunk_in_the_document_is_merged():
     doc = reel_document(inputs, plan, _times(inputs))     # 100 ms a word: "seven eight" would flash alone
     assert [w["t"] for w in doc["captions"][0]["words"]][-2:] == ["seven", "eight"]
     assert len(doc["captions"][0]["words"]) == 8
+
+
+def test_partial_word_accents_reach_the_document_as_spans():
+    inputs = TechReelInputs.model_validate({"title": "t", "beats": [
+        {"heading": "*R*etrieval *A*ugmented", "lines": [{"say": "retrieval rocks", "text": "*R*etrieval rocks"}]}]})
+    plan = schedule(inputs.beats, [[800]])
+    doc = reel_document(inputs, plan, _times(inputs))
+    assert doc["beats"][0]["heading"] == [{"t": "Retrieval", "a": False, "accentSpans": [[0, 1]]},
+                                          {"t": "Augmented", "a": False, "accentSpans": [[0, 1]]}]
+    words = doc["captions"][0]["words"]
+    assert words[0]["accentSpans"] == [[0, 1]] and "accentSpans" not in words[1]

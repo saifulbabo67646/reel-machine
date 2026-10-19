@@ -294,10 +294,10 @@ const heartbeat = {
 
 const flash = {
   ownEnter: true,
-  build(v) {
+  build(v, doc) {
     const node = el("div", "flashv");
     const text = el("div", "ftext", node);
-    node._words = wordSpans(text, accentWords(v.text));
+    node._words = wordSpans(text, accentWords(v.text), doc);
     node._text = text;
     return node;
   },

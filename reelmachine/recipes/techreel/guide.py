@@ -300,8 +300,9 @@ GUIDE: dict[str, Any] = {
         "japanese": "`say` in natural Japanese with numbers in kana (\"よんビット\", \"じゅうよんギガ\") so the voice "
                     "cannot misread them, and Latin acronyms in katakana (\"エーアイ\"). `text` only when the caption "
                     "should show digits (\"*4ビット*\"). Captions chunk by characters (14 per chunk), so keep lines "
-                    "short with 、 and 。 at natural breaks. A cue `word` in Japanese is one character (its first "
-                    "occurrence in the line): prefer `frac` (0–1 through the line) for Japanese cues.",
+                    "short with 、 and 。 at natural breaks. A cue `word` in Japanese is a run of characters as it "
+                    "appears in the caption (\"量子化\", its first occurrence in the line); use `frac` (0–1 "
+                    "through the line) for a moment between words.",
         "numbers": {
             "en": ["0 zero, 1 one, 2 two, 3 three, 4 four, 5 five, 6 six, 7 seven, 8 eight, 9 nine, 10 ten",
                    "100 one hundred, 250 two hundred fifty, 1,000 one thousand, 12,400 twelve thousand four hundred",
@@ -407,7 +408,8 @@ GUIDE: dict[str, Any] = {
                                "asleep and searching; chat, nodes, people, equation, checklist, svg, image; an "
                                "authored comment and follow with a callback to the hook.",
         "ja-tiny-models.json": "Japanese concept reel on small, quantised models: kana numbers in `say`, digits "
-                               "in `text`, `frac` cues; the phone hero's screen; counter, equation, bars, dialog, "
-                               "heartbeat, a drawn compression bag (svg); the default cta with a `next` tease.",
+                               "in `text`, word cues on runs of characters; the phone hero's screen; counter, equation, "
+                               "bars, dialog, heartbeat, a drawn compression bag (svg); the default cta with a "
+                               "`next` tease.",
     },
 }

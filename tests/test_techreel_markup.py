@@ -57,3 +57,20 @@ def test_chunks_japanese_fourteen():
 def test_chunks_japanese_breaks_after_period():
     us = units("あいう。えお", "ja")
     assert chunks(us, "ja") == [[0, 1, 2], [3, 4]]
+
+
+def test_units_partial_word_accent_stays_one_unit():
+    us = units("What is *R*etrieval *A*ugmented?", "en")
+    assert [u.text for u in us] == ["What", "is", "Retrieval", "Augmented?"]
+    assert us[2] == Unit("Retrieval", False, ((0, 1),))
+    assert us[3] == Unit("Augmented?", False, ((0, 1),))
+
+
+def test_units_partial_accent_mid_word_and_several_runs():
+    assert units("re*mark*able", "en") == [Unit("remarkable", False, ((2, 6),))]
+    assert units("*a*b*c*", "en") == [Unit("abc", False, ((0, 1), (2, 3)))]
+
+
+def test_units_whole_word_accent_ignores_punctuation_outside_the_stars():
+    # "*ChatGPT*," and "(*RAG*)" are still accent words: the punctuation is not part of the word
+    assert units("*ChatGPT*, (*RAG*)", "en") == [Unit("ChatGPT,", True), Unit("(RAG)", True)]

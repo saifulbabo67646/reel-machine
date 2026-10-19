@@ -14,10 +14,13 @@ _MAX_CHARS = 14
 
 @dataclass(frozen=True)
 class Unit:
-    """One caption unit: a word, or a character for an unspaced script."""
+    """One caption unit: a word, or a character for an unspaced script. `accent` is a whole-word accent;
+    `accent_spans` are (start, end) character offsets of the accented runs in a partly accented word
+    (`*R*etrieval` stays one word on screen, its R coloured)."""
 
     text: str
     accent: bool
+    accent_spans: tuple[tuple[int, int], ...] = ()
 
 
 def is_unspaced(language: str) -> bool:
@@ -49,16 +52,32 @@ def units(caption: str, language: str) -> list[Unit]:
             else:
                 out.append(Unit(ch, on))
         return out
-    word, accent = "", False
+    word: list[tuple[str, bool]] = []
     for ch, on in [*_marked(caption), (" ", False)]:
-        if ch.isspace():
-            if word:
-                out.append(Unit(word, accent))
-            word, accent = "", False
-        else:
-            word += ch
-            accent = accent or on
+        if not ch.isspace():
+            word.append((ch, on))
+        elif word:
+            out.append(_word(word))
+            word = []
     return out
+
+
+def _word(chars: list[tuple[str, bool]]) -> Unit:
+    """A spaced-script word from its marked characters: a whole-word accent when every letter is accented
+    (punctuation outside the stars, as in `*ChatGPT*,`, does not count), else the accented runs as spans."""
+    text = "".join(ch for ch, _ in chars)
+    letters = [on for ch, on in chars if not unicodedata.category(ch).startswith("P")] or [on for _, on in chars]
+    if all(letters):
+        return Unit(text, True)
+    spans: list[tuple[int, int]] = []
+    for i, (_, on) in enumerate(chars):
+        if not on:
+            continue
+        if spans and spans[-1][1] == i:
+            spans[-1] = (spans[-1][0], i + 1)
+        else:
+            spans.append((i, i + 1))
+    return Unit(text, False, tuple(spans))
 
 
 def plain(text: str) -> str:

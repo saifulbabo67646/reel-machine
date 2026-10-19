@@ -265,3 +265,19 @@ def test_active_tab():
     assert _at(f, "active-tab") == [("warning", "beats[0].visuals[0].active")]
     assert "active-tab" not in _rules(check(_inputs([_beat(visuals=[{**w, "active": 1}])])))
     assert "active-tab" not in _rules(check(_inputs([_beat(visuals=[{"kind": "window", "title": "w"}])])))
+
+
+def test_cue_word_matches_a_run_of_japanese_characters():
+    line = {"say": "小さいパラメータ、すごい。"}
+    hit = {"kind": "title", "text": "x", "at": {"line": 0, "word": "パラメータ"}}
+    assert _core(check(_inputs([{"lines": [line], "visuals": [hit]}], language="ja"))) == []
+    miss = {"kind": "title", "text": "x", "at": {"line": 0, "word": "メモリ"}}
+    assert "cue-word" in _rules(check(_inputs([{"lines": [line], "visuals": [miss]}], language="ja")))
+
+
+def test_stamp_long_warns_above_sixteen_characters():
+    ok = {"kind": "stamp", "text": "SIXTEEN CHARS OK"}          # 16
+    assert _core(check(_inputs([_beat(visuals=[ok])]))) == []
+    long = {"kind": "stamp", "text": "SEVENTEEN CHARS!!"}       # 17
+    f = _core(check(_inputs([_beat(visuals=[long])])))
+    assert [(x.rule, x.severity, x.path) for x in f] == [("stamp-long", "warning", "beats[0].visuals[0].text")]
