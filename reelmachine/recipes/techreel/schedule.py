@@ -61,6 +61,15 @@ def estimate(inputs: TechReelInputs) -> Plan:
     return schedule(inputs.beats, speech)
 
 
+def word_index(cue: Cue, us: Sequence[Unit]) -> int | None:
+    """Index of the first unit matching the cue word's first token; the one matcher lint and cue_ms share."""
+    tokens = (cue.word or "").split()
+    want = norm(tokens[0]) if tokens else ""
+    if not want:
+        return None
+    return next((k for k, u in enumerate(us) if norm(u.text) == want), None)
+
+
 def cue_ms(
     cue: Cue | None,
     beat: BeatSlot,
@@ -74,11 +83,9 @@ def cue_ms(
         return beat.start_ms, False
     line = beat.lines[cue.line]
     if cue.word is not None:
-        tokens = cue.word.split()
-        want = norm(tokens[0]) if tokens else ""
-        for k, u in enumerate(us[cue.line]):
-            if want and norm(u.text) == want and k < len(times[cue.line]):
-                return line.start_ms + times[cue.line][k][0], True
+        k = word_index(cue, us[cue.line])
+        if k is not None and k < len(times[cue.line]):
+            return line.start_ms + times[cue.line][k][0], True
         return line.start_ms, False
     if cue.frac is not None:
         return line.start_ms + round(cue.frac * line.speech_ms), True

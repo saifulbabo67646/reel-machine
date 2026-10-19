@@ -7,8 +7,9 @@ from typing import Literal
 
 from reelmachine.recipes.doodle.narration import provider_for
 
-from .markup import norm, units
+from .markup import units
 from .models import Cue, TechReelInputs
+from .schedule import word_index
 
 
 @dataclass(frozen=True)
@@ -68,10 +69,8 @@ def check(inputs: TechReelInputs, bound_provider: str | None = None) -> list[Fin
                                          f"{path} is {cue.line}, but the beat has {len(beat.lines)} lines",
                                          f"use a line from 0 to {len(beat.lines) - 1}", path))
                 elif cue.word is not None:
-                    tokens = cue.word.split()
-                    want = norm(tokens[0]) if tokens else ""
                     caption = units(beat.lines[cue.line].caption, inputs.language)
-                    if not want or not any(norm(u.text) == want for u in caption):
+                    if word_index(cue, caption) is None:
                         wpath = f"beats[{b}].visuals[{v}].{where}.word"
                         found.append(Finding("cue-word", "warning",
                                              f"{wpath} {cue.word!r} is not a word of line {cue.line}",

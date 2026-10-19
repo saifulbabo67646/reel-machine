@@ -75,3 +75,12 @@ def test_schedule_refuses_mismatched_speech_lists():
 def test_estimate_floors_one_character_say_at_400ms():
     plan = estimate(TechReelInputs(title="t", beats=[Beat(lines=[Line(say="a")])]))
     assert plan.beats[0].lines[0].speech_ms == 400
+
+
+def test_word_index():
+    from reelmachine.recipes.techreel.schedule import word_index
+
+    us = units("Hello, *big* world", "en")
+    assert word_index(Cue(line=0, word="BIG now"), us) == 1
+    assert word_index(Cue(line=0, word="nope"), us) is None
+    assert word_index(Cue(line=0, frac=0.5), us) is None

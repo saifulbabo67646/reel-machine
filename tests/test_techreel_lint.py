@@ -95,3 +95,9 @@ def test_finding_is_frozen():
     f = Finding("r", "error", "m", "h", "p")
     with pytest.raises(dataclasses.FrozenInstanceError):
         f.rule = "x"  # type: ignore[misc]
+
+
+def test_cue_word_warning_on_exit_cue():
+    miss = {"kind": "title", "text": "x", "exit": {"line": 0, "word": "banana"}}
+    f = check(_inputs([_beat(visuals=[miss])]))
+    assert [(x.rule, x.severity, x.path) for x in f] == [("cue-word", "warning", "beats[0].visuals[0].exit.word")]
