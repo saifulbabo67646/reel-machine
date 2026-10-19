@@ -44,7 +44,7 @@ EXAMPLE: dict[str, Any] = {
         {
             "id": "hook", "kind": "hook", "kicker": "NEW TOOL", "heading": "Laptop pe *apna* AI?",
             "lines": [
-                {"say": "भाई, अब तुम्हारे पुराने लैपटॉप पर भी अपना खुद का AI चलेगा।",
+                {"say": "भाई, अब तुम्हारे पुराने लैपटॉप पर भी अपना खुद का एआई चलेगा।",
                  "text": "Bhai, ab tumhare purane laptop par bhi *apna* khud ka AI chalega."},
                 {"say": "सिर्फ़ चार जीबी रैम में, और वो भी बिना इंटरनेट के।",
                  "text": "Sirf *4 GB* RAM mein, aur woh bhi bina internet ke."},
@@ -75,7 +75,7 @@ EXAMPLE: dict[str, Any] = {
             "id": "reveal", "kind": "reveal", "kicker": "OPEN SOURCE", "heading": "Milo *Pocket LLM* se",
             "transition": "flash",
             "lines": [
-                {"say": "मिलो पॉकेट एलएलएम से, एक ओपन सोर्स ऐप जो पूरा मॉडल तुम्हारे लैपटॉप पर चलाता है।",
+                {"say": "मिलो पॉकेट एल एल एम से, एक ओपन सोर्स ऐप जो पूरा मॉडल तुम्हारे लैपटॉप पर चलाता है।",
                  "text": "Milo *Pocket LLM* se, ek open source app jo poora model tumhare laptop par chalata hai."},
                 {"say": "विंडोज़, मैक और लिनक्स, तीनों पर।", "text": "Windows, Mac aur Linux, *teeno* par."},
             ],
@@ -103,7 +103,8 @@ EXAMPLE: dict[str, Any] = {
                     {"out": "> namaste! main offline hoon"},
                 ]},
                 {"kind": "window", "title": "Pocket LLM", "tabs": ["Chat", "Models"], "live": True,
-                 "button": "Send", "at": {"line": 1},
+                 "button": "Send", "rows": ["> pankha itna shor kyun?", "Main soch raha hoon. Zor se."],
+                 "at": {"line": 1},
                  "cursor": [{"to": [0.78, 0.86], "at": {"line": 1, "word": "gaana"}}]},
                 {"kind": "hero", "state": "corner", "at": {"line": 1, "word": "pankha"}},
             ],
@@ -130,7 +131,9 @@ GUIDE: dict[str, Any] = {
         "`say` is exactly what the voice reads: in the voice's script (Devanagari for Hindi), numbers, symbols "
         "and names with digits written as words (\"चार जीबी\", \"G P T four o\"), no `*` markup; digits or `*` in "
         "`say` are lint errors. `text` is the caption (any script; Hinglish in Latin for Hindi), keeps the "
-        "digits, and marks accent words as `*word*`; it defaults to `say`. Word cues match caption words."
+        "digits, and marks accent words as `*word*`; it defaults to `say`. Word cues match caption words. "
+        "Hindi voices do not spell Latin letters: \"AI\" in a Devanagari `say` comes out as a long \"एएएए\", so "
+        "write \"एआई\"; spell an acronym as spaced letters (\"एल एल एम\", not \"एलएलएम\", which runs together)."
     ),
 }
 

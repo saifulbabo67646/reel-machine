@@ -110,6 +110,8 @@ class WindowVisual(VisualBase):
     live: bool = False
     cursor: list[CursorMove] = Field(default_factory=list, max_length=4)
     button: str | None = Field(None, max_length=24)
+    # chat or list lines shown in the body; none gives placeholder bars
+    rows: list[Annotated[str, Field(max_length=48)]] = Field(default_factory=list, max_length=4)
 
 
 class TermLine(_Model):

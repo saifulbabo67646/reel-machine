@@ -18,8 +18,9 @@ from ...config import Settings
 from ...core.assets import AssetKind, Provenance
 from ...core.errors import InvalidInput, RendererUnavailable, VoiceUnavailable
 from ...core.stage import StageContext
-from ...core.timeline import Caption
+from ...core.timeline import Caption, WordSpan
 from ...render.captions import write_srt
+from ..dialoguereel.verify import parse_silences
 from ..doodle.narration import provider_for
 from ..explainer3d.audio import mix, pad_speech, silence, synth_sfx
 from ..explainer3d.stages import speak_line
@@ -47,6 +48,39 @@ MAX_SFX = 80
 _DROP_ORDER = ("pop", "tick", "ding", "thud", "whoosh")
 MAX_STILLS = 24
 STILL_AFTER_MS = 400      # a visual's enter animation has played by then (a counter's count by COUNTER_MS)
+TRIM_DB = -45             # quieter than this at a clip's ends is padding, not speech
+TRIM_MIN_S = 0.05         # silencedetect's shortest silence: a lead shorter than this stays
+
+
+def trim_clip(src: Path, dest: Path, *, settings: Settings, keep_ms: int = 60,
+              cancel: Any = None) -> tuple[Path, int, int]:
+    """`src` without its leading and trailing silence, `keep_ms` of it kept at each end: (the clip, the ms cut
+    from its start, its new length). TTS voices pad a line with half a second or more each side, which piles up
+    as dead air between lines. A clip with no silence at either end (or nothing but silence) is copied as it is."""
+    src, dest = Path(src), Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    total = round(ffmpeg.probe(src).duration_s * 1000)
+    proc = ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-i", str(src), "-af",
+                       f"silencedetect=n={TRIM_DB}dB:d={TRIM_MIN_S}", "-f", "null", "-"], cancel=cancel)
+    silences = parse_silences(proc.stderr or "", total)
+    first = next((e for s, e in silences if s <= 10), 0)               # sound starts where a silence at 0 ends
+    last = next((s for s, e in reversed(silences) if e >= total - 10), total)
+    start, end = max(0, first - keep_ms), min(total, last + keep_ms)
+    if end <= start or (start == 0 and end == total):
+        shutil.copy2(src, dest)
+        return dest, 0, total
+    ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-y", "-i", str(src), "-af",
+                f"atrim=start={start / 1000:.3f}:end={end / 1000:.3f},asetpts=PTS-STARTPTS", str(dest)],
+               cancel=cancel)
+    return dest, start, end - start
+
+
+def shift_words(words: list[WordSpan], lead_ms: int, total_ms: int) -> list[WordSpan]:
+    """Word spans moved `lead_ms` earlier (the trimmed lead) and held inside the trimmed clip."""
+    def clamp(ms: int) -> int:
+        return min(max(ms - lead_ms, 0), total_ms)
+
+    return [w.model_copy(update={"start_ms": clamp(w.start_ms), "end_ms": clamp(w.end_ms)}) for w in words]
 
 
 def terminal_starts(v: dict[str, Any]) -> list[int]:
@@ -198,9 +232,11 @@ class NarrationStage:
             times.append([])
             for n, line in enumerate(beat.lines):
                 ctx.cancel.raise_if_cancelled()
-                path, ms, words, line_licence = speak_line(ctx, provider, line.say, inputs.voice, inputs.language)
-                local = work / f"{b:02d}-{n:02d}.wav"
-                shutil.copy2(path, local)
+                path, _, words, line_licence = speak_line(ctx, provider, line.say, inputs.voice, inputs.language)
+                # the cached clip stays as spoken; the reel gets it without the voice's padding
+                local, lead, ms = trim_clip(path, work / f"{b:02d}-{n:02d}.wav", settings=settings,
+                                            cancel=ctx.cancel)
+                words = shift_words(list(words), lead, ms)
                 clips[-1].append(local)
                 speech[-1].append(ms)
                 times[-1].append(unit_times(list(words), units(line.caption, inputs.language), ms))

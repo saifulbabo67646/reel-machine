@@ -64,6 +64,16 @@ def test_beat_id_pattern_and_limits():
         Beat.model_validate({"lines": []})
 
 
+def test_window_rows():
+    assert _beat({"kind": "window", "title": "w"}).visuals[0].rows == []
+    v = _beat({"kind": "window", "title": "w", "rows": ["> namaste", "hi! main offline hoon"]}).visuals[0]
+    assert v.rows == ["> namaste", "hi! main offline hoon"]
+    with pytest.raises(ValidationError):
+        _beat({"kind": "window", "title": "w", "rows": ["x" * 49]})
+    with pytest.raises(ValidationError):
+        _beat({"kind": "window", "title": "w", "rows": ["a", "b", "c", "d", "e"]})
+
+
 def test_window_cursor_move():
     v = _beat({"kind": "window", "title": "w", "cursor": [{"to": [0.5, 0.2], "at": {"line": 0}}]}).visuals[0]
     assert v.cursor[0].to == (0.5, 0.2)

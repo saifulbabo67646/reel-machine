@@ -11,7 +11,9 @@
   --red: #ff5d73; --green: #4ade80;
   --deva: "Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN";
   --jp: "Noto Sans JP", "Hiragino Sans";
-  --display: "Archivo Black", "Montserrat", "Helvetica Neue", "Arial Black", var(--deva), var(--jp), sans-serif;
+  /* every face in the display stack has a heavy cut (Archivo Black, Montserrat 900, Arial Black, Helvetica Neue
+     Bold, Noto 900); the display elements ask for 900 and may synthesise it, so no fallback lands on a regular */
+  --display: "Archivo Black", "Montserrat", "Arial Black", "Helvetica Neue", var(--deva), var(--jp), sans-serif;
   --mono: "JetBrains Mono", "SF Mono", Menlo, var(--deva), var(--jp), monospace;
   --sans: "Montserrat", "Helvetica Neue", Arial, var(--deva), var(--jp), sans-serif;
 }
@@ -56,7 +58,9 @@ html, body { margin: 0; background: #000; }
 .htitle {
   font-family: var(--display); font-size: 96px; line-height: 1.02; letter-spacing: -0.01em; color: var(--text);
   max-width: 952px; text-transform: uppercase; text-shadow: 0 6px 30px rgba(0,0,0,0.35);
+  text-wrap: balance; /* no lone short word on the last line */
 }
+.htitle, .title, .counter .num, .stamp, .repo .rstars .n, .hero .screen, .hero .zzz { font-weight: 900; font-synthesis: weight; }
 .word { display: inline-block; white-space: pre; will-change: transform, opacity; }
 .accent { color: var(--accent); }
 .htitle .accent, .title .accent { text-shadow: 0 0 40px color-mix(in srgb, var(--accent) 45%, transparent); }
@@ -76,7 +80,7 @@ html, body { margin: 0; background: #000; }
 .dot3:nth-child(1) { background: #ff5f57; } .dot3:nth-child(2) { background: #febc2e; } .dot3:nth-child(3) { background: #28c840; }
 
 /* title */
-.title { font-family: var(--display); text-align: center; line-height: 1.04; max-width: 952px; text-transform: uppercase; }
+.title { font-family: var(--display); text-align: center; line-height: 1.04; max-width: 952px; text-transform: uppercase; text-wrap: balance; }
 .title.m { font-size: 84px; } .title.l { font-size: 108px; } .title.xl { font-size: 136px; }
 
 /* counter */
@@ -128,6 +132,16 @@ html, body { margin: 0; background: #000; }
   color: var(--muted); border: 1.5px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03);
 }
 .tab.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 60%, transparent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.wrow {
+  width: fit-content; max-width: 78%; margin-top: 16px; padding: 16px 24px; border-radius: 22px 22px 22px 6px;
+  font-family: var(--sans); font-size: 30px; font-weight: 600; line-height: 1.3; color: var(--text);
+  background: rgba(255,255,255,0.07); border: 1.5px solid rgba(255,255,255,0.08);
+}
+.top + .wrow, .tabs + .wrow { margin-top: 0; }
+.wrow.me {
+  margin-left: auto; border-radius: 22px 22px 6px 22px; color: var(--accentInk); background: var(--accent);
+  border-color: var(--accent);
+}
 .sk { border-radius: 14px; background: rgba(255,255,255,0.06); margin-top: 18px; }
 .sk.a { height: 46px; width: 62%; background: color-mix(in srgb, var(--accent) 28%, transparent); margin-top: 0; }
 .sk.b { height: 150px; background: linear-gradient(100deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04)); }
@@ -197,8 +211,10 @@ html, body { margin: 0; background: #000; }
   visibility: hidden;
 }
 .cap.on { visibility: visible; }
+/* main.mjs holds the pill at the whole chunk's size, centred; the words said so far sit centred inside it */
+.cap.held { display: flex; align-items: center; justify-content: center; }
 .cap .w { display: inline; }
-.cap .w.future { visibility: hidden; }
+.cap .w.future { display: none; }
 .cap .w.past { color: rgba(255,255,255,0.85); }
 .cap .w.now { color: #fff; text-shadow: 0 0 24px rgba(255,255,255,0.35); }
 .cap .w.accent { color: var(--accent); }

@@ -9,7 +9,8 @@ const easeOut = (p) => 1 - Math.pow(1 - p, 3);
 const easeInOut = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
 const MAX_W = 952;
 const CURSOR_MS = 350, PRESS_MS = 260, CHIP_STAGGER_MS = 120, WORD_STAGGER_MS = 60;
-const WOBBLE_MS = 700;
+const WOBBLE_MS = 700, ROW_STAGGER_MS = 220;
+export const STAMP_FROM = 1.8; // a stamp slams down from this scale (main.mjs may start it lower to stay in the stage)
 
 export function el(tag, className, parent, text) {
   const node = document.createElement(tag);
@@ -108,12 +109,13 @@ const stamp = {
     const node = el("div", `stamp ${v.tone || "red"}`, null, v.text);
     return node;
   },
-  /** Slams from 1.8× with the rotation overshooting, then settles. Main positions and rotates the wrapper. */
+  /** Slams from STAMP_FROM× (or `node._from`, set by main.mjs) with the rotation overshooting, then settles.
+      Main positions and rotates the wrapper. */
   update(node, v, t) {
     const p = clamp01((t - v.enterMs) / ENTER_MS);
     const settle = clamp01((t - v.enterMs - ENTER_MS) / 220);
     // down fast to a touch under its size, then back up to it
-    const s = p < 1 ? lerp(1.8, 0.94, p * p) : lerp(0.94, 1, easeOut(settle));
+    const s = p < 1 ? lerp(node._from ?? STAMP_FROM, 0.94, p * p) : lerp(0.94, 1, easeOut(settle));
     const r = p < 1 ? lerp(-9, 4, p) : lerp(4, 0, easeOut(settle));
     node.style.opacity = clamp01(p * 3).toFixed(3);
     node.style.transform = `rotate(${r.toFixed(2)}deg) scale(${s.toFixed(4)})`;
@@ -176,7 +178,12 @@ const windowViz = {
       const tabs = el("div", "tabs", node);
       v.tabs.forEach((name, i) => el("div", i === (v.active || 0) ? "tab on" : "tab", tabs, name));
     }
-    for (const k of ["a", "b", "c"]) el("div", `sk ${k}`, node); // three skeleton rows
+    // the body: the given chat/list rows ("> " marks the user's), else three placeholder bars
+    node._rows = (v.rows || []).map((text) => {
+      const mine = text.startsWith(">");
+      return el("div", mine ? "wrow me" : "wrow", node, mine ? text.replace(/^>\s*/, "") : text);
+    });
+    if (!node._rows.length) for (const k of ["a", "b", "c"]) el("div", `sk ${k}`, node);
     node._button = v.button ? el("div", "wbutton", node, v.button) : null;
     node._cursor = el("div", "cursor", node);
     node._cursor.innerHTML = CURSOR_SVG;
@@ -189,6 +196,12 @@ const windowViz = {
     node._buttonBox = b ? { x0: b.offsetLeft, y0: b.offsetTop, x1: b.offsetLeft + b.offsetWidth, y1: b.offsetTop + b.offsetHeight } : null;
   },
   update(node, v, t) {
+    // the rows pop in one after another once the window has landed
+    node._rows.forEach((row, i) => {
+      const p = clamp01((t - v.enterMs - ENTER_MS - i * ROW_STAGGER_MS) / ENTER_MS);
+      row.style.opacity = clamp01(p * 2).toFixed(3);
+      row.style.transform = `translateY(${(16 * (1 - easeOut(p))).toFixed(1)}px)`;
+    });
     if (node._live) {
       const pulse = 0.5 + 0.5 * Math.sin((2 * Math.PI * t) / 1100);
       node._live.style.opacity = (0.65 + 0.35 * pulse).toFixed(3);

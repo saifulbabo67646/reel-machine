@@ -118,7 +118,9 @@ _TEMPLATE = """<!doctype html>
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width={w}, height={h}" />
-<link rel="stylesheet" href="./runtime/reel.css" />
+<style>
+{css}
+</style>
 <script>window.__hf = window.__hf || {{}}; window.__reelReady = new Promise((r) => {{ window.__reelResolve = r; }}); window.__hf.buildReady = {{ techreel: window.__reelReady }};</script>
 </head>
 <body>
@@ -146,7 +148,11 @@ def write_project(doc: dict[str, Any], dest: Path) -> Path:
     # "script data double escaped" state, the real </script> would not close the data script, and the
     # runtime's module script would be swallowed (buildReady never settles and the render hangs)
     data = json.dumps(doc, ensure_ascii=False, allow_nan=False).replace("<", "\\u003c")
-    html = _TEMPLATE.format(w=WIDTH, h=HEIGHT, lang=escape(str(doc.get("language") or "en")),
+    # the look goes inline: HyperFrames' render compiler fetches the fonts the page itself names (snapshot bundles
+    # linked sheets first, render does not), so a linked reel.css left the display font to a regular fallback
+    sheet = dest / "runtime" / "reel.css"
+    css = sheet.read_text(encoding="utf-8").replace("</", "<\\/") if sheet.is_file() else ""
+    html = _TEMPLATE.format(w=WIDTH, h=HEIGHT, lang=escape(str(doc.get("language") or "en")), css=css,
                             duration=f"{doc['duration']:.3f}", data=data)
     (dest / "index.html").write_text(html, encoding="utf-8")
     return dest

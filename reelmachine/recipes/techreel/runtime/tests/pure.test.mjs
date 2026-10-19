@@ -138,6 +138,16 @@ test("a new block makes room: the others glide, the newcomer lands in its slot",
   assert.deepEqual(mid.get("b"), final.get("b"));
 });
 
+test("the others are mostly out of the way once a newcomer is opaque", () => {
+  // a newcomer is fully opaque half way through its enter (main.mjs: opacity = 2 × enter progress)
+  const blocks = [{ id: "hero" }, block("b", 1000)];
+  const sizes = sized([["hero", 160, 160], ["b", 400, 300]]);
+  const alone = stackLayout(blocks, sizes, 999).get("hero").y;
+  const final = stackLayout(blocks, sizes, 1000 + GLIDE_MS).get("hero").y;
+  const opaque = stackLayout(blocks, sizes, 1000 + ENTER_MS / 2).get("hero").y;
+  assert.ok((alone - opaque) / (alone - final) >= 0.75, `only ${((alone - opaque) / (alone - final)).toFixed(2)} of the way`);
+});
+
 test("the hero stacks first, with no times of its own", () => {
   const blocks = [block("a", 500), { id: "hero" }];
   const layout = stackLayout(blocks, sized([["hero", 300, 300], ["a", 400, 200]]), 1000);

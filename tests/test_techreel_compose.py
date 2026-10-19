@@ -143,7 +143,7 @@ def test_write_project(tmp_path, monkeypatch):
     rt = tmp_path / "rt"
     rt.mkdir()
     (rt / "main.mjs").write_text("// m")
-    (rt / "reel.css").write_text("/* c */")
+    (rt / "reel.css").write_text(".htitle { font-family: var(--display); } /* c */")
     monkeypatch.setattr(compose, "_runtime_paths", lambda: sorted(rt.iterdir()))
     _, _, doc = _doc()
     doc["beats"][0]["heading"][0]["t"] = "<!--<script>"
@@ -151,6 +151,10 @@ def test_write_project(tmp_path, monkeypatch):
     html = (out / "index.html").read_text()
     assert (out / "runtime" / "main.mjs").exists() and (out / "runtime" / "reel.css").exists()
     assert 'data-composition-id="techreel"' in html and "buildReady = { techreel:" in html
+    # the look is inlined, not linked: HyperFrames' render compiler only sees font families in the page itself
+    # (a linked sheet left the display font unfetched, so full renders fell back to a regular face)
+    assert "<style>\n.htitle { font-family: var(--display); } /* c */" in html
+    assert "stylesheet" not in html
     data = re.search(r'<script id="reel-data" type="application/json">(.*?)</script>', html, re.DOTALL).group(1)
     assert "<" not in data
     assert json.loads(data)["beats"][0]["heading"][0]["t"] == "<!--<script>"

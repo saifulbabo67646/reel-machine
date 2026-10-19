@@ -23,7 +23,6 @@ const TERM_CMD_GAP_MS = 250;
 const EPS = 1e-9;
 
 export const clamp01 = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x);
-const smooth = (p) => p * p * (3 - 2 * p);
 const lerp = (a, b, p) => a + (b - a) * p;
 const easeOutCubic = (p) => 1 - Math.pow(1 - p, 3);
 
@@ -106,8 +105,9 @@ function layoutOf(live, sizes) {
 /** The stage stack at `t`. `blocks` are the current beat's block visuals (plus `{id: "hero", ...heroSpan()}`
     while the hero is in a HERO_STACKING state); `sizes` their natural `{w, h}` measured at build.
     Glide rule: membership changes when a block enters (`enterMs`) or has finished leaving (`exitMs + EXIT_MS`).
-    At each change every block that stays glides over GLIDE_MS (smoothstep) from where it was at that moment to
-    its slot in the new layout; a newcomer starts in its slot (its own enter animation brings it in). Walking
+    At each change every block that stays glides over GLIDE_MS (ease-out: most of the way in the first third, so
+    a newcomer, which starts in its slot under its own enter animation, is not drawn over a block still making
+    room for it — the orb sat on a counter's digits with a smoothstep glide). Walking
     the changes in order makes a change during a glide start from the half-glided place, so nothing jumps. */
 export function stackLayout(blocks, sizes, t) {
   // the hero always takes the top row, whenever it joined
@@ -132,11 +132,11 @@ export function stackLayout(blocks, sizes, t) {
   // blocks with no times (the hero) are live before any change
   let from = new Map(), to = layoutOf(liveAt(-Infinity), sizes), since = -Infinity;
   for (const c of changes) {
-    from = blend(from, to, smooth(clamp01((c - since) / GLIDE_MS)));
+    from = blend(from, to, easeOutCubic(clamp01((c - since) / GLIDE_MS)));
     to = layoutOf(liveAt(c), sizes);
     since = c;
   }
-  return blend(from, to, smooth(clamp01((t - since) / GLIDE_MS)));
+  return blend(from, to, easeOutCubic(clamp01((t - since) / GLIDE_MS)));
 }
 
 // ------------------------------------------------------------ counters and typing

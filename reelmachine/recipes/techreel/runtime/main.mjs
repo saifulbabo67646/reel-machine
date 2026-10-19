@@ -7,7 +7,7 @@ import {
   ENTER_MS, GLIDE_MS, HERO_MOVE_MS, HERO_STACKING, STAGE, backOut, clamp01, enterP, exitP, alive, stackLayout,
   captionAt, wordPhase, heroAt, heroSpan, beatAt, transitionP, progress, blob, seedOf,
 } from "./pure.mjs";
-import { COMPONENTS, el, wordSpans, slam } from "./components.mjs";
+import { COMPONENTS, STAMP_FROM, el, wordSpans, slam } from "./components.mjs";
 import { HERO_SIZE, buildHero, updateHero } from "./hero.mjs";
 
 const done = () => window.__reelResolve && window.__reelResolve();
@@ -20,6 +20,7 @@ const HEADING_STAGGER_MS = 70, HEADING_OUT_MS = 150;
 const HEADING_ROOM = 300, HEADING_GAP = 22, HEADING_PX = 96, TEXT_W = 952;
 const CAPTION_ROOM = 220, CAPTION_POP_MS = 160;
 const SMALL_TOP = 0.45, CORNER = 0.3;
+const STAMP_TILT = 9; // the most a stamp's slam turns it past its own rotation (components.mjs: -9° → 4°)
 const STAGE_CX = (STAGE.left + STAGE.right) / 2, STAGE_CY = (STAGE.top + STAGE.bottom) / 2;
 const GRAIN = "data:image/svg+xml;utf8," + encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="240" height="240" filter="url(#n)"/></svg>`);
@@ -88,9 +89,11 @@ function build(doc, root) {
   ui.captions = (doc.captions || []).map((c) => {
     const node = el("div", "cap", ui.captionBox);
     if (doc.language && /^(ar|he|fa|ur)\b/.test(doc.language)) node.dir = "rtl";
+    // one inline run inside the pill, so the pill can centre it as a block
+    const text = el("span", "ct", node);
     const words = c.words.map((w, i) => {
-      const span = el("span", w.a ? "w accent" : "w", node, w.t);
-      if (i < c.words.length - 1) node.appendChild(document.createTextNode(" "));
+      const span = el("span", w.a ? "w accent" : "w", text, w.t);
+      if (i < c.words.length - 1) text.appendChild(document.createTextNode(" "));
       return span;
     });
     return { c, node, words };
@@ -127,6 +130,10 @@ function fit(ui) {
       size -= 2;
       cap.node.style.fontSize = `${size}px`;
     }
+    // the pill keeps the whole chunk's size while its words appear, so it neither jumps nor sits off-centre
+    cap.node.style.width = `${cap.node.offsetWidth}px`;
+    cap.node.style.height = `${cap.node.offsetHeight}px`;
+    cap.node.classList.add("held");
   }
 }
 
@@ -249,9 +256,21 @@ function applyStage(ui, doc, b, ms) {
       cx = box.x + box.w / 2;
       cy = box.y + box.h / 2;
     }
-    // the whole overlay stays inside the stage: the side margins and the heading/caption bands
-    cx = Math.min(STAGE.right - o.w / 2, Math.max(STAGE.left + o.w / 2, cx));
-    cy = Math.min(STAGE.bottom - o.h / 2, Math.max(STAGE.top + o.h / 2, cy));
+    // the whole overlay stays inside the stage: the side margins and the heading/caption bands. A stamp is
+    // measured as its tilted box, and slams down from no bigger than the room round it allows
+    let bw = o.w, bh = o.h;
+    if (o.v.kind === "stamp") {
+      const a = ((Math.abs(o.v.rotate ?? -8) + STAMP_TILT) * Math.PI) / 180;
+      bw = o.w * Math.cos(a) + o.h * Math.sin(a);
+      bh = o.w * Math.sin(a) + o.h * Math.cos(a);
+    }
+    cx = Math.min(STAGE.right - bw / 2, Math.max(STAGE.left + bw / 2, cx));
+    cy = Math.min(STAGE.bottom - bh / 2, Math.max(STAGE.top + bh / 2, cy));
+    if (o.v.kind === "stamp") {
+      const room = Math.min(2 * (cx - STAGE.left) / bw, 2 * (STAGE.right - cx) / bw,
+        2 * (cy - STAGE.top) / bh, 2 * (STAGE.bottom - cy) / bh);
+      o.node._from = Math.max(1, Math.min(STAMP_FROM, room));
+    }
     o.wrap.style.display = "block";
     o.wrap.style.transform = `translate(${px(cx - o.w / 2)}, ${px(cy - o.h / 2)})`;
     o.wrap.style.opacity = (1 - exitP(o.v, ms)).toFixed(3);
@@ -393,9 +412,15 @@ try {
     // ask for each caption's face with its own text (a face is only fetched for text that uses it), then wait
     // for everything the page laid out, so fit() measures real metrics
     const text = (doc.captions || []).flatMap((c) => c.words.map((w) => w.t)).join(" ");
+    // the display face at the heavy weight the headings, titles and numbers ask for, with their own text
+    const display = doc.beats.flatMap((b) => [...b.heading.map((w) => w.t), ...b.visuals.flatMap((v) => [v.text, v.label])])
+      .filter(Boolean).join(" ").toUpperCase() + " 0123456789";
     const css = getComputedStyle(document.documentElement);
-    await Promise.all([css.getPropertyValue("--sans"), css.getPropertyValue("--display"), css.getPropertyValue("--mono")]
-      .map((family) => document.fonts.load(`800 54px ${family}`, text || "a").catch(() => null)));
+    const face = (name) => css.getPropertyValue(name);
+    await Promise.all([
+      ...[face("--sans"), face("--display"), face("--mono")].map((family) => document.fonts.load(`800 54px ${family}`, text || "a")),
+      document.fonts.load(`900 96px ${face("--display")}`, display),
+    ].map((p) => p.catch(() => null)));
     if (document.fonts.ready) await document.fonts.ready;
   }
   fit(ui);

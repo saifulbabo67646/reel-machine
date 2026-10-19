@@ -13,6 +13,7 @@ from reelmachine import ffmpeg
 from reelmachine.config import get_settings
 from reelmachine.core.job import JobRequest, JobState
 from reelmachine.engine import Engine
+from reelmachine.recipes.techreel import compose
 from reelmachine.recipes.techreel.recipe import EXAMPLE
 from reelmachine.render.hyperframes import HyperframesRenderer
 
@@ -70,3 +71,22 @@ def test_the_example_renders_as_a_real_reel(tmp_path):
 
     report = json.loads(Path(job.result.manifest).read_text(encoding="utf-8"))["verification"]
     assert report["ok"], report["checks"]
+
+
+def _png(path: Path) -> np.ndarray:
+    out = subprocess.run([SETTINGS.ffmpeg, "-v", "error", "-i", str(path), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                         capture_output=True, check=True).stdout
+    return np.frombuffer(out, dtype=np.uint8).reshape(1920, 1080, 3).astype(np.int16)
+
+
+def test_a_rendered_heading_matches_its_snapshot(tmp_path):
+    """The full render draws the heading in the same heavy display face as a still: the render's compiler only
+    fetches fonts the page itself names, so a linked sheet once left it on a regular fallback (diff ≈ 15)."""
+    doc = json.loads((compose.RUNTIME_DIR / "tests" / "fixture.json").read_text(encoding="utf-8"))
+    doc["duration"] = 2.5
+    renderer = HyperframesRenderer(SETTINGS)
+    project = compose.write_project(doc, tmp_path / "project")
+    still = _png(renderer.snapshot(project, 1.5, tmp_path / "still.png"))
+    clip = renderer.render(project, tmp_path / "clip.mp4", fps=30, seconds=2.5)
+    frame = _frame_at(clip, 1500)
+    assert np.abs(frame[120:420] - still[120:420]).mean() < 6

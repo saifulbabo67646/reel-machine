@@ -1,14 +1,18 @@
-"""techreel stages without a render: sound-effect cues, terminal typing starts, the script stage's lint gate."""
+"""techreel stages without a render: sound-effect cues, terminal typing starts, the script stage's lint gate, the
+silence trim on each spoken line."""
 
 import dataclasses
+import shutil
 
 import pytest
 
+from reelmachine import ffmpeg
 from reelmachine.config import get_settings
 from reelmachine.core.assets import AssetStore
 from reelmachine.core.errors import InvalidInput
 from reelmachine.core.job import Job, JobRequest
 from reelmachine.core.stage import StageContext, StaticProviders
+from reelmachine.core.timeline import WordSpan
 from reelmachine.recipes.doodle.narration.fake import FakeNarration
 from reelmachine.recipes.techreel.recipe import _lint_counts
 from reelmachine.recipes.techreel.stages import (
@@ -17,8 +21,10 @@ from reelmachine.recipes.techreel.stages import (
     STILL_AFTER_MS,
     ScriptStage,
     sfx_cues,
+    shift_words,
     storyboard_times,
     terminal_starts,
+    trim_clip,
 )
 
 
@@ -124,3 +130,40 @@ def test_a_storyboard_only_warns(tmp_path):
     assert out.warnings and out.warnings[0].startswith("digit-in-say: ")
     full_warn = ScriptStage().run(_ctx(tmp_path), SCRIPT | {"mode": "full", "lint": "warn"})
     assert [f["rule"] for f in full_warn.lint] == ["digit-in-say"]
+
+
+def _clip(path, *parts):
+    """A WAV of ("quiet" | "tone", ms) parts in order."""
+    settings = get_settings()
+    inputs, labels = [], []
+    for n, (kind, ms) in enumerate(parts):
+        src = "anullsrc=r=48000:cl=mono" if kind == "quiet" else "sine=frequency=440:sample_rate=48000"
+        inputs += ["-f", "lavfi", "-t", f"{ms / 1000:.3f}", "-i", src]
+        labels.append(f"[{n}:a]")
+    ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-y", *inputs, "-filter_complex",
+                f"{''.join(labels)}concat=n={len(parts)}:v=0:a=1", str(path)])
+    return path
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which(get_settings().ffmpeg) is None, reason="ffmpeg not available")
+def test_trim_clip_cuts_the_lead_and_tail_silence(tmp_path):
+    src = _clip(tmp_path / "in.wav", ("quiet", 500), ("tone", 800), ("quiet", 700))
+    out, lead, ms = trim_clip(src, tmp_path / "out.wav", settings=get_settings())
+    assert abs(lead - 440) <= 25
+    assert abs(ms - 920) <= 30
+    assert abs(ffmpeg.probe(out).duration_s * 1000 - ms) <= 25
+    assert abs(ffmpeg.probe(src).duration_s * 1000 - 2000) <= 25      # the source is left alone
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which(get_settings().ffmpeg) is None, reason="ffmpeg not available")
+def test_trim_clip_keeps_a_clip_with_no_silence(tmp_path):
+    src = _clip(tmp_path / "in.wav", ("tone", 600))
+    out, lead, ms = trim_clip(src, tmp_path / "out.wav", settings=get_settings())
+    assert lead == 0 and abs(ms - 600) <= 25 and out.is_file()
+
+
+def test_word_spans_follow_the_trim():
+    words = [WordSpan(text="a", start_ms=400, end_ms=700), WordSpan(text="b", start_ms=900, end_ms=1500)]
+    assert [(w.start_ms, w.end_ms) for w in shift_words(words, 440, 920)] == [(0, 260), (460, 920)]
