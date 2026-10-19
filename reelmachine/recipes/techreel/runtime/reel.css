@@ -349,7 +349,7 @@ html, body { margin: 0; background: #000; }
 .nlinks { position: absolute; left: 0; top: 0; overflow: visible; }
 .nline { stroke: color-mix(in srgb, var(--accent) 75%, transparent); stroke-width: 4; stroke-linecap: round; fill: none; }
 .narrow { fill: var(--accent); }
-.ndot { fill: #fff; filter: drop-shadow(0 0 8px var(--accent)); }
+.ndot { fill: var(--text); filter: drop-shadow(0 0 8px var(--accent)); }
 .nnode { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .ndisc {
   flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -374,8 +374,8 @@ html, body { margin: 0; background: #000; }
   fill: none; stroke: var(--accent); stroke-width: 6; stroke-linejoin: round; stroke-linecap: round;
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 65%, transparent));
 }
-.etrail { fill: none; stroke: #fff; stroke-width: 7; stroke-linejoin: round; stroke-linecap: round; filter: drop-shadow(0 0 12px var(--accent)); }
-.edot { fill: #fff; filter: drop-shadow(0 0 14px var(--accent)) drop-shadow(0 0 4px #fff); }
+.etrail { fill: none; stroke: var(--text); stroke-width: 7; stroke-linejoin: round; stroke-linecap: round; filter: drop-shadow(0 0 12px var(--accent)); }
+.edot { fill: var(--text); filter: drop-shadow(0 0 14px var(--accent)) drop-shadow(0 0 4px var(--text)); }
 .elabel {
   display: flex; align-items: center; gap: 16px; font-family: var(--mono); font-size: 30px; font-weight: 800;
   letter-spacing: 0.16em; text-transform: uppercase; color: var(--text); white-space: nowrap;
@@ -434,7 +434,7 @@ html, body { margin: 0; background: #000; }
 .favatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .favatar.initial {
   display: flex; align-items: center; justify-content: center; font-family: var(--display); font-size: 64px; font-weight: 900;
-  color: var(--accentInk); background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 40%, #fff), var(--accent) 55%);
+  color: var(--accentInk); background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 60%, var(--text)), var(--accent) 55%);
 }
 .fwho { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .fname { font-family: var(--sans); font-size: 48px; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

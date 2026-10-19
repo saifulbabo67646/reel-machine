@@ -151,7 +151,11 @@ const heroScale = (state) => (state === "small-top" ? SMALL_TOP : 1);
 
 /** Beat `k`'s stack at `ms`, the hero in it (when it stacks) at `k` times its natural size. */
 function layoutOf(ui, k, ms, kScale) {
-  const blocks = ui.beats[k].blocks.map((b) => b.v);
+  // a block of no size (a follow card with no creator) takes no row, so its neighbours do not shift
+  const blocks = ui.beats[k].blocks.map((b) => b.v).filter((v) => {
+    const s = ui.sizes.get(v.id);
+    return !s || s.w > 0 || s.h > 0;
+  });
   const span = ui.hero ? heroSpan(ui.states, ms) : null;
   let sizes = ui.sizes;
   if (span) {

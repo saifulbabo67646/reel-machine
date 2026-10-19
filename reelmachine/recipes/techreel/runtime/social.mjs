@@ -10,13 +10,14 @@ const easeOut = (p) => 1 - Math.pow(1 - p, 3);
 const easeInOut = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-const PEOPLE_W = 888, PEOPLE_CELL = 52, PERSON_TALL = 1.3;
+const PEOPLE_W = 888, PEOPLE_CELL = 34, PERSON_TALL = 1.55; // a row is taller than a cell is wide: people stand
 const FADE_ALL_MS = 600, PERSON_FADE_MS = 140, LIT_AFTER_MS = 150, LIT_SPAN_MS = 600, LIT_GAP_MS = 90, HOP_MS = 320;
 const BADGE_AFTER_MS = 250, HOP = 0.34; // a lit person hops a third of its cell
 const NODE_GAP_MS = 180, LINK_AFTER_MS = 150, LINK_MS = 300, FLOW_PULSE_MS = 1200;
 const ECG_W = 880, ECG_H = 240, ECG_DRAW_MS = 900, ECG_SWEEP_MS = 1200, ECG_TRAIL = 140;
 const FLASH_IN_MS = 150, FLASH_OUT_MS = 150;
 const SEND_AFTER_MS = 200, PRESS_MS = 260, REPLY_AFTER_MS = 350;
+export const TYPE_DELAY_MS = 300; // stages.py COMMENT_TYPE_DELAY_MS: "Add a comment…" shows this long, then the tick and the typing
 export const FLIP_MS = 900; // stages.py FOLLOW_FLIP_MS: the ding plays on this flip
 const BURST_MS = 520;
 
@@ -57,14 +58,14 @@ const people = {
     const rowH = g.size * PERSON_TALL;
     const art = svgEl("svg", { width: g.cols * g.size, height: g.rows * rowH, class: "pgrid" }, node);
     const lit = litSet(total, v.lit || 0, seedOf(String(v.id)));
-    // a person in a 20 × 26 box: a round head over rounded shoulders, a touch narrower than its cell
-    const k = (g.size * 0.74) / 20;
+    // a person in a 12 × 26 box: a small head over a slim, tall body with round shoulders
+    const k = (g.size * 0.6) / 12;
     node._people = Array.from({ length: total }, (_, i) => {
-      const x = (i % g.cols) * g.size + (g.size - 20 * k) / 2, y = Math.floor(i / g.cols) * rowH + (rowH - 26 * k) / 2;
+      const x = (i % g.cols) * g.size + (g.size - 12 * k) / 2, y = Math.floor(i / g.cols) * rowH + (rowH - 26 * k) / 2;
       const gEl = svgEl("g", { class: lit.has(i) ? "pp lit" : "pp" }, art);
       const inner = svgEl("g", { transform: `scale(${k.toFixed(4)})` }, gEl);
-      svgEl("circle", { cx: 10, cy: 6, r: 5.4 }, inner);
-      svgEl("rect", { x: 2, y: 13.2, width: 16, height: 14, rx: 7 }, inner);
+      svgEl("circle", { cx: 6, cy: 3.6, r: 3.4 }, inner);
+      svgEl("path", { d: "M1.2 26 V12.6 A4.8 4.8 0 0 1 6 7.8 A4.8 4.8 0 0 1 10.8 12.6 V26 Z" }, inner);
       return { g: gEl, x, y, lit: lit.has(i), i };
     });
     node._litOrder = node._people.filter((p) => p.lit);
@@ -322,11 +323,13 @@ const flash = {
 
 const STARTS_WITH_EMOJI = /^\p{Extended_Pictographic}/u;
 
-/** When the comment's parts happen: the keyword types from the enter, the send arrow is pressed, the reply lands. */
+/** When the comment's parts happen: the keyword types from TYPE_DELAY_MS after the enter, the send arrow is
+    pressed, the reply lands. */
 function commentTimes(v) {
-  const typedAt = v.enterMs + ([...(v.keyword || "")].length * 1000) / TYPE_CPS;
+  const typeAt = v.enterMs + TYPE_DELAY_MS;
+  const typedAt = typeAt + ([...(v.keyword || "")].length * 1000) / TYPE_CPS;
   const sendAt = typedAt + SEND_AFTER_MS;
-  return { typedAt, sendAt, replyAt: sendAt + REPLY_AFTER_MS };
+  return { typeAt, typedAt, sendAt, replyAt: sendAt + REPLY_AFTER_MS };
 }
 
 const comment = {
@@ -335,9 +338,10 @@ const comment = {
     const box = el("div", "cmbox", node);
     el("div", "cavatar", box);
     const field = el("div", "cfield", box);
-    node._place = el("span", "cplace", field, "Add a comment…");
+    // the caret sits before the placeholder while the field is empty, as a real one does
     node._typed = el("span", "ctyped", field, "");
     node._caret = el("span", "ccaret", field);
+    node._place = el("span", "cplace", field, "Add a comment…");
     node._send = el("div", "csend", box);
     node._send.innerHTML = SEND_SVG;
     node._box = box;
@@ -348,14 +352,14 @@ const comment = {
     return node;
   },
   update(node, v, t) {
-    const { typedAt, sendAt, replyAt } = commentTimes(v);
-    const text = typed(v.keyword, v.enterMs, t);
+    const { typeAt, typedAt, sendAt, replyAt } = commentTimes(v);
+    const text = typed(v.keyword, typeAt, t);
     node._typed.textContent = text;
     node._place.style.display = text ? "none" : "inline";
     const blink = Math.floor(t / 400) % 2 === 0;
     node._caret.style.visibility = t < typedAt || blink ? "visible" : "hidden";
     // the field lights up while it is being typed into, the arrow is pressed once the word is in
-    node._box.classList.toggle("active", t >= v.enterMs);
+    node._box.classList.toggle("active", t >= typeAt);
     node._send.classList.toggle("on", t >= typedAt);
     node._send.style.transform = `scale(${pressScale(t, sendAt, 0.2).toFixed(4)})`;
     if (node._reply) {

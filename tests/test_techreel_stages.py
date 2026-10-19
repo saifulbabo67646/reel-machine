@@ -16,6 +16,7 @@ from reelmachine.core.timeline import WordSpan
 from reelmachine.recipes.doodle.narration.fake import FakeNarration
 from reelmachine.recipes.techreel.recipe import _lint_counts
 from reelmachine.recipes.techreel.stages import (
+    COMMENT_TYPE_DELAY_MS,
     COUNTER_MS,
     FOLLOW_FLIP_MS,
     MAX_SFX,
@@ -68,7 +69,8 @@ def test_sfx_for_the_social_and_overlay_kinds():
     cues = sfx_cues(doc)
     assert FOLLOW_FLIP_MS == 900
     assert _named(cues, "ding") == [1000 + 900]                   # the follow button flips to Following
-    assert _named(cues, "tick") == [300]                          # the comment's keyword starts typing
+    assert COMMENT_TYPE_DELAY_MS == 300
+    assert _named(cues, "tick") == [300 + 300]                    # the keyword starts typing, after the placeholder
     assert _named(cues, "thud") == [2100]                         # the error box lands
     assert _named(cues, "whoosh") == [2000, 2500]                 # the beat change, then the flash wipe
     assert _named(cues, "pop") == [300, 1000]                     # the overlays bring their own sound

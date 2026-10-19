@@ -49,6 +49,7 @@ from .words import unit_times
 COUNTER_MS = 900          # runtime/pure.mjs COUNTER_MS: a counter lands this long after it enters
 TYPE_CPS = 28             # runtime/pure.mjs TYPE_CPS
 TERM_CMD_GAP_MS = 250     # runtime/pure.mjs: the pause before the next command starts typing
+COMMENT_TYPE_DELAY_MS = 300  # runtime/social.mjs TYPE_DELAY_MS: the comment's keyword starts typing this long after it enters
 FOLLOW_FLIP_MS = 900      # runtime/social.mjs FLIP_MS: the follow button turns to Following this long after it enters
 MAX_SFX = 80
 # what goes first when a reel has too many cues: the pops are the most and the least missed
@@ -150,7 +151,7 @@ def sfx_cues(doc: dict[str, Any]) -> list[tuple[int, str]]:
             elif v["kind"] == "follow":
                 cues.append((v["enterMs"] + FOLLOW_FLIP_MS, "ding"))
             elif v["kind"] == "comment":
-                cues.append((v["enterMs"], "tick"))
+                cues.append((v["enterMs"] + COMMENT_TYPE_DELAY_MS, "tick"))
             elif v["kind"] == "counter":
                 cues.append((v["enterMs"] + COUNTER_MS, "ding"))
             elif v["kind"] == "terminal":

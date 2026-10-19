@@ -184,8 +184,10 @@ const SCALE = { k: 1e3, m: 1e6, b: 1e9, g: 1e9, t: 1e12, kb: 1e3, mb: 1e6, gb: 1
     beats "900K"; so do byte units, "2MB" beats "900KB"); a tie, or a side that is not a number, goes right. */
 export function winner(left, right) {
   const num = (text) => {
-    const m = /(-?\d+(?:\.\d+)?)(?:\s?([kmgt]b|[kmbgt])(?![a-z]))?/i.exec(String(text ?? "").replace(/(\d)[,\s](?=\d{3}\b)/g, "$1"));
-    return m ? Number(m[1]) * (m[2] ? SCALE[m[2].toLowerCase()] : 1) : null;
+    // a byte unit may be plural ("3 GBs"); a count suffix may not ("5 bs" is no billion)
+    const m = /(-?\d+(?:\.\d+)?)(?:\s?(?:([kmgt]b)s?|([kmbgt]))(?![a-z]))?/i.exec(String(text ?? "").replace(/(\d)[,\s](?=\d{3}\b)/g, "$1"));
+    const unit = m && (m[2] || m[3]);
+    return m ? Number(m[1]) * (unit ? SCALE[unit.toLowerCase()] : 1) : null;
   };
   const a = num(left), b = num(right);
   return a !== null && b !== null && a > b ? "left" : "right";
@@ -216,11 +218,11 @@ export function terminalStarts(v) {
 
 // ------------------------------------------------------------ people and nodes
 
-/** A people grid: about 1.6× as many columns as rows (never more columns than people), each cell `cell` px,
-    smaller when that would make the grid wider than `maxW`. */
+/** A people grid: a wide strip, about 5× as many columns as rows (125 people make the references' 25 × 5;
+    never more columns than people), each cell `cell` px, smaller when the grid would be wider than `maxW`. */
 export function gridOf(total, maxW, cell) {
   const n = Math.max(1, total);
-  const cols = Math.min(n, Math.ceil(Math.sqrt(n * 1.6)));
+  const cols = Math.min(n, Math.ceil(Math.sqrt(n * 5)));
   return { cols, rows: Math.ceil(n / cols), size: Math.min(cell, Math.floor(maxW / cols)) };
 }
 

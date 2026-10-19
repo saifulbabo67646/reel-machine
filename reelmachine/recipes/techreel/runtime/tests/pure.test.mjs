@@ -293,7 +293,9 @@ test("byte units scale a score too", () => {
   assert.equal(winner("2G", "900M"), "left", "a bare G is giga");
   assert.equal(winner("1T", "999G"), "left", "a bare T is tera");
   assert.equal(winner("24gb", "12GB"), "left", "any case");
-  assert.equal(winner("3 GBs", "2"), "left", "a word after the unit is no unit: 3 against 2");
+  assert.equal(winner("3 GBs", "900MB"), "left", "a byte unit may be plural");
+  assert.equal(winner("3 GBps", "2"), "left", "a word after the unit is no unit: 3 against 2");
+  assert.equal(winner("5 bs", "6"), "right", "only a byte unit takes the s");
   assert.equal(winner("12x", "9"), "left", "a letter after the number leaves the number whole");
 });
 
@@ -310,16 +312,15 @@ test("a number with a prefix and suffix splits for counterValue, which then give
 
 // ------------------------------------------------------------ social and analogy helpers
 
-test("a people grid is about 1.6 times wider than tall and fits its width", () => {
-  assert.deepEqual(gridOf(125, 888, 52), { cols: 15, rows: 9, size: 52 });
-  const big = gridOf(200, 888, 52);
-  assert.equal(big.cols, 18);
-  assert.equal(big.rows, 12);
+test("a people grid is a wide strip, about five columns per row, and fits its width", () => {
+  assert.deepEqual(gridOf(125, 888, 34), { cols: 25, rows: 5, size: 34 }, "the reference's 25 × 5 office");
+  const big = gridOf(200, 888, 34);
+  assert.equal(big.cols, 32);
+  assert.equal(big.rows, 7);
   assert.ok(big.cols * big.size <= 888, "200 people fit in 888 px");
-  assert.ok(big.cols * big.rows >= 200);
-  assert.deepEqual(gridOf(1, 888, 52), { cols: 1, rows: 1, size: 52 }, "never wider than the people in it");
+  assert.deepEqual(gridOf(1, 888, 34), { cols: 1, rows: 1, size: 34 }, "never wider than the people in it");
   for (let n = 1; n <= 200; n++) {
-    const g = gridOf(n, 888, 60);
+    const g = gridOf(n, 888, 34);
     assert.ok(g.cols * g.rows >= n && g.cols * g.size <= 888 && (g.rows - 1) * g.cols < n, `total ${n}`);
   }
 });
@@ -374,7 +375,7 @@ test("node links: a chain for row and flow, a closed loop for ring and triangle"
 
 test("the badge finds a spot with no lit person under it", () => {
   const lit = litSet(125, 6, 42);
-  const { cols, rows } = gridOf(125, 888, 52);
+  const { cols, rows } = gridOf(125, 888, 34);
   const spot = emptySpot(cols, rows, 125, lit, 5, 2);
   assert.ok(spot);
   for (let r = spot.row; r < spot.row + 2; r++) {
