@@ -177,11 +177,14 @@ export function staggerP(i, enterMs, t, gapMs, durMs) {
   return clamp01((t - start) / durMs);
 }
 
-/** Which of two score values wins: the higher number; a tie, or a side that is not a number, goes right. */
+const SCALE = { k: 1e3, m: 1e6, b: 1e9 };
+
+/** Which of two score values wins: the higher number (a K, M or B right after it scales it, any case, so "1.2M"
+    beats "900K"); a tie, or a side that is not a number, goes right. */
 export function winner(left, right) {
   const num = (text) => {
-    const m = /-?\d+(?:\.\d+)?/.exec(String(text ?? "").replace(/(\d)[,\s](?=\d{3}\b)/g, "$1"));
-    return m ? Number(m[0]) : null;
+    const m = /(-?\d+(?:\.\d+)?)\s?([kmb](?![a-z]))?/i.exec(String(text ?? "").replace(/(\d)[,\s](?=\d{3}\b)/g, "$1"));
+    return m ? Number(m[1]) * (m[2] ? SCALE[m[2].toLowerCase()] : 1) : null;
   };
   const a = num(left), b = num(right);
   return a !== null && b !== null && a > b ? "left" : "right";

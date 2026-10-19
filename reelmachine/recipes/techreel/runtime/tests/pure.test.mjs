@@ -276,6 +276,14 @@ test("the winner is the higher number, else the right", () => {
   assert.equal(winner("", ""), "right");
 });
 
+test("K, M and B suffixes scale a score before it is compared", () => {
+  assert.equal(winner("1.2M", "900K"), "left");
+  assert.equal(winner("900k", "1.2m"), "right", "lowercase scales too");
+  assert.equal(winner("2B", "1999M"), "left");
+  assert.equal(winner("$3b", "$40m"), "left");
+  assert.equal(winner("5 bytes", "4"), "left", "a word starting with b is not a suffix");
+});
+
 test("a number with a prefix and suffix splits for counterValue, which then gives it back", () => {
   assert.deepEqual(numberParts("176B"), { prefix: "", to: 176, decimals: 0, suffix: "B" });
   assert.deepEqual(numberParts("$19.99/mo"), { prefix: "$", to: 19.99, decimals: 2, suffix: "/mo" });

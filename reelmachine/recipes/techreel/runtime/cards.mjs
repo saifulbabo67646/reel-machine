@@ -172,7 +172,8 @@ const dialog = {
     node._h = node.offsetHeight;
     // the arrow's tip lands a little right of and below each button's middle
     const at = (b) => [b.offsetLeft + b.offsetWidth * 0.55, b.offsetTop + b.offsetHeight * 0.6];
-    node._home = [node._w * 0.86, node._h * 1.05];
+    // inside the card's bottom edge: a cursor hanging below it would cross into the caption band
+    node._home = [node._w * 0.86, node._h - 60];
     node._targets = { approve: at(node._approve), decline: at(node._decline) };
   },
   update(node, v, t) {
@@ -184,7 +185,7 @@ const dialog = {
     }
     const chosen = v.click === "decline" ? node._decline : node._approve;
     const other = chosen === node._approve ? node._decline : node._approve;
-    // the arrow drifts in from below the card and reaches the button as it is pressed
+    // the arrow drifts up from the card's lower corner and reaches the button as it is pressed
     const move = easeInOut(clamp01((t - (at - CURSOR_MS)) / CURSOR_MS));
     const [tx, ty] = node._targets[v.click];
     const [hx, hy] = node._home;
