@@ -66,7 +66,7 @@ def trim_clip(src: Path, dest: Path, *, settings: Settings, keep_ms: int = 60,
     first = next((e for s, e in silences if s <= 10), 0)               # sound starts where a silence at 0 ends
     last = next((s for s, e in reversed(silences) if e >= total - 10), total)
     start, end = max(0, first - keep_ms), min(total, last + keep_ms)
-    if end <= start or (start == 0 and end == total):
+    if total <= 2 * keep_ms or end <= start or (start == 0 and end == total):
         shutil.copy2(src, dest)
         return dest, 0, total
     ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-y", "-i", str(src), "-af",

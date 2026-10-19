@@ -151,7 +151,9 @@ def write_project(doc: dict[str, Any], dest: Path) -> Path:
     # the look goes inline: HyperFrames' render compiler fetches the fonts the page itself names (snapshot bundles
     # linked sheets first, render does not), so a linked reel.css left the display font to a regular fallback
     sheet = dest / "runtime" / "reel.css"
-    css = sheet.read_text(encoding="utf-8").replace("</", "<\\/") if sheet.is_file() else ""
+    if not sheet.is_file():
+        raise FileNotFoundError(f"the techreel runtime has no reel.css ({RUNTIME_DIR})")
+    css = sheet.read_text(encoding="utf-8").replace("</", "<\\/")
     html = _TEMPLATE.format(w=WIDTH, h=HEIGHT, lang=escape(str(doc.get("language") or "en")), css=css,
                             duration=f"{doc['duration']:.3f}", data=data)
     (dest / "index.html").write_text(html, encoding="utf-8")

@@ -164,6 +164,16 @@ def test_trim_clip_keeps_a_clip_with_no_silence(tmp_path):
     assert lead == 0 and abs(ms - 600) <= 25 and out.is_file()
 
 
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which(get_settings().ffmpeg) is None, reason="ffmpeg not available")
+@pytest.mark.parametrize("ms", [100, 400])
+def test_trim_clip_keeps_a_silent_clip_whole(tmp_path, ms):
+    src = _clip(tmp_path / "in.wav", ("quiet", ms))
+    out, lead, kept = trim_clip(src, tmp_path / "out.wav", settings=get_settings())
+    assert lead == 0 and abs(kept - ms) <= 25
+    assert abs(ffmpeg.probe(out).duration_s * 1000 - ms) <= 25
+
+
 def test_word_spans_follow_the_trim():
     words = [WordSpan(text="a", start_ms=400, end_ms=700), WordSpan(text="b", start_ms=900, end_ms=1500)]
     assert [(w.start_ms, w.end_ms) for w in shift_words(words, 440, 920)] == [(0, 260), (460, 920)]

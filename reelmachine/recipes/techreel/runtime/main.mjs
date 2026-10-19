@@ -131,8 +131,11 @@ function fit(ui) {
       cap.node.style.fontSize = `${size}px`;
     }
     // the pill keeps the whole chunk's size while its words appear, so it neither jumps nor sits off-centre
-    cap.node.style.width = `${cap.node.offsetWidth}px`;
-    cap.node.style.height = `${cap.node.offsetHeight}px`;
+    // rounded up (offsetWidth rounds down: a fractional width would push the last word onto a line the fixed
+    // height has no room for), plus a pixel of slack for the flex layout's own rounding
+    const box = cap.node.getBoundingClientRect();
+    cap.node.style.width = `${Math.ceil(box.width) + 1}px`;
+    cap.node.style.height = `${Math.ceil(box.height) + 1}px`;
     cap.node.classList.add("held");
   }
 }

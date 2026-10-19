@@ -160,6 +160,10 @@ def test_write_project(tmp_path, monkeypatch):
     assert json.loads(data)["beats"][0]["heading"][0]["t"] == "<!--<script>"
     # rewriting replaces the directory
     write_project(doc, out)
+    # a runtime without its look is a broken install, not a page with no styles
+    (rt / "reel.css").unlink()
+    with pytest.raises(FileNotFoundError, match="reel.css"):
+        write_project(doc, tmp_path / "proj2")
 
 
 def test_project_key_tracks_runtime_bytes(tmp_path, monkeypatch):
