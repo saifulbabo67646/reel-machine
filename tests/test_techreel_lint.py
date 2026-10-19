@@ -158,6 +158,16 @@ def test_image_local():
     assert "image-local" not in _rules(check(_inputs([_beat(visuals=[url])]), allow_local=False))
 
 
+@pytest.mark.parametrize("src", ["ftp://e.com/a.png", "file:///tmp/a.png", "data:image/png;base64,AAAA"])
+def test_image_scheme(src):
+    for allow_local in (True, False):
+        f = check(_inputs([_beat(visuals=[{"kind": "image", "src": src}])]), allow_local=allow_local)
+        assert _at(f, "image-scheme") == [("error", "beats[0].visuals[0].src")]
+        assert "image-local" not in _rules(f)
+    for ok in ("https://e.com/a.png", "a.png"):
+        assert "image-scheme" not in _rules(check(_inputs([_beat(visuals=[{"kind": "image", "src": ok}])])))
+
+
 def test_hook_slow():
     title = {"kind": "title", "text": "x"}
     slow = _inputs([{"lines": [{"say": _words(12)}], "visuals": [title]}])

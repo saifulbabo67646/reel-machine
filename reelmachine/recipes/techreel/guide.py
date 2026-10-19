@@ -224,18 +224,19 @@ GUIDE: dict[str, Any] = {
         ],
         "examples": [
             "en: \"Then its knowledge freezes. Like my gym progress.\" (self-roast, the model's training cutoff)",
-            "en: \"It can even cite its sources. Unlike me in every argument.\" (self-roast)",
-            "en: \"RAG is an open-book exam. The model finally gets to bring notes.\" (everyday life, and right)",
+            "en: \"And it can cite its sources.\" / \"Unlike me in every argument.\" (self-roast)",
+            ("en: \"Messy documents in, messy answers out.\" / \"So clean that folder called final final two.\" "
+             "(self-roast, and the honest catch)"),
             "en: \"Your chatbot? Still confident. Now also right.\" (callback to the hook's confident lie)",
             ("hi: \"मेरा क्रेडिट कार्ड अब मुझसे बात नहीं करता।\" / \"Mera credit card ab mujhse baat nahi karta.\" "
             "(self-roast over a pile of receipts)"),
-            "hi: \"और प्राइवेसी? वो गई तेल लेने।\" / \"Aur privacy? Woh gayi tel lene.\" (deadpan, with a stamp)",
-            ("hi: \"लैपटॉप का पंखा गाना ज़रूर गाएगा।\" / \"Laptop ka pankha gaana zaroor gaayega.\" (the honest catch "
-            "as a joke)"),
-            ("hi: \"मेरे दोस्तों से ज़्यादा राज़ यही रखता है।\" / \"Mere doston se zyada raaz yahi rakhta hai.\" "
+            "hi: \"और प्राइवेसी? वो गई तेल लेने।\" / \"Aur privacy? Woh gayi *tel lene*.\" (deadpan, with a stamp)",
+            ("hi: \"और हाँ, लैपटॉप का पंखा गाना ज़रूर गाएगा।\" / \"Aur haan, laptop ka pankha *gaana* zaroor gaayega.\" "
+             "(the honest catch as a joke)"),
+            ("hi: \"मेरे दोस्तों से ज़्यादा राज़ यही रखता है।\" / \"Mere doston se zyada *raaz* yahi rakhta hai.\" "
             "(everyday life, privacy)"),
-            "ja: \"僕のスマホ、写真だけでもう満杯なのに。\" (self-roast: the phone is already full of photos)",
-            "ja: \"旅行の圧縮袋みたいなもの。ちょっとシワになるけどね。\" (an everyday analogy that is technically right)",
+            "ja: \"僕のスマホ、写真でもう満杯なのに。\" (self-roast: the phone is already full of photos)",
+            "ja: \"旅行の圧縮袋みたいなもの。\" / \"ちょっとシワになるけどね。\" (an everyday analogy that is technically right)",
             "ja: \"冬はカイロ代わりに、どうぞ。\" (deadpan: a hot phone as a hand warmer)",
             "ja: \"これなら、写真を消さなくても入る。\" (callback to the full phone)",
         ],
@@ -402,7 +403,7 @@ GUIDE: dict[str, Any] = {
                               "Devanagari `say`, Hinglish `text`; the orb hero locked and split; repo, chips, "
                               "terminal, window, receipts, versus, error, flash; the default cta.",
         "en-what-is-rag.json": "English concept reel \"What is RAG?\": analogies drawn literally (open-book exam, "
-                               "a card catalogue photo, a pipeline, the few relevant documents); the robot hero "
+                               "a library photo, a pipeline, the office where only three people know); the robot hero "
                                "asleep and searching; chat, nodes, people, equation, checklist, svg, image; an "
                                "authored comment and follow with a callback to the hook.",
         "ja-tiny-models.json": "Japanese concept reel on small, quantised models: kana numbers in `say`, digits "

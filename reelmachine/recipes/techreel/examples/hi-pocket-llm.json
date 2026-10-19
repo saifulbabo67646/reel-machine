@@ -74,12 +74,13 @@
       "visuals": [
         {"kind": "hero", "state": "center"},
         {"kind": "hero", "state": "locked", "at": {"line": 0, "word": "bahar"}},
-        {"kind": "title", "text": "server pe *kuch nahi*", "size": "m", "at": {"line": 0, "word": "nahi"}},
+        {"kind": "hero", "state": "small-top", "at": {"line": 1}},
+        {"kind": "title", "text": "server pe *kuch nahi*", "size": "m", "at": {"line": 1, "word": "doston"}},
         {"kind": "emoji", "emoji": "🤐", "at": {"line": 1, "word": "raaz"}}
       ]
     },
     {
-      "id": "feature", "kind": "feature", "kicker": "FEATURE 01/02", "heading": "Bas *ek command*",
+      "id": "feature", "kind": "feature", "kicker": "FEATURE", "heading": "Bas *ek command*",
       "transition": "zoom",
       "lines": [
         {"say": "बस एक कमांड चलाओ, मॉडल डाउनलोड।",
@@ -99,7 +100,7 @@
         {"kind": "window", "title": "Pocket LLM", "tabs": ["Chat", "Models"], "live": true,
          "button": "Send", "rows": ["> pankha itna shor kyun?", "Main soch raha hoon. Zor se."],
          "at": {"line": 1},
-         "cursor": [{"to": [0.78, 0.86], "at": {"line": 2, "word": "gaana"}}]},
+         "cursor": [{"to": [0.78, 0.86], "at": {"line": 1, "word": "shuru"}}]},
         {"kind": "hero", "state": "corner", "at": {"line": 2}},
         {"kind": "emoji", "emoji": "🎤", "at": {"line": 2, "word": "pankha"}}
       ]

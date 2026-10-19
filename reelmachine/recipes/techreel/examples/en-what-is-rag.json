@@ -48,7 +48,7 @@
       "lines": [
         {"say": "RAG turns every question into an open-book exam."},
         {"say": "Before it answers, it looks things up.", "text": "Before it answers, it *looks things up*."},
-        {"say": "In your documents, not its memory."}
+        {"say": "In your documents, not just its memory."}
       ],
       "visuals": [
         {"kind": "hero", "state": "center"},
@@ -63,7 +63,8 @@
       "transition": "slide",
       "lines": [
         {"say": "Your question goes to search first."},
-        {"say": "It grabs the few snippets that matter.", "text": "It grabs the *few* snippets that matter."},
+        {"say": "Like an office where only three people know.",
+         "text": "Like an office where only *three* people know."},
         {"say": "The model reads them, then answers."}
       ],
       "visuals": [
@@ -72,8 +73,8 @@
           {"label": "Question", "icon": "❓"}, {"label": "Search", "icon": "🔎"},
           {"label": "Snippets", "icon": "📄"}, {"label": "Answer", "icon": "💬"}
         ]},
-        {"kind": "people", "total": 100, "lit": 3, "label": "YOUR DOCUMENTS", "badge": "NOT RELEVANT 💤",
-         "at": {"line": 1, "word": "few"}, "exit": {"line": 2}},
+        {"kind": "people", "total": 100, "lit": 3, "label": "THE WHOLE OFFICE", "badge": "NO IDEA 💤",
+         "at": {"line": 1, "word": "office"}, "exit": {"line": 2}},
         {"kind": "equation", "rows": ["your question", "+ the right snippets"], "result": "a grounded answer",
          "at": {"line": 2}}
       ]

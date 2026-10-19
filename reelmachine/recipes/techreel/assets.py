@@ -42,7 +42,8 @@ def image_sources(inputs: TechReelInputs) -> Iterator[tuple[str, str]]:
             yield path, src
 
 
-def _is_url(src: str) -> bool:
+def is_url(src: str) -> bool:
+    """Whether `src` is fetched over http(s)."""
     return urlsplit(src).scheme.lower() in ("http", "https")
 
 
@@ -54,7 +55,7 @@ def is_local(src: str) -> bool:
 def check_sources(inputs: TechReelInputs, *, allow_local: bool) -> None:
     """What can be said of the images without fetching them: a URL is http(s), a path needs local files."""
     for path, src in image_sources(inputs):
-        if _is_url(src):
+        if is_url(src):
             continue
         if not is_local(src):
             scheme = urlsplit(src).scheme.lower()
@@ -74,7 +75,7 @@ def fetch_images(inputs: TechReelInputs, folder: Path, *, allow_local: bool,
     for path, src in image_sources(inputs):
         name = image_name(src)
         target = folder / name
-        kept = cache / name if cache is not None and _is_url(src) else None
+        kept = cache / name if cache is not None and is_url(src) else None
         folder.mkdir(parents=True, exist_ok=True)
         if kept is not None and kept.is_file():
             shutil.copy2(kept, target)

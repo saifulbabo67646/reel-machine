@@ -139,11 +139,14 @@ def _assets(inputs: TechReelInputs, allow_local: bool, found: list[Finding]) -> 
     except InvalidInput as exc:
         path = exc.details.get("path", "")
         found.append(Finding("svg", "error", f"{path}: {exc.message}", exc.hint or "fix the drawing", path))
-    if not allow_local:
-        for path, src in assets.image_sources(inputs):
-            if assets.is_local(src):
+    for path, src in assets.image_sources(inputs):
+        if assets.is_local(src):
+            if not allow_local:
                 found.append(Finding("image-local", "error", f"{path} is a local path",
                                      "local files are read for local runs only: use an https URL", path))
+        elif not assets.is_url(src):     # ftp:, file:, data: ... the assets stage refuses them
+            found.append(Finding("image-scheme", "error", f"{path} is neither an https URL nor a local path",
+                                 "use an https URL (or, on a local run, a file path)", path))
 
 
 def check(inputs: TechReelInputs, bound_provider: str | None = None, *, allow_local: bool = True) -> list[Finding]:

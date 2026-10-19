@@ -33,7 +33,8 @@
       ],
       "visuals": [
         {"kind": "hero", "state": "center"},
-        {"kind": "counter", "to": 14, "suffix": " GB", "label": "7Bモデル · 16ビット", "at": {"line": 1}},
+        {"kind": "counter", "to": 14, "suffix": " GB", "label": "7Bモデル · 16ビット", "at": {"line": 1},
+         "exit": {"line": 2}},
         {"kind": "hero", "state": "shake", "at": {"line": 2}},
         {"kind": "stamp", "text": "容量不足", "tone": "red", "at": {"line": 2, "frac": 0.7}}
       ]

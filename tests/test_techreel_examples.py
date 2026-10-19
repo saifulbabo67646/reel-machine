@@ -2,6 +2,7 @@
 
 import dataclasses
 import json
+import re
 from pathlib import Path
 from typing import get_args
 
@@ -97,6 +98,13 @@ def test_the_guide_has_every_section():
         assert needle in text
     assert set(GUIDE["cta"]["patterns"]) == {"en", "hi", "ja"}
     json.dumps(GUIDE)                                             # plain data an MCP reply can carry
+
+
+def test_the_humour_examples_quote_the_example_files():
+    lines = {t for p in EXAMPLES for b in load(p).beats for ln in b.lines for t in (ln.say, ln.text) if t}
+    for joke in GUIDE["humour"]["examples"]:
+        quotes = re.findall(r'"([^"]+)"', joke)
+        assert quotes and all(q in lines for q in quotes), joke
 
 
 # ---------------------------------------------------------------- over MCP
