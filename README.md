@@ -224,7 +224,7 @@ Useful flags on `build`: `--count`, `--per-media`, `--per-category`, `--category
 `.env` and `REEL_*` names are unchanged. Resolution order is **job config >
 `REEL_<RECIPE>_<SETTING>` > `REEL_<SETTING>` > default**, and every resolved value that
 affects output lands in the manifest with its provenance. New settings worth knowing:
-`REEL_TTS` (`fake` | `elevenlabs` | `cartesia`), `REEL_QURAN_API_BASE`,
+`REEL_TTS` (`fake` | `elevenlabs` | `cartesia` | `supertonic`, with `REEL_SUPERTONIC_URL` and `SUPERTONIC_API_KEY`), `REEL_QURAN_API_BASE`,
 `REEL_MCP_TOKEN` / `REEL_MCP_TENANTS`, `REEL_MCP_SIGNING_KEY`, `REEL_LOG_FORMAT=json`.
 
 ## Layout

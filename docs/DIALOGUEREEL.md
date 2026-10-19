@@ -194,7 +194,7 @@ not verified.
 
 | variable | default | meaning |
 |---|---|---|
-| `REEL_TTS` | `fake` | the narration provider: `fake`, `macos`, `cartesia`, `elevenlabs` |
+| `REEL_TTS` | `fake` | the narration provider: `fake`, `macos`, `cartesia`, `elevenlabs`, `supertonic` |
 | `REEL_HYPERFRAMES_WORKERS` | auto | `1` streams frames straight to the encoder: slower, light on memory |
 | `REEL_OPENAI_API_KEY` | none | needed only for generated image characters |
 | `REEL_OPENAI_IMAGE_MODEL` | `gpt-image-1` | the image model |
@@ -202,4 +202,5 @@ not verified.
 | `REEL_OUTDIR` | `out/` | where `full` mode writes `reel.mp4` (or the script's `outdir`) |
 
 Cloud voices need `CARTESIA_API_KEY` or `ELEVENLABS_API_KEY` and bill per character;
-`probe` reports the count.
+`probe` reports the count. `supertonic` is a self-hosted Supertonic 3 server at
+`REEL_SUPERTONIC_URL` (`SUPERTONIC_API_KEY` if it has one): free, with estimated word timings.

@@ -80,7 +80,7 @@ class DialogueReelRecipe:
         cost=CostNote(unit="tts_characters", estimate="the dialogue's length",
                       notes="the fake and macOS voices are free; cloud voices bill per character. "
                       "Each generated image character draws 4 poses: 4 OpenAI image calls, once per cast",
-                      providers=("elevenlabs", "cartesia", "macos", "openai", "fake")),
+                      providers=("elevenlabs", "cartesia", "supertonic", "macos", "openai", "fake")),
         artifacts=("reel.mp4", "captions.srt", "reel.json", "storyboard.jpg", "cast.png", "script.resolved.json", "post.md",
                    "cast-<id>-<pose>.png"),
         render_modes=("hyperframes",),

@@ -98,7 +98,7 @@ class StoryReelRecipe:
                 "the film is downloaded once and re-cut for free; cloud voices bill per "
                 "character; subtitle databases have daily download quotas"
             ),
-            providers=("vidvault", "subdl", "opensubtitles", "elevenlabs", "cartesia"),
+            providers=("vidvault", "subdl", "opensubtitles", "elevenlabs", "cartesia", "supertonic"),
         ),
         artifacts=(
             "reel.mp4",

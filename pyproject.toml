@@ -62,6 +62,7 @@ fake = "reelmachine.recipes.doodle.narration.fake:FakeNarration"
 elevenlabs = "reelmachine.recipes.doodle.narration.cloud:ElevenLabsNarration"
 cartesia = "reelmachine.recipes.doodle.narration.cloud:CartesiaNarration"
 macos = "reelmachine.recipes.doodle.narration.macos:MacOSNarration"
+supertonic = "reelmachine.recipes.doodle.narration.supertonic:SupertonicNarration"
 
 [project.entry-points."reelmachine.scripts"]
 template = "reelmachine.recipes.doodle.script:TemplateScriptProvider"

@@ -132,6 +132,8 @@ class CloudNarration:
     vendor = ""
     env_key = ""
     base_url = ""
+    #: a self-hosted server may run without a key; a vendor never does
+    requires_key = True
 
     def __init__(
         self,
@@ -156,7 +158,9 @@ class CloudNarration:
         return self._client
 
     def missing(self) -> list[str]:
-        return [f"{self.env_key} is not set (needed for the {self.vendor} voice)"] if not self.api_key else []
+        if self.api_key or not self.requires_key:
+            return []
+        return [f"{self.env_key} is not set (needed for the {self.vendor} voice)"]
 
     def describe(self) -> dict[str, Any]:
         return {
@@ -178,9 +182,13 @@ class CloudNarration:
         """`(audio, word spans, resolved voice, file suffix)`."""
         raise NotImplementedError
 
+    def _duration_ms(self, audio: bytes, spans: list[WordSpan]) -> int:
+        """How long the narration lasts; vendors report no length, so the last word's end."""
+        return max((span.end_ms for span in spans), default=0)
+
     # -- the protocol -----------------------------------------------------------
     def synthesize(self, text: str, *, voice: str = "", language: str = "en") -> TimedSpeech:
-        if not self.api_key:
+        if self.requires_key and not self.api_key:
             raise VoiceUnavailable(
                 f"the {self.vendor} voice {voice!r} needs an API key",
                 hint=f"set {self.env_key}, or choose an available voice",
@@ -210,7 +218,7 @@ class CloudNarration:
         path = (self.workdir or Path.cwd()) / f"narration-{self.vendor}-{abs(hash(text)) % 10_000_000:07d}{suffix}"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(audio)
-        duration_ms = max((span.end_ms for span in spans), default=0)
+        duration_ms = self._duration_ms(audio, spans)
         segment = SpeechSegment(text=text, start_ms=0, end_ms=duration_ms, words=spans)
         return TimedSpeech(
             path=path,
