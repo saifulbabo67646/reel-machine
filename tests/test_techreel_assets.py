@@ -152,6 +152,21 @@ def test_unsafe_svg_is_refused_naming_its_path(bad, element):
     assert exc.value.details["path"] == "hero.svg"
 
 
+def test_a_drawing_is_refused_as_a_drawing_and_a_character_as_a_character():
+    from reelmachine.recipes.dialoguereel import svg as dsvg
+
+    bad = DRAWING.replace("</svg>", "<script/></svg>")
+    with pytest.raises(InvalidInput) as exc:
+        assets.check_svgs(_inputs([{"kind": "svg", "svg": bad}]))
+    assert exc.value.message == "<script> is not allowed in a drawing" and "character" not in exc.value.hint
+    with pytest.raises(InvalidInput) as exc:
+        _doc(_inputs([{"kind": "svg", "svg": DRAWING.replace("</svg>", "<!-- x --></svg>")}]))
+    assert "not allowed in a drawing" in exc.value.message
+    with pytest.raises(InvalidInput) as exc:
+        dsvg.check_svg(bad.replace('viewBox="0 0 100 60"', 'viewBox="0 0 400 400"'), path="p")
+    assert exc.value.message == "<script> is not allowed in a character"
+
+
 def test_any_safe_drawing_passes():
     png = 'data:image/png;base64,iVBORw0KGgo='
     assets.check_svgs(_inputs([{"kind": "svg", "svg": DRAWING.replace("</svg>", f'<image href="{png}"/></svg>')}],
@@ -183,6 +198,29 @@ def test_image_visuals_carry_their_file():
     v = doc["beats"][0]["visuals"][0]
     assert v["file"] == "assets/img-a.png" and list(v["highlight"]) == [0.1, 0.2, 0.3, 0.4] and "src" not in v
     assert doc["hero"]["file"] == "assets/img-h.png" and "src" not in doc["hero"]
+
+
+def test_an_image_with_no_file_is_an_error_not_a_blank():
+    with pytest.raises(ValueError, match="https://e.com/a.png"):
+        _doc(_inputs([{"kind": "image", "src": "https://e.com/a.png"}]))
+    with pytest.raises(ValueError, match="h.png"):
+        _doc(_inputs([], hero={"kind": "image", "src": "https://e.com/h.png"}))
+
+
+def test_the_creator_avatar_is_fetched_like_an_image(tmp_path):
+    face = tmp_path / "face.png"
+    face.write_bytes(_png((300, 300)))
+    inputs = _inputs([{"kind": "follow"}], creator={"name": "Aryan", "handle": "@aryan", "avatar": str(face)})
+    names = assets.fetch_images(inputs, tmp_path / "out", allow_local=True)
+    assert names == {str(face): _name(str(face))}
+    doc = _doc(inputs, names)
+    assert doc["creator"] == {"name": "Aryan", "handle": "@aryan", "avatar": f"assets/{_name(str(face))}"}
+    assert compose.asset_files(doc) == [_name(str(face))]
+    with pytest.raises(InvalidInput) as exc:
+        assets.check_sources(inputs, allow_local=False)
+    assert exc.value.details["path"] == "creator.avatar"
+    with pytest.raises(ValueError):
+        _doc(inputs)
 
 
 def test_the_project_carries_its_assets_and_the_key_their_bytes(tmp_path):

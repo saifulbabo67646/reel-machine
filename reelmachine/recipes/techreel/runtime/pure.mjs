@@ -177,13 +177,14 @@ export function staggerP(i, enterMs, t, gapMs, durMs) {
   return clamp01((t - start) / durMs);
 }
 
-const SCALE = { k: 1e3, m: 1e6, b: 1e9 };
+// counts (K, M, B = billion) and byte sizes (KB…TB; a bare G or T is giga/tera): only the order matters here
+const SCALE = { k: 1e3, m: 1e6, b: 1e9, g: 1e9, t: 1e12, kb: 1e3, mb: 1e6, gb: 1e9, tb: 1e12 };
 
 /** Which of two score values wins: the higher number (a K, M or B right after it scales it, any case, so "1.2M"
-    beats "900K"); a tie, or a side that is not a number, goes right. */
+    beats "900K"; so do byte units, "2MB" beats "900KB"); a tie, or a side that is not a number, goes right. */
 export function winner(left, right) {
   const num = (text) => {
-    const m = /(-?\d+(?:\.\d+)?)\s?([kmb](?![a-z]))?/i.exec(String(text ?? "").replace(/(\d)[,\s](?=\d{3}\b)/g, "$1"));
+    const m = /(-?\d+(?:\.\d+)?)(?:\s?([kmgt]b|[kmbgt])(?![a-z]))?/i.exec(String(text ?? "").replace(/(\d)[,\s](?=\d{3}\b)/g, "$1"));
     return m ? Number(m[1]) * (m[2] ? SCALE[m[2].toLowerCase()] : 1) : null;
   };
   const a = num(left), b = num(right);

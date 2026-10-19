@@ -1,6 +1,6 @@
 """techreel's caller images and agent drawings.
 
-Images (`image` visuals and an `image` hero) are fetched once with dialoguereel's guarded download (a remote
+Images (`image` visuals, an `image` hero and the creator's avatar) are fetched once with dialoguereel's guarded download (a remote
 caller reaches public addresses only; local paths are read for local runs alone), normalised to PNGs at most
 1600 px on the longest side and named by the hash of their `src`. Drawings (`svg` visuals and an `svg` hero) pass
 dialoguereel's SVG safety rules; compose inlines them scoped by `inline_svg`, which checks them again.
@@ -28,11 +28,14 @@ def image_name(src: str) -> str:
 
 
 def image_sources(inputs: TechReelInputs) -> Iterator[tuple[str, str]]:
-    """Every image `src` with the path of its first use, each once: the hero's, then the visuals' in order."""
+    """Every image `src` with the path of its first use, each once: the hero's, the visuals' in order, then the
+    creator's avatar (the follow card draws it)."""
     seen: set[str] = set()
     found = [("hero.src", inputs.hero.src)] if inputs.hero and inputs.hero.kind == "image" else []
     found += [(f"beats[{b}].visuals[{v}].src", visual.src)
               for b, beat in enumerate(inputs.beats) for v, visual in enumerate(beat.visuals) if visual.kind == "image"]
+    if inputs.creator and inputs.creator.avatar:
+        found.append(("creator.avatar", inputs.creator.avatar))
     for path, src in found:
         if src is not None and src not in seen:
             seen.add(src)

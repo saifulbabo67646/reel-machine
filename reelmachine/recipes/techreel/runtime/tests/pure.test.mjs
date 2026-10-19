@@ -284,6 +284,18 @@ test("K, M and B suffixes scale a score before it is compared", () => {
   assert.equal(winner("5 bytes", "4"), "left", "a word starting with b is not a suffix");
 });
 
+test("byte units scale a score too", () => {
+  assert.equal(winner("2MB", "900KB"), "left");
+  assert.equal(winner("1.5GB", "800MB"), "left");
+  assert.equal(winner("800 MB", "1.5 GB"), "right");
+  assert.equal(winner("1TB", "999GB"), "left");
+  assert.equal(winner("2G", "900M"), "left", "a bare G is giga");
+  assert.equal(winner("1T", "999G"), "left", "a bare T is tera");
+  assert.equal(winner("24gb", "12GB"), "left", "any case");
+  assert.equal(winner("3 GBs", "2"), "left", "a word after the unit is no unit: 3 against 2");
+  assert.equal(winner("12x", "9"), "left", "a letter after the number leaves the number whole");
+});
+
 test("a number with a prefix and suffix splits for counterValue, which then gives it back", () => {
   assert.deepEqual(numberParts("176B"), { prefix: "", to: 176, decimals: 0, suffix: "B" });
   assert.deepEqual(numberParts("$19.99/mo"), { prefix: "$", to: 19.99, decimals: 2, suffix: "/mo" });

@@ -83,10 +83,10 @@ def _visual(
     the project (never its source), a drawing re-checked with its ids scoped to this visual."""
     fields = visual.model_dump(exclude={"at", "exit", "click_at", "src"}, exclude_none=True, by_alias=True)
     out: dict[str, Any] = {_camel(k): _camel_keys(v) for k, v in fields.items() if k != "cursor"}
-    if visual.kind == "image" and visual.src in images:
-        out["file"] = f"{ASSETS}/{images[visual.src]}"
+    if visual.kind == "image":
+        out["file"] = _asset(visual.src, images, f"{path}.src")
     elif visual.kind == "svg":
-        out["svg"] = inline_svg(visual.svg, vid, path=f"{path}.svg", view_box=None)
+        out["svg"] = inline_svg(visual.svg, vid, path=f"{path}.svg", view_box=None, noun="drawing")
     if visual.kind == "window":
         out["cursor"] = [{"to": list(m.to), "atMs": ms} for m, ms in zip(visual.cursor, cues, strict=True)]
     if getattr(visual, "click_at", None) is not None:
@@ -96,22 +96,40 @@ def _visual(
     return out
 
 
+def _asset(src: str, images: Mapping[str, str], path: str) -> str:
+    """An image's file in the project. An image the assets stage did not fetch would draw as an empty frame, so
+    it is a bug upstream, not something to render."""
+    if src not in images:
+        raise ValueError(f"{path}: the image {src} was not fetched (no entry in `images`)")
+    return f"{ASSETS}/{images[src]}"
+
+
+def _creator(inputs: TechReelInputs, images: Mapping[str, str]) -> dict[str, Any] | None:
+    if inputs.creator is None:
+        return None
+    out = inputs.creator.model_dump()
+    if out["avatar"] is not None:
+        out["avatar"] = _asset(out["avatar"], images, "creator.avatar")
+    return out
+
+
 def _hero(inputs: TechReelInputs, images: Mapping[str, str]) -> dict[str, Any] | None:
     hero = inputs.hero
     if hero is None:
         return None
     out: dict[str, Any] = {"kind": hero.kind, "text": hero.text}
     if hero.svg is not None:
-        out["svg"] = inline_svg(hero.svg, "hero", path="hero.svg", view_box=None)
-    if hero.src is not None and hero.src in images:
-        out["file"] = f"{ASSETS}/{images[hero.src]}"
+        out["svg"] = inline_svg(hero.svg, "hero", path="hero.svg", view_box=None, noun="drawing")
+    if hero.src is not None:
+        out["file"] = _asset(hero.src, images, "hero.src")
     return out
 
 
 def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tuple[int, int]]]],
                   images: Mapping[str, str] | None = None) -> dict[str, Any]:
     """`times[b][l]` are beat b line l's unit times, line-relative; here they move to reel time. `images` maps
-    each image `src` to its file name in the assets folder (an image missing from it is drawn as a blank frame)."""
+    each image `src` (visuals, the hero, the creator's avatar) to its file name in the assets folder; a `src`
+    missing from it is a ValueError."""
     images = images or {}
     beats: list[dict[str, Any]] = []
     captions: list[dict[str, Any]] = []
@@ -156,7 +174,7 @@ def reel_document(inputs: TechReelInputs, plan: Plan, times: list[list[list[tupl
         "mode": "reel", "width": WIDTH, "height": HEIGHT, "duration": plan.duration_ms / 1000,
         "language": inputs.language, "look": look_tokens(inputs),
         "hero": _hero(inputs, images),
-        "creator": inputs.creator.model_dump() if inputs.creator else None,
+        "creator": _creator(inputs, images),
         "heroStates": hero_states, "beats": beats, "captions": captions, "sfx": inputs.sfx,
     }
 
@@ -190,6 +208,8 @@ def asset_files(doc: dict[str, Any]) -> list[str]:
     files = [v["file"] for beat in doc.get("beats", []) for v in beat.get("visuals", []) if "file" in v]
     if (doc.get("hero") or {}).get("file"):
         files.append(doc["hero"]["file"])
+    if (doc.get("creator") or {}).get("avatar"):
+        files.append(doc["creator"]["avatar"])
     return sorted({f.removeprefix(f"{ASSETS}/") for f in files})
 
 
