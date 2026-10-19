@@ -27,6 +27,20 @@
 
 ---
 
+### Task 0: Runtime fixes found by the worked examples (Plan 2 Task 8 report)
+
+**Files:** `runtime/main.mjs`, `runtime/components.mjs`, `reel.css`, `markup.py`, `schedule.py` (word_index), `lint.py` (cue-word), `reelmachine/recipes/doodle/narration/fake.py` (or wherever the `fake` narration lives), `reelmachine/recipes/mapreel/geodata.py` (`USER_AGENT`); Tests: node, `tests/test_techreel_markup.py`, `tests/test_techreel_schedule.py`, the fake narration's test file.
+
+1. **Japanese spacing**: unspaced-script units (headings, titles, captions) are joined with no gap; spaced scripts keep word gaps. The runtime decides from `doc.language` (`is_unspaced` mirror in `pure.mjs` with a test).
+2. **Partial-word accents**: `*R*etrieval` stays one word on screen — `markup.units` keeps intra-word accent runs as one unit with an `accentSpans` list (start/end char offsets), and the runtime colours the spans; a whole-word accent still sets `accent: true`. Test both.
+3. **Japanese cue words**: `word_index` matches a run of consecutive units whose concatenated `norm` equals `norm(word)` (unspaced scripts); lint `cue-word` uses the same function. Tests: "パラメータ" matches its 5-character run.
+4. **Fake voice for unspaced scripts**: the fake narration's duration/word spans use `explainer3d.timing.estimate_speech_ms(text, language)` and one span per character for `ja`/`zh`, so Japanese storyboards are representative. Test: a 20-character Japanese line lasts ≈ the estimate.
+5. **Caption clipping mid-ease**: during the pill's width ease the revealed words must never be clipped — clip only the not-yet-revealed side (the pill grows from the centre: reveal the words, then let the pill catch up with `clip-path` padded by the new word's width, or don't clip at all and let the pill background lag). Snapshot "Poora mode" and "laptop ka pankha gaana" mid-ease; LOOK.
+6. **Long stamps**: a stamp wider than the stage shrinks its font to fit 952 px (measure once at build); lint warns above 16 characters (`stamp-long`).
+7. **Wikimedia 403**: `mapreel.geodata.USER_AGENT` (and the image fetcher's UA used by techreel/dialoguereel) becomes `reel-machine/<version> (+https://github.com/saifulbabo67646/reel-machine)` so Commons images download.
+
+- [ ] Steps: failing tests for 1–4, 6, 7 → implement → PASS; snapshots for 1, 2, 5, 6 → LOOK → Commit `techreel: japanese spacing, partial accents, cue runs and fixes from the examples`.
+
 ### Task 1: Look polish — the liquid chrome orb and a fuller stage
 
 **Files:** Modify `runtime/hero.mjs`, `runtime/reel.css`, `runtime/main.mjs`, `compose.py` (`look_tokens`); Test node tests, `tests/test_techreel_compose.py`.
