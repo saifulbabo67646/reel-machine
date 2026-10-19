@@ -5,9 +5,9 @@
 // index.html?t=3.2 shows the frame at 3.2 s.
 import {
   ENTER_MS, GLIDE_MS, HERO_MOVE_MS, HERO_STACKING, STAGE, backOut, clamp01, enterP, exitP, alive, stackLayout,
-  captionAt, wordPhase, pillAt, heroAt, heroSpan, heroTimeline, beatAt, transitionP, progress, blob, seedOf, isUnspaced, grownSize,
+  captionAt, wordPhase, pillAt, heroAt, heroSpan, heroTimeline, beatAt, transitionP, progress, blob, seedOf, grownSize,
 } from "./pure.mjs";
-import { COMPONENTS, STAMP_FROM, STAMP_TILT, el, fillWord, wordSpans, slam } from "./components.mjs";
+import { COMPONENTS, STAMP_FROM, STAMP_TILT, el, wordSpans, slam } from "./components.mjs";
 import { CARDS } from "./cards.mjs";
 import { SOCIAL } from "./social.mjs";
 import { HERO_SIZE, SPLITS, buildHero, updateHero } from "./hero.mjs";
@@ -98,12 +98,7 @@ function build(doc, root) {
     if (doc.language && /^(ar|he|fa|ur)\b/.test(doc.language)) node.dir = "rtl";
     // one inline run inside the pill, so the pill can centre it as a block
     const text = el("span", "ct", node);
-    const gap = isUnspaced(doc.language) ? "" : " ";   // Japanese units are characters: no gap between them
-    const words = c.words.map((w, i) => {
-      const span = fillWord(el("span", w.a ? "w accent" : "w", text), w);
-      if (gap && i < c.words.length - 1) text.appendChild(document.createTextNode(gap));
-      return span;
-    });
+    const words = wordSpans(text, c.words, doc, "w");
     return { c, node, text, words, sizes: [], runs: [] };
   });
   return ui;

@@ -39,3 +39,11 @@ def test_twenty_character_japanese_line(tmp_path):
 def test_chinese_is_unspaced_too(tmp_path):
     speech = FakeNarration(workdir=tmp_path).synthesize("我们 今天", language="zh")
     assert [w.text for w in speech.segments[0].words] == ["我", "们", "今", "天"]
+
+
+def test_language_is_normalised_like_the_callers(tmp_path):
+    # "ja_JP" and " Ja " are Japanese too: one span per character, not one word for the whole line
+    text = "あいうえお"
+    voice = FakeNarration(workdir=tmp_path)
+    for language in ("ja_JP", " Ja ", "JA-jp"):
+        assert len(voice.synthesize(text, language=language).segments[0].words) == 5, language

@@ -515,6 +515,9 @@ html, body { margin: 0; background: #000; }
 .cap .w.now { color: #fff; text-shadow: 0 0 24px rgba(255,255,255,0.35); }
 .cap .w.accent { color: var(--accent); }
 .cap .w.accent.now { text-shadow: 0 0 26px color-mix(in srgb, var(--accent) 70%, transparent); }
+/* a partly accented word ("re*mark*able"): its accented run glows in the accent like a whole accented word */
+.cap .w .accent { color: var(--accent); }
+.cap .w.now .accent { text-shadow: 0 0 26px color-mix(in srgb, var(--accent) 70%, transparent); }
 
 /* ------------------------------------------------------------ progress (top 6 px) */
 .progress { position: absolute; left: 0; top: 0; width: 1080px; height: 6px; background: rgba(255,255,255,0.10); }

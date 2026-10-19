@@ -37,12 +37,12 @@ export function fillWord(span, w) {
   return span;
 }
 
-/** Word spans inside `parent`, a space between them; none in an unspaced script (`doc.language`), whose units
-    are characters. */
-export function wordSpans(parent, words, doc) {
+/** Word spans of class `cls` inside `parent`, a space between them; none in an unspaced script
+    (`doc.language`), whose units are characters. */
+export function wordSpans(parent, words, doc, cls = "word") {
   const gap = isUnspaced(doc?.language) ? "" : " ";
   return words.map((w, i) => {
-    const span = fillWord(el("span", w.a ? "word accent" : "word", parent), w);
+    const span = fillWord(el("span", w.a ? `${cls} accent` : cls, parent), w);
     if (gap && i < words.length - 1) parent.appendChild(document.createTextNode(gap));
     return span;
   });

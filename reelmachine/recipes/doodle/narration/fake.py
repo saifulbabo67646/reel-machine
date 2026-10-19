@@ -70,9 +70,10 @@ class FakeNarration:
         samples: list[np.ndarray] = []
         words: list[WordSpan] = []
         cursor_ms = 0
-        if language.split("-")[0].lower() in _UNSPACED:
+        base = _base_language(language)
+        if base in _UNSPACED:
             groups = _characters(text)
-            total = estimate_speech_ms(text, language)
+            total = estimate_speech_ms(text, base)
             count = sum(len(g) for g in groups) or 1
             used = 0
             for index, group in enumerate(groups):
@@ -115,6 +116,11 @@ class FakeNarration:
             provenance=Provenance(provider=self.name, provider_version="1", source="synthetic"),
             licence=Licence(name="CC0-1.0", attribution="reelmachine fake voice"),
         )
+
+
+def _base_language(language: str) -> str:
+    """The language's base code, as the recipes read it: " Ja ", "ja_JP" and "ja-JP" are all "ja"."""
+    return language.strip().lower().replace("_", "-").split("-")[0]
 
 
 def _characters(text: str) -> list[str]:
