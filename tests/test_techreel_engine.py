@@ -68,7 +68,7 @@ def test_storyboard_makes_a_sheet(tmp_path):
     assert data["beats"][0]["startMs"] == 0
     first = data["beats"][0]["visuals"]
     assert first and {"kind", "enterMs", "exitMs"} <= set(first[0])
-    assert 25_000 <= data["durationMs"] <= 35_000
+    assert 30_000 <= data["durationMs"] <= 60_000   # the lint's target for this example
 
 
 def test_full_makes_a_reel_with_sound_and_captions(tmp_path):
@@ -80,7 +80,8 @@ def test_full_makes_a_reel_with_sound_and_captions(tmp_path):
     assert (info.width, info.height) == (1080, 1920) and info.has_audio
     assert abs(info.duration_s * 1000 - data["durationMs"]) < 100
     srt = artifact(job, "captions.srt").read_text(encoding="utf-8")
-    assert "Bhai, ab tumhare purane laptop" in srt and "*" not in srt   # plain chunks of `text`
+    first = " ".join(EXAMPLE["beats"][0]["lines"][0]["text"].replace("*", "").split()[:3])
+    assert first in srt and "*" not in srt   # plain chunks of `text`
     manifest = json.loads(artifact(job, "reel.json").read_text(encoding="utf-8"))
     assert manifest["recipe"] == "techreel" and manifest["mode"] == "full"
     assert manifest["sources"] == EXAMPLE["sources"] and manifest["voice"] == "fake:default"
