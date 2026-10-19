@@ -241,3 +241,43 @@ def test_the_probe_reports_a_missing_music_file(tmp_path):
                                     ProbeContext(config=ctx.config, providers=ctx.providers))
     assets = next(c for c in report.checks if c.name == "assets")
     assert not assets.ok and assets.detail.startswith("music:")
+
+
+def test_timing_constants_match_the_runtime():
+    import re
+    from pathlib import Path
+
+    from reelmachine.recipes import techreel
+    from reelmachine.recipes.techreel import stages
+
+    runtime = Path(techreel.__file__).parent / "runtime"
+
+    def const(file, name):
+        found = re.search(rf"^(?:export )?const {name} = (\d+);", (runtime / file).read_text(encoding="utf-8"),
+                          re.MULTILINE)
+        assert found, f"{file}: no `const {name} = <number>;`"
+        return int(found.group(1))
+
+    assert const("pure.mjs", "COUNTER_MS") == stages.COUNTER_MS
+    assert const("pure.mjs", "TYPE_CPS") == stages.TYPE_CPS
+    assert const("pure.mjs", "TERM_CMD_GAP_MS") == stages.TERM_CMD_GAP_MS
+    assert const("social.mjs", "TYPE_DELAY_MS") == stages.COMMENT_TYPE_DELAY_MS
+    assert const("social.mjs", "FLIP_MS") == stages.FOLLOW_FLIP_MS
+
+
+def test_the_fake_voice_line_cache_key_is_versioned():
+    """The fake voice's Japanese and Chinese timings changed: clips cached before must not be reused."""
+    import hashlib
+    import json
+
+    from reelmachine.recipes.explainer3d.stages import line_key
+
+    fake = FakeNarration(get_settings())
+    old = hashlib.sha256(json.dumps(["fake", "fake:default", "ja", "こんにちは"]).encode()).hexdigest()
+    assert line_key(fake, "こんにちは", "fake:default", "ja") != old
+
+    class Plain:                                         # a provider with no cache version keeps its old keys
+        name = "supertonic"
+
+    kept = hashlib.sha256(json.dumps(["supertonic", "supertonic:M1", "en", "hi"]).encode()).hexdigest()
+    assert line_key(Plain(), "hi", "supertonic:M1", "en") == kept

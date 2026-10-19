@@ -33,6 +33,9 @@ _UNSPACED = {"ja", "zh"}
 
 class FakeNarration:
     name = "fake"
+    # bumped when the same text comes out different: 2 = unspaced scripts timed per character on the shared
+    # estimate. It is part of explainer3d's line cache key, so older clips in a caller's cache are not reused.
+    cache_version = "2"
 
     def __init__(self, settings: Settings | None = None, *, workdir: Path | None = None) -> None:
         self.settings = settings
@@ -113,7 +116,7 @@ class FakeNarration:
             duration_ms=cursor_ms,
             segments=[segment],
             voice=voice or "fake:default",
-            provenance=Provenance(provider=self.name, provider_version="1", source="synthetic"),
+            provenance=Provenance(provider=self.name, provider_version=self.cache_version, source="synthetic"),
             licence=Licence(name="CC0-1.0", attribution="reelmachine fake voice"),
         )
 

@@ -57,9 +57,19 @@ def _caller_cache(ctx: StageContext) -> Path:
     return settings.cache_dir / "explainer3d"
 
 
+def line_key(provider: Any, text: str, voice: str, language: str) -> str:
+    """The cache key of one spoken line. A provider whose output changed for the same text sets `cache_version`, so
+    clips cached before the change are not reused; providers without one keep their old keys (and paid clips)."""
+    parts = [getattr(provider, "name", ""), voice, language, text]
+    version = getattr(provider, "cache_version", None)
+    if version:
+        parts.append(f"v{version}")
+    return hashlib.sha256(json.dumps(parts).encode()).hexdigest()
+
+
 def speak_line(ctx: StageContext, provider: Any, text: str, voice: str, language: str) -> tuple[Path, int, list[WordSpan], Licence | None]:
     """One line, spoken once per (voice, language, text): cloud voices bill per character."""
-    key = hashlib.sha256(json.dumps([getattr(provider, "name", ""), voice, language, text]).encode()).hexdigest()
+    key = line_key(provider, text, voice, language)
     folder = _caller_cache(ctx) / "lines" / key[:2]
     audio, meta = folder / f"{key}.wav", folder / f"{key}.json"
     if audio.is_file() and meta.is_file():
