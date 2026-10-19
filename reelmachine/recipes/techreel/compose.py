@@ -57,16 +57,15 @@ def _look(*values: str) -> dict[str, str]:
 LOOKS: dict[str, dict[str, str]] = {
     "mint": _look("#06100f", "#0f6f66", "#0a3d4a", "#0b2447", "#e9fbf6", "#7fa7a0", "#2ee6b8", "#000000",
                   "rgba(255,255,255,0.05)", "rgba(46,230,184,0.22)", "#ff5d73", "#4ade80"),
-    "ember": _look("#141110", "#7a2e12", "#4a2a1a", "#2a2321", "#f7efe9", "#a8998f", "#ff5a2a", "#ffffff",
+    "ember": _look("#141110", "#7a2e12", "#4a2a1a", "#2a2321", "#f7efe9", "#a8998f", "#ff5a2a", "#000000",
                    "rgba(255,255,255,0.05)", "rgba(255,90,42,0.24)", "#ff4d5e", "#5ee08a"),
-    "violet": _look("#0d0a18", "#3b2a8c", "#241a5e", "#14123a", "#f1edff", "#9a93bf", "#9b7bff", "#ffffff",
+    "violet": _look("#0d0a18", "#3b2a8c", "#241a5e", "#14123a", "#f1edff", "#9a93bf", "#9b7bff", "#000000",
                     "rgba(255,255,255,0.05)", "rgba(155,123,255,0.24)", "#ff6b8b", "#5eead4"),
     "mono": _look("#0b0b0c", "#2a2a2e", "#1c1c1f", "#141416", "#f4f4f5", "#9a9aa0", "#f4f4f5",
                   "#000000", "rgba(255,255,255,0.06)", "rgba(255,255,255,0.20)", "#ff6b6b", "#6ee7a0"),
 }
 
 
-_INK_LUMINANCE = 0.45    # an accent brighter than this takes black text, else white
 _ACCENT_CONTRAST = 3.0   # the least an accent may contrast with the background (large text, WCAG)
 
 
@@ -106,10 +105,10 @@ def _readable_accent(accent: str, bg: str) -> str:
 
 def look_tokens(inputs: TechReelInputs) -> dict[str, str]:
     """The look's colours, with the custom accent if there is one, made readable on the background; the ink (text
-    on an accent fill) is black or white by the accent's luminance."""
+    on an accent fill) is whichever of black and white contrasts more with the accent."""
     tokens = dict(LOOKS[inputs.look])
     tokens["accent"] = _readable_accent(inputs.accent or tokens["accent"], tokens["bg"])
-    tokens["accentInk"] = "#000000" if _luminance(tokens["accent"]) > _INK_LUMINANCE else "#ffffff"
+    tokens["accentInk"] = max(("#000000", "#ffffff"), key=lambda ink: _contrast(tokens["accent"], ink))
     return tokens
 
 

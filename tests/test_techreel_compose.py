@@ -154,18 +154,21 @@ def _contrast(a, b):
     return (hi + 0.05) / (lo + 0.05)
 
 
-@pytest.mark.parametrize(("look", "ink"), [("mint", "#000000"), ("ember", "#ffffff"), ("violet", "#ffffff"),
-                                           ("mono", "#000000")])
-def test_look_tokens_accent_ink_follows_the_accent_luminance(look, ink):
-    # black ink on an accent brighter than 0.45 relative luminance, else white
+@pytest.mark.parametrize("look", ["mint", "ember", "violet", "mono"])
+def test_look_tokens_accent_ink_is_the_higher_contrast_of_black_and_white(look):
+    # every built-in accent is bright enough that black reads better on it than white (ember ~6.7:1 vs ~3.1:1)
     tokens = look_tokens(_inputs(look=look))
-    assert tokens["accentInk"] == ink
+    assert tokens["accentInk"] == LOOKS[look]["accentInk"] == "#000000"
+    assert _contrast(tokens["accent"], "#000000") > _contrast(tokens["accent"], "#ffffff")
     assert tokens["accent"] == LOOKS[look]["accent"]          # every built-in accent already reads on its bg
 
 
 def test_look_tokens_custom_accent_ink():
-    assert look_tokens(_inputs(accent="#ffd400"))["accentInk"] == "#000000"     # luminance ~0.69
-    assert look_tokens(_inputs(accent="#e0245e"))["accentInk"] == "#ffffff"     # luminance ~0.19
+    assert look_tokens(_inputs(accent="#ffd400"))["accentInk"] == "#000000"     # 14.7:1 vs 1.4:1
+    assert look_tokens(_inputs(accent="#e0245e"))["accentInk"] == "#000000"     # 4.583:1 vs 4.582:1
+    blue = look_tokens(_inputs(accent="#1d4ed8"))                               # lightened to 3:1, still dark
+    assert blue["accentInk"] == "#ffffff"
+    assert _contrast(blue["accent"], "#ffffff") > _contrast(blue["accent"], "#000000")
 
 
 def test_look_tokens_lightens_a_dim_accent_to_three_to_one():
@@ -177,7 +180,8 @@ def test_look_tokens_lightens_a_dim_accent_to_three_to_one():
     new = [int(accent[i:i + 2], 16) for i in (1, 3, 5)]
     assert all(n >= o for n, o in zip(new, orig))             # toward white, the hue kept
     assert new[2] > new[1] > new[0]
-    assert tokens["accentInk"] == ("#000000" if _luminance(accent) > 0.45 else "#ffffff")
+    ink = max(("#000000", "#ffffff"), key=lambda c: _contrast(accent, c))
+    assert tokens["accentInk"] == ink
     assert look_tokens(_inputs(accent="#000000", look="mono"))["accent"] != "#000000"
 
 

@@ -32,7 +32,7 @@ const NS = "http://www.w3.org/2000/svg";
 // the reflection up to SWIRL_PX round the centre
 const ORB = 360, ORB_PAD = 200, LENS_PX = 110, SWIRL_PX = 60;
 // the liquid's contrast curve: darks a little deeper, lights brighter, so the reflections read as polished
-const CHROME_CURVE = "0 0.08 0.2 0.38 0.6 0.8 0.93 1";
+const CHROME_CURVE = "0 0.03 0.1 0.28 0.58 0.85 0.97 1";
 
 function orbSvg(seed, lens) {
   // liquid chrome is a mirror of a world: a dark sky (the reel's night) over a bright, blurred horizon and a
@@ -45,21 +45,21 @@ function orbSvg(seed, lens) {
 <svg xmlns="${NS}" width="${ORB}" height="${ORB}" viewBox="0 0 ${ORB} ${ORB}">
   <defs>
     <linearGradient id="hero-sky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#34444a"/><stop offset="0.3" stop-color="#56676b"/>
-      <stop offset="0.46" stop-color="#8e9b9d"/><stop offset="0.52" stop-color="#d4dbdc"/>
-      <stop offset="0.6" stop-color="#7f8d90"/><stop offset="0.8" stop-color="#a2adaf"/>
-      <stop offset="1" stop-color="#8d999b"/>
+      <stop offset="0" stop-color="#1a262a"/><stop offset="0.22" stop-color="#3b4a4e"/>
+      <stop offset="0.36" stop-color="#6f7c7f"/><stop offset="0.39" stop-color="#f4f7f7"/>
+      <stop offset="0.43" stop-color="#a9b4b5"/><stop offset="0.58" stop-color="#7f8b8e"/>
+      <stop offset="0.76" stop-color="#a3aeb0"/><stop offset="1" stop-color="#b9c2c3"/>
     </linearGradient>
     <radialGradient id="hero-body" cx="34%" cy="68%" r="58%">
-      <stop offset="0" stop-color="#d3dadb" stop-opacity="0.78"/>
-      <stop offset="0.4" stop-color="#c3cbcc" stop-opacity="0.5"/>
+      <stop offset="0" stop-color="#d3dadb" stop-opacity="0.32"/>
+      <stop offset="0.4" stop-color="#c3cbcc" stop-opacity="0.18"/>
       <stop offset="1" stop-color="#b9c2c3" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="hero-shade" cx="50%" cy="50%" r="50%" fx="42%" fy="40%">
       <stop offset="0.6" stop-color="#0b1416" stop-opacity="0"/>
-      <stop offset="0.86" stop-color="#0b1416" stop-opacity="0.3"/>
-      <stop offset="0.96" stop-color="#0b1416" stop-opacity="0.72"/>
-      <stop offset="1" stop-color="#0b1416" stop-opacity="0.8"/>
+      <stop offset="0.8" stop-color="#0b1416" stop-opacity="0.3"/>
+      <stop offset="0.94" stop-color="#0b1416" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#0b1416" stop-opacity="0.92"/>
     </radialGradient>
     <radialGradient id="hero-rim" cx="50%" cy="28%" r="74%">
       <stop offset="0.74" stop-color="var(--accent)" stop-opacity="0"/>
@@ -71,21 +71,21 @@ function orbSvg(seed, lens) {
       <stop offset="0.7" stop-color="#fff" stop-opacity="0.95"/>
       <stop offset="1" stop-color="#fff" stop-opacity="0"/>
     </radialGradient>
-    <filter id="hero-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter>
+    <filter id="hero-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter>
     <filter id="hero-caustic" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>
     <filter id="hero-liquid" filterUnits="userSpaceOnUse" x="${-P}" y="${-P}" width="${W}" height="${W}" color-interpolation-filters="sRGB">
-      <feTurbulence id="hero-turb" type="fractalNoise" baseFrequency="0.007 0.010" numOctaves="2" seed="${seed}" result="noise"/>
+      <feTurbulence id="hero-turb" type="fractalNoise" baseFrequency="0.0045 0.0065" numOctaves="2" seed="${seed}" result="noise"/>
       <feOffset id="hero-drift" in="noise" dx="0" dy="0" result="moved"/>
-      <feDisplacementMap in="SourceGraphic" in2="moved" scale="150" xChannelSelector="R" yChannelSelector="G" result="liquid"/>
+      <feDisplacementMap in="SourceGraphic" in2="moved" scale="170" xChannelSelector="R" yChannelSelector="G" result="liquid"/>
       <feComponentTransfer in="liquid" result="crisp">
         <feFuncR type="table" tableValues="${CHROME_CURVE}"/>
         <feFuncG type="table" tableValues="${CHROME_CURVE}"/>
         <feFuncB type="table" tableValues="${CHROME_CURVE}"/>
       </feComponentTransfer>
-      <feTurbulence id="hero-glint" type="fractalNoise" baseFrequency="0.006 0.022" numOctaves="2" seed="${seed + 1}" result="fine"/>
+      <feTurbulence id="hero-glint" type="fractalNoise" baseFrequency="0.005 0.03" numOctaves="2" seed="${seed + 1}" result="fine"/>
       <feDisplacementMap in="fine" in2="moved" scale="90" xChannelSelector="R" yChannelSelector="G" result="fineflow"/>
       <feColorMatrix in="fineflow" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  1 0 0 0 0" result="fineA"/>
-      <feComponentTransfer in="fineA" result="glints"><feFuncA type="linear" slope="12" intercept="-6.4"/></feComponentTransfer>
+      <feComponentTransfer in="fineA" result="glints"><feFuncA type="linear" slope="14" intercept="-8.5"/></feComponentTransfer>
       <feMerge result="world"><feMergeNode in="crisp"/><feMergeNode in="glints"/></feMerge>
       ${lens ? `<feImage href="${lens}" x="0" y="0" width="${ORB}" height="${ORB}" preserveAspectRatio="none" result="lens"/>
       <feDisplacementMap in="world" in2="lens" scale="${2 * (LENS_PX + SWIRL_PX)}" xChannelSelector="R" yChannelSelector="G"/>` : ""}
@@ -99,12 +99,10 @@ function orbSvg(seed, lens) {
       <g transform="rotate(-24 180 180)"><g id="hero-flow">
         <rect x="${-P}" y="${-P}" width="${W}" height="${W}" fill="url(#hero-sky)"/>
         <g filter="url(#hero-soft)">
-          ${band(70, 26, "#1f2c31", 0.9)}
-          ${band(120, 18, "#c3cdce", 0.7)}
-          ${band(176, 20, "#fff")}
-          ${band(232, 14, "#6f7e82", 0.8)}
-          ${band(296, 22, "#d0d8d9", 0.7)}
-          ${band(340, 16, "#fff", 0.9)}
+          ${band(60, 22, "#0e1618", 0.9)}
+          ${band(112, 8, "#fff")}
+          ${band(214, 12, "#2c3a3e", 0.4)}
+          ${band(290, 10, "#fff")}
           <ellipse cx="180" cy="${ORB + 40}" rx="240" ry="50" fill="var(--accent)" opacity="0.1"/>
         </g>
       </g></g>
@@ -116,18 +114,26 @@ function orbSvg(seed, lens) {
       <path d="M150 300 C 214 300, 270 262, 276 214 C 280 180, 262 160, 240 158"
             stroke="color-mix(in srgb, var(--accent) 45%, #fff)" stroke-width="6" fill="none" stroke-linecap="round"/>
     </g>
-    <ellipse cx="112" cy="84" rx="30" ry="14" fill="url(#hero-spec)" transform="rotate(-38 112 84)"/>
+    <ellipse cx="112" cy="84" rx="46" ry="22" fill="url(#hero-spec)" transform="rotate(-38 112 84)"/>
     <ellipse cx="84" cy="128" rx="8" ry="5" fill="#fff" opacity="0.85" transform="rotate(-55 84 128)"/>
   </g>
-  <circle cx="180" cy="180" r="179" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.5"/>
+  <circle cx="180" cy="180" r="179" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
 </svg>`;
 }
 
 /** The sphere lens as a displacement map (a data URL, drawn once): red/green say how far right/down each pixel
     of the orb reads its reflection from. Outwards with the square of the distance from the centre, so the world
     bunches up towards the rim as on a ball; and round the centre, most at mid-radius, so the reflections curl.
-    Plain arithmetic per pixel, so every render draws the same map; "" (no lens, a flat mirror) without a canvas. */
+    Plain arithmetic per pixel, so every render draws the same map; "" (no lens, a flat mirror) without a canvas.
+    Drawn once per page and reused. */
+let lensCache = null;
 function lensMap() {
+  if (lensCache !== null) return lensCache;
+  lensCache = drawLens();
+  return lensCache;
+}
+
+function drawLens() {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = ORB;
   const ctx = canvas.getContext("2d");
