@@ -24,6 +24,7 @@ from .stages import (
     PreviewStage,
     RenderStage,
     ScriptStage,
+    bound_provider,
     lint_findings,
 )
 from .verify import verify_techreel
@@ -134,11 +135,13 @@ GUIDE: dict[str, Any] = {
 }
 
 
-def _role(ctx: ProbeContext, role: str) -> Any:
-    try:
-        return ctx.providers.get(role) if ctx.providers else None
-    except KeyError:
-        return None
+def _lint_counts(found: list[dict[str, Any]]) -> str:
+    """'2 errors (not blocking), 3 warnings': a non-blocking lint's findings by severity."""
+    errors = sum(f["severity"] == "error" for f in found)
+    others = len(found) - errors
+    parts = [f"{errors} error{'s' * (errors != 1)} (not blocking)"] if errors else []
+    parts.append(f"{others} warning{'s' * (others != 1)}")
+    return ", ".join(parts)
 
 
 class TechReelRecipe:
@@ -179,18 +182,18 @@ class TechReelRecipe:
         """Checks the lint, the renderer and the voice, and estimates the length. Writes nothing."""
         checks: list[CheckResult] = []
         details: dict[str, Any] = {}
-        bound = getattr(_role(ctx, "narration"), "name", "")
+        bound = getattr(bound_provider(ctx, "narration"), "name", "")
         found = lint_findings(inputs, bound or None)
         details["lint"] = found
         errors = [f"{f['path']}: {f['message']}" for f in found if f["severity"] == "error"]
         blocking = bool(errors) and lint.blocks(inputs)
         checks.append(CheckResult(name="lint", ok=not blocking,
-                                  detail="; ".join(errors) if blocking else f"{len(found)} suggestions"))
+                                  detail="; ".join(errors) if blocking else _lint_counts(found)))
         plan = estimate(inputs)
         details["estimatedMs"] = plan.duration_ms
         details["beats"] = [{"index": i, "estimatedMs": b.end_ms - b.start_ms} for i, b in enumerate(plan.beats)]
         details["cost"] = {"ttsCharacters": sum(len(line.say) for beat in inputs.beats for line in beat.lines)}
-        renderer = _role(ctx, "renderer")
+        renderer = bound_provider(ctx, "renderer")
         problems = renderer.missing() if renderer is not None else ["no renderer bound"]
         checks.append(CheckResult(name="renderer", ok=not problems,
                                   detail="; ".join(problems) or getattr(renderer, "name", "")))

@@ -46,7 +46,7 @@ MAX_SFX = 80
 # what goes first when a reel has too many cues: the pops are the most and the least missed
 _DROP_ORDER = ("pop", "tick", "ding", "thud", "whoosh")
 MAX_STILLS = 24
-STILL_AFTER_MS = 400      # the last visual of a beat, once its enter animation has played
+STILL_AFTER_MS = 400      # a visual's enter animation has played by then (a counter's count by COUNTER_MS)
 
 
 def terminal_starts(v: dict[str, Any]) -> list[int]:
@@ -129,9 +129,10 @@ def lint_findings(inputs: TechReelInputs, bound: str | None = None) -> list[dict
             for f in lint.check(inputs, bound)]
 
 
-def _bound_narration(ctx: StageContext) -> str | None:
+def bound_provider(ctx: Any, role: str) -> Any:
+    """The provider bound to `role` on a stage or probe context, None when nothing is."""
     try:
-        return getattr(ctx.providers.get("narration"), "name", None)
+        return ctx.providers.get(role) if ctx.providers else None
     except KeyError:
         return None
 
@@ -144,7 +145,7 @@ class ScriptStage:
 
     def run(self, ctx: StageContext, payload: Any) -> ScriptOutput:
         inputs = TechReelInputs.model_validate(payload)
-        found = lint_findings(inputs, _bound_narration(ctx))
+        found = lint_findings(inputs, getattr(bound_provider(ctx, "narration"), "name", None))
         if lint.blocks(inputs):
             for finding in found:
                 if finding["severity"] == "error":
@@ -264,14 +265,16 @@ def _renderer(ctx: StageContext, stage: str) -> Any:
 
 
 def storyboard_times(doc: dict[str, Any], duration_ms: int) -> list[int]:
-    """Each beat's midpoint and its last visual once landed, one per frame, in order; at most MAX_STILLS."""
+    """Each beat's midpoint and the moment its last visual has landed (a counter on its final value), one per
+    frame, in order; at most MAX_STILLS."""
     frame = 1000 / compose.FPS
     last = max(0, duration_ms - math.ceil(frame))
     wanted = []
     for beat in doc["beats"]:
         wanted.append((beat["startMs"] + beat["endMs"]) // 2)
         if beat["visuals"]:
-            wanted.append(max(v["enterMs"] for v in beat["visuals"]) + STILL_AFTER_MS)
+            wanted.append(max(v["enterMs"] + (COUNTER_MS if v["kind"] == "counter" else STILL_AFTER_MS)
+                              for v in beat["visuals"]))
     by_frame = {round(min(max(ms, 0), last) / frame): min(max(ms, 0), last) for ms in wanted}
     times = [by_frame[k] for k in sorted(by_frame)]
     if len(times) > MAX_STILLS:   # spread the keep evenly, first and last included

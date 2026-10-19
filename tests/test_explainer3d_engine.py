@@ -30,7 +30,8 @@ def test_every_sfx_synthesises(tmp_path):
     settings = _settings(tmp_path)
     for name in SFX_NAMES:
         info = ffmpeg.probe(synth_sfx(name, tmp_path / f"{name}.wav", settings=settings))
-        assert info.has_audio and 0.02 < info.duration_s < 1.5   # the typing tick is 25 ms
+        floor = 0.02 if name == "tick" else 0.05   # the typing tick is 25 ms
+        assert info.has_audio and floor < info.duration_s < 1.5, name
 
 
 def test_pad_speech_is_exactly_the_window(tmp_path):

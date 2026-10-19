@@ -10,10 +10,14 @@ from reelmachine.core.errors import InvalidInput
 from reelmachine.core.job import Job, JobRequest
 from reelmachine.core.stage import StageContext, StaticProviders
 from reelmachine.recipes.doodle.narration.fake import FakeNarration
+from reelmachine.recipes.techreel.recipe import _lint_counts
 from reelmachine.recipes.techreel.stages import (
+    COUNTER_MS,
     MAX_SFX,
+    STILL_AFTER_MS,
     ScriptStage,
     sfx_cues,
+    storyboard_times,
     terminal_starts,
 )
 
@@ -46,6 +50,24 @@ def test_sfx_cues_follow_the_document():
     assert _named(cues, "pop") == [300, 1500, 2600]               # block visuals only; overlays have their own
     assert _named(cues, "tick") == terminal_starts(DOC["beats"][1]["visuals"][0])[::2]
     assert [at for at, _ in cues] == sorted(at for at, _ in cues)
+
+
+def test_the_storyboard_waits_for_a_counter_to_land():
+    doc = _doc([(0, [_visual("counter", 300, to=9), _visual("title", 200)]),
+                (3000, [_visual("title", 3100), _visual("counter", 3200, to=4), _visual("chips", 3300)])])
+    times = storyboard_times(doc, 10_000)
+    assert 300 + COUNTER_MS in times                                # the counter on its final value
+    assert max(3200 + COUNTER_MS, 3300 + STILL_AFTER_MS) in times   # whichever lands last
+
+
+def test_the_probe_counts_lint_errors_and_warnings_apart():
+    def found(*severities):
+        return [{"severity": s} for s in severities]
+
+    assert _lint_counts(found("error", "error", "warning", "warning", "warning")) == \
+        "2 errors (not blocking), 3 warnings"
+    assert _lint_counts(found("error", "warning")) == "1 error (not blocking), 1 warning"
+    assert _lint_counts(found()) == "0 warnings"
 
 
 def test_no_sfx_when_switched_off():
