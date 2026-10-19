@@ -287,6 +287,11 @@ def test_cta_keyword_from_a_title_strips_punctuation_and_fits():
     assert doc["beats"][1]["visuals"][0]["keyword"] == "SUPERCALIFRAGILISTICEXPI"
 
 
+def test_cta_keyword_skips_all_digit_words():
+    _, doc = _cta({"lines": [{"say": "x"}]}, creator=False, title="5 AI tools")
+    assert doc["beats"][1]["visuals"][0]["keyword"] == "AI"
+
+
 def test_merge_short_joins_a_flash_chunk_to_the_next():
     times = [(0, 400), (400, 520), (520, 900), (900, 1300)]
     assert merge_short([[0], [1], [2, 3]], times) == [[0], [1, 2, 3]]

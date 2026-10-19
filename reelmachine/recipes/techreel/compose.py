@@ -18,6 +18,7 @@ from typing import Any
 from ..dialoguereel.svg import inline_svg
 from .markup import Unit, chunks, is_unspaced, merge_short, units
 from .models import (
+    KEYWORD_MAX,
     Beat,
     CommentVisual,
     Cue,
@@ -135,7 +136,6 @@ def _hero(inputs: TechReelInputs, images: Mapping[str, str]) -> dict[str, Any] |
     return out
 
 
-_KEYWORD_MAX = CommentVisual.model_fields["keyword"].metadata[0].max_length
 _FOLLOW_FRAC, _TITLE_FRAC = 0.6, 0.8    # a line shared with an earlier generated visual: how far into it
 
 
@@ -146,8 +146,9 @@ def _cta_visuals(beat: Beat, inputs: TechReelInputs) -> list[Visual]:
     if beat.kind != "cta" or any(not isinstance(v, HeroVisual) for v in beat.visuals):
         return []
     # the keyword falls back to the title's first word: "Strata: local AI" asks for "STRATA"
-    first = re.search(r"\w+", inputs.title)
-    keyword = beat.keyword or (first.group(0).upper()[:_KEYWORD_MAX] if first else "LINK")
+    # (a number is no keyword: "5 AI tools" asks for "AI")
+    first = next((w for w in re.findall(r"\w+", inputs.title) if not w.isdigit()), None)
+    keyword = beat.keyword or (first.upper()[:KEYWORD_MAX] if first else "LINK")
     out: list[Visual] = [CommentVisual(kind="comment", keyword=keyword, reply=beat.dm or "", at=Cue(line=0))]
     last, used = len(beat.lines) - 1, {0}
     if inputs.creator is not None:

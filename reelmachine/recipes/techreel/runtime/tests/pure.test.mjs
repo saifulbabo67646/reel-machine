@@ -5,7 +5,7 @@ import {
   backOut, clamp01, enterP, exitP, alive, stackLayout, counterValue, typed, terminalStarts, captionAt, wordPhase,
   heroAt, heroSpan, beatAt, transitionP, progress, blob, seedOf, CAPTION_HOLD_MS, staggerP, winner, numberParts,
   gridOf, litSet, nodeLayout, nodeLinks, emptySpot, effectiveHeroState, heroTimeline, splitPoints, blinkAt,
-  HERO_PINNED, PILL_EASE_MS, pillAt,
+  PILL_EASE_MS, pillAt,
 } from "../pure.mjs";
 
 const block = (id, enterMs, exitMs = 99999, place = "stack") => ({ id, kind: "title", class: "block", enterMs, exitMs, place });
@@ -16,7 +16,7 @@ test("the constants are the spec's", () => {
   assert.deepEqual([ENTER_MS, EXIT_MS, GLIDE_MS, COUNTER_MS, HERO_MOVE_MS, TYPE_CPS, STACK_GAP, MIN_SCALE],
     [260, 200, 300, 900, 450, 28, 32, 0.6]);
   assert.deepEqual(STAGE, { top: 440, bottom: 1380, left: 64, right: 1016 });
-  assert.deepEqual([...HERO_STACKING].sort(), 
+  assert.deepEqual([...HERO_STACKING].sort(),
     ["center", "locked", "pulse", "rings", "screen", "shake", "sleep", "small-top", "split"]);
 });
 
@@ -392,7 +392,6 @@ test("the hero in the centre makes room once anything else is on the stage; pinn
   assert.equal(effectiveHeroState("center", true), "small-top");
   assert.equal(effectiveHeroState("center", false), "center");
   for (const s of ["pulse", "shake", "rings", "screen", "sleep", "locked"]) {
-    assert.ok(HERO_PINNED.has(s));
     assert.equal(effectiveHeroState(s, true), s);
   }
   for (const s of ["small-top", "corner", "hidden", "split"]) assert.equal(effectiveHeroState(s, true), s);

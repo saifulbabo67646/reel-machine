@@ -19,6 +19,7 @@ _ID = r"^[a-z][a-z0-9_-]{0,23}$"
 _LANGUAGE = r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$"      # BCP-47 shape: primary subtag then subtags
 _NAME = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$"            # the output file's stem
 _HEX = r"^#[0-9a-fA-F]{6}$"
+KEYWORD_MAX = 24                                         # a comment keyword, authored or generated
 
 
 class _Model(BaseModel):
@@ -269,7 +270,7 @@ class HeartbeatVisual(VisualBase):
 
 class CommentVisual(VisualBase):
     kind: Literal["comment"]
-    keyword: str = Field(max_length=24)
+    keyword: str = Field(max_length=KEYWORD_MAX)
     reply: str = Field("", max_length=40)
 
 
@@ -327,7 +328,7 @@ class Beat(_Model):
     lines: list[Line] = Field(min_length=1, max_length=8)
     visuals: list[Visual] = Field(default_factory=list, max_length=12)
     transition: Transition = "cut"
-    keyword: str | None = Field(None, max_length=24)
+    keyword: str | None = Field(None, max_length=KEYWORD_MAX)
     dm: str | None = Field(None, max_length=40)
     next: str | None = Field(None, max_length=60)
 

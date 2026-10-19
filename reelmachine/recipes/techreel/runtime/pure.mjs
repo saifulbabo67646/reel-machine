@@ -15,8 +15,6 @@ export const CAPTION_HOLD_MS = 300;
 
 // hero states that take a slot in the stage stack; `corner` and `hidden` float outside it
 export const HERO_STACKING = new Set(["center", "small-top", "pulse", "shake", "rings", "screen", "sleep", "locked", "split"]);
-// states that keep the hero at its own size while other blocks share the stage (only `center` makes room)
-export const HERO_PINNED = new Set(["pulse", "shake", "rings", "screen", "sleep", "locked"]);
 const BLINK_MS = 180;
 
 // a beat's transition length; the schedule's gap before a beat is at least this long (a cut's gap is silence)
