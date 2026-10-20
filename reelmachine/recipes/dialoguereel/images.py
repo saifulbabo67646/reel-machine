@@ -139,8 +139,8 @@ def generator_for(provider: str, settings) -> Generator:
     raise ProviderUnavailable(f"no image provider {provider!r}")
 
 
-def trim_png(png: bytes) -> bytes:
-    """Crop to the alpha bounding box, at most IMAGE_MAX_SIDE on the longest side."""
+def trim_png(png: bytes, max_side: int = IMAGE_MAX_SIDE) -> bytes:
+    """Crop to the alpha bounding box, at most `max_side` on the longest side."""
     from PIL import Image
 
     with Image.open(io.BytesIO(png)) as img:
@@ -148,14 +148,10 @@ def trim_png(png: bytes) -> bytes:
     box = img.getchannel("A").getbbox()
     if box:
         img = img.crop(box)
-    img.thumbnail((IMAGE_MAX_SIDE, IMAGE_MAX_SIDE), Image.LANCZOS)
+    img.thumbnail((max_side, max_side), Image.LANCZOS)
     out = io.BytesIO()
     img.save(out, format="PNG")
     return out.getvalue()
-
-
-def _clean(data: bytes) -> bytes:
-    return trim_png(_normalise(data))
 
 
 MAX_REDIRECTS = 3
@@ -216,33 +212,43 @@ def _guarded_download(ref: str) -> tuple[bytes, str]:
     raise _Refused("too many redirects")
 
 
-def read_pose(ref: str, *, allow_local: bool, path: str) -> bytes:
-    """A pose PNG from an http(s) URL, or a local file for local runs: normalised and trimmed."""
+def read_image(ref: str, *, allow_local: bool, path: str, what: str = "pose image", trim: bool = True,
+               max_side: int = IMAGE_MAX_SIDE) -> bytes:
+    """A raster image from an http(s) URL, or a local file for local runs: normalised to a PNG at most `max_side`
+    on its longest side and, with `trim`, cropped to its alpha box. `what` names it in errors ("pose image")."""
+    noun = what.removesuffix(" image")       # "pose image" -> "pose", "image" -> "image"
+    article = "an" if noun[:1] in "aeiou" else "a"
     if urlsplit(ref).scheme.lower() in ("http", "https"):
         try:
             data, kind = _download(ref) if allow_local else _guarded_download(ref)
         except (_Refused, ValueError, httpx.HTTPError) as exc:
-            raise InvalidInput(f"could not fetch the pose image ({exc})", details={"path": path}) from None
+            raise InvalidInput(f"could not fetch the {what} ({exc})", details={"path": path}) from None
         if kind == "image/svg+xml":
-            raise InvalidInput("SVG poses are not drawn; give a PNG", details={"path": path})
+            raise InvalidInput(f"SVG {noun}s are not drawn; give a PNG", details={"path": path})
     else:
         if not allow_local:
             raise InvalidInput(LOCAL_REFUSED, details={"path": path})
         file = Path(ref).expanduser()
         suffix = file.suffix.lower()
         if suffix == ".svg" or suffix not in IMAGE_SUFFIXES:
-            raise InvalidInput(f"a pose is a PNG, JPEG, WebP or GIF file, not {suffix or 'no suffix'}",
+            raise InvalidInput(f"{article} {noun} is a PNG, JPEG, WebP or GIF file, not {suffix or 'no suffix'}",
                                details={"path": path})
         try:
             if file.stat().st_size > IMAGE_MAX_BYTES:
-                raise InvalidInput("the pose image is larger than 8 MB", details={"path": path})
+                raise InvalidInput(f"the {what} is larger than 8 MB", details={"path": path})
             data = file.read_bytes()
         except OSError as exc:
-            raise InvalidInput(f"cannot read the pose image ({exc.strerror or exc})", details={"path": path}) from None
+            raise InvalidInput(f"cannot read the {what} ({exc.strerror or exc})", details={"path": path}) from None
     try:
-        return _clean(data)
+        png = _normalise(data, max_side)
+        return trim_png(png, max_side) if trim else png
     except ValueError as exc:
         raise InvalidInput(str(exc), details={"path": path}) from None
+
+
+def read_pose(ref: str, *, allow_local: bool, path: str) -> bytes:
+    """A pose PNG from an http(s) URL, or a local file for local runs: normalised and trimmed."""
+    return read_image(ref, allow_local=allow_local, path=path)
 
 
 def quota_ledger(caller_root: Path, provider: str) -> QuotaLedger:

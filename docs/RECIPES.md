@@ -190,3 +190,24 @@ text on screen when its meaning shows, and the renderer named.
 about 30 N5-N3 situations, how to write natural lines, hook titles, endings, the emotion
 table, the level ladders (JLPT, TOPIK, CEFR) and the character SVG contract. See
 [DIALOGUEREEL.md](DIALOGUEREEL.md) and [MCP.md](MCP.md#make_cast).
+
+## techreel: funny AI and tech explainers
+
+`techreel` makes a vertical 1080x1920 reel about an AI or tech topic: a conversational
+voice over dense motion graphics (window, terminal, repo and chat mock-ups, counters,
+stamps, emoji, bars, nodes, an agent's own SVG drawings) and a recurring hero that reacts
+to the story. The agent researches and writes; the engine never fetches the web.
+
+**Inputs at a glance.** `title`, `language`, one `voice`, `look` (`mint`, `ember`,
+`violet`, `mono`) and `accent`, `hero`, `creator`, `sources`, `music`, `sfx`, and 6 to 10
+`beats` of `{kind, heading, kicker, lines, visuals, transition}`. A line is `{say, text}`:
+`say` is what the voice reads (no digits, no `*`), `text` the caption. Each visual enters
+on a cue (`{line, word}`). `mode` is `storyboard` (the default) or `full`. Three full
+examples (Hindi, English, Japanese) are in `reelmachine/recipes/techreel/examples/`; the
+Hindi one is `describe_recipe("techreel").example`.
+
+**MCP flow.** research → write beats → `probe` → `start_job` in `storyboard` mode →
+`start_job` in `full` mode for `reel.mp4`, `captions.srt` and `reel.json`, plus `post.md`
+and `script.resolved.json`. `verify` checks the format, the duration (±100 ms), an audible
+voice, no voice gap over 1 s inside the beats, something on stage in every beat, and the
+renderer. See [TECHREEL.md](TECHREEL.md).

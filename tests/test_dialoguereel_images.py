@@ -346,3 +346,15 @@ def test_openai_closes_only_its_own_client():
     own = images.OpenAIImages("sk-test")
     own.close()
     assert own.client.is_closed
+
+
+def test_a_download_sends_a_user_agent_with_a_contact_url(monkeypatch):
+    # Wikimedia answers 403 to a bare UA; one naming the project and a contact URL is let through
+    from reelmachine import __version__
+    from reelmachine.recipes.mapreel.geodata import USER_AGENT
+
+    assert USER_AGENT == f"reel-machine/{__version__} (+https://github.com/saifulbabo67646/reel-machine)"
+    seen, _ = _remote(monkeypatch, {("a.example", "/a.png"): _png_response(_png((40, 40), box=(0, 0, 10, 20)))},
+                      {"a.example": "93.184.216.34"})
+    images.read_pose("https://a.example/a.png", allow_local=False, path="p")
+    assert seen[0].headers["user-agent"] == USER_AGENT

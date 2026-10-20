@@ -1,0 +1,123 @@
+{
+  "mode": "storyboard",
+  "title": "小さいモデル: スマホで動くAI",
+  "language": "ja",
+  "voice": "fake:default",
+  "look": "ember",
+  "hero": {"kind": "phone", "text": "AI"},
+  "creator": {"name": "Your Name", "handle": "@yourhandle"},
+  "sources": [
+    "https://arxiv.org/abs/2210.17323",
+    "https://arxiv.org/abs/2305.14314"
+  ],
+  "beats": [
+    {
+      "id": "hook", "kind": "hook", "kicker": "小さいモデル", "heading": "スマホで*AI*？",
+      "lines": [
+        {"say": "スマホの中で、エーアイが動く時代。", "text": "スマホの中で、*AI*が動く時代。"},
+        {"say": "しかも、ネットなしで。", "text": "しかも、*ネットなし*で。"}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "center"},
+        {"kind": "hero", "state": "pulse", "at": {"line": 0, "word": "AI"}},
+        {"kind": "hero", "state": "screen", "text": "OFFLINE ✓", "at": {"line": 1}},
+        {"kind": "emoji", "emoji": "📵", "at": {"line": 1, "word": "ネットなし"}}
+      ]
+    },
+    {
+      "id": "pain", "kind": "pain", "kicker": "PROBLEM?", "heading": "*デカすぎ*問題", "transition": "slide",
+      "lines": [
+        {"say": "普通のモデルは、とにかく大きい。"},
+        {"say": "ななビーで、じゅうよんギガ。", "text": "*7B*で、*14GB*。"},
+        {"say": "僕のスマホ、写真でもう満杯なのに。"}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "center"},
+        {"kind": "counter", "to": 14, "suffix": " GB", "label": "7Bモデル · 16ビット", "at": {"line": 1},
+         "exit": {"line": 2}},
+        {"kind": "hero", "state": "shake", "at": {"line": 2}},
+        {"kind": "stamp", "text": "容量不足", "tone": "red", "at": {"line": 2, "word": "満杯"}}
+      ]
+    },
+    {
+      "id": "reveal", "kind": "reveal", "kicker": "SOLUTION", "heading": "そこで*量子化*", "transition": "flash",
+      "lines": [
+        {"say": "そこで登場するのが、りょうしか。", "text": "そこで登場するのが、*量子化*。"},
+        {"say": "数字の細かさを、ざっくりにするだけ。", "text": "数字の細かさを、*ざっくり*にするだけ。"}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "hidden"},
+        {"kind": "flash", "text": "*量子化*", "at": {"line": 0, "word": "量子化"}, "exit": {"line": 1}},
+        {"kind": "chips", "items": ["3.14159265", "→", "3.14"], "style": "filled", "at": {"line": 1}},
+        {"kind": "emoji", "emoji": "🤏", "at": {"line": 1, "word": "ざっくり"}}
+      ]
+    },
+    {
+      "id": "bag", "kind": "explain", "kicker": "たとえるなら", "heading": "*圧縮袋*と同じ", "transition": "slide",
+      "lines": [
+        {"say": "旅行のあっしゅくぶくろみたいなもの。", "text": "旅行の*圧縮袋*みたいなもの。"},
+        {"say": "服の量は同じで、空気だけ抜く。", "text": "服の量は同じで、*空気だけ*抜く。"},
+        {"say": "ちょっとシワになるけどね。"}
+      ],
+      "visuals": [
+        {"kind": "svg", "size": "m",
+         "svg": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 170'><rect x='14' y='30' width='160' height='120' rx='20' fill='none' stroke='currentColor' stroke-width='6'/><line x1='14' y1='54' x2='174' y2='54' stroke-width='5' stroke-dasharray='10 7' style='stroke:var(--accent)'/><g fill='none' stroke='currentColor' stroke-width='4' stroke-linejoin='round'><path d='M38 76 h112 l-6 14 h-100 z'/><path d='M38 100 h112 l-6 14 h-100 z'/><path d='M38 124 h112 l-6 14 h-100 z'/></g><circle cx='150' cy='30' r='12' fill='none' stroke-width='5' style='stroke:var(--accent)'/><g fill='none' stroke-width='5' stroke-linecap='round' style='stroke:var(--accent)'><path d='M170 16 q14 -8 26 0 t26 0'/><path d='M176 34 q12 -8 24 0 t24 0'/><path d='M214 8 l10 8 l-10 8'/></g></svg>"},
+        {"kind": "emoji", "emoji": "👕", "at": {"line": 1, "word": "服"}},
+        {"kind": "stamp", "text": "ちょいシワ", "tone": "accent", "at": {"line": 2, "word": "シワ"}}
+      ]
+    },
+    {
+      "id": "math", "kind": "explain", "kicker": "計算してみる", "heading": "*4ビット*なら", "transition": "cut",
+      "lines": [
+        {"say": "じゅうろくビットを、よんビットに。", "text": "*16ビット*を、*4ビット*に。"},
+        {"say": "じゅうよんギガが、さんてんごギガに。", "text": "*14GB*が、*3.5GB*に。"},
+        {"say": "これなら、写真を消さなくても入る。"}
+      ],
+      "visuals": [
+        {"kind": "equation", "rows": ["14GB（16ビット）", "÷ 4"], "result": "3.5GB", "exit": {"line": 1}},
+        {"kind": "bars", "items": [{"label": "16ビット", "value": 14}, {"label": "8ビット", "value": 7},
+                                   {"label": "4ビット", "value": 3.5}],
+         "unit": "GB", "highlight": 2, "at": {"line": 1}, "exit": {"line": 2}},
+        {"kind": "dialog", "title": "モデルを保存しますか？", "body": "tiny-7b-q4 · 3.5GB", "approve": "保存",
+         "decline": "やめる", "click": "approve", "click_at": {"line": 2, "frac": 0.8}, "at": {"line": 2}}
+      ]
+    },
+    {
+      "id": "offline", "kind": "feature", "kicker": "FEATURE", "heading": "*圏外*でもOK", "transition": "zoom",
+      "lines": [
+        {"say": "電車でも、飛行機でも、圏外でも動く。", "text": "電車でも、飛行機でも、*圏外*でも動く。"},
+        {"say": "データは、スマホから一歩も出ない。", "text": "データは、スマホから*一歩も*出ない。"}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "screen", "text": "圏外 · OK"},
+        {"kind": "emoji", "emoji": "✈️", "at": {"line": 0, "word": "飛行機"}},
+        {"kind": "hero", "state": "locked", "at": {"line": 1, "word": "スマホ"}}
+      ]
+    },
+    {
+      "id": "honest", "kind": "honest", "kicker": "HONEST MOMENT", "heading": "*正直*に言うと", "transition": "slide",
+      "lines": [
+        {"say": "かしこさは、少しだけおちる。", "text": "賢さは、*少しだけ*落ちる。"},
+        {"say": "あと、スマホがちょっと熱くなる。", "text": "あと、スマホがちょっと*熱く*なる。"},
+        {"say": "冬はカイロ代わりに、どうぞ。", "text": "冬は*カイロ*代わりに、どうぞ。"}
+      ],
+      "visuals": [
+        {"kind": "hero", "state": "hidden"},
+        {"kind": "chips", "items": ["速い", "軽い", "ちょい天然"], "style": "filled", "exit": {"line": 1}},
+        {"kind": "heartbeat", "label": "スマホの温度：上昇中", "at": {"line": 1}},
+        {"kind": "emoji", "emoji": "🔥", "at": {"line": 1, "word": "熱く"}},
+        {"kind": "stamp", "text": "冬限定", "tone": "accent", "at": {"line": 2, "word": "カイロ"}}
+      ]
+    },
+    {
+      "id": "cta", "kind": "cta", "transition": "slide", "keyword": "TINY", "dm": "リンク送ります",
+      "next": "次回：スマホで画像生成",
+      "lines": [
+        {"say": "続きは、コメントにタイニーって書いてね。", "text": "続きは、コメントに*TINY*って書いてね。"},
+        {"say": "フォローもよろしく。"},
+        {"say": "次回は、スマホで画像生成。"}
+      ],
+      "visuals": [{"kind": "hero", "state": "corner"}]
+    }
+  ]
+}

@@ -18,6 +18,7 @@ ElementTree (text and attribute values escaped, names from the checked tree).
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping
 from xml.etree import ElementTree
@@ -65,6 +66,7 @@ _XML_NS = "http://www.w3.org/XML/1998/namespace"
 # HTML integration points: the HTML parser reads their children as HTML, so they hold text only
 _TEXT_ONLY = {"title", "desc"}
 _HINT = "characters are plain SVG shapes; see the SVG character contract in the guide"
+_DRAWING_HINT = "drawings are plain SVG shapes: no scripts, HTML or links outside the drawing"
 
 
 def _refuse(message: str, element: str, path: str, hint: str = _HINT) -> InvalidInput:
@@ -79,40 +81,47 @@ def _local(name: str) -> tuple[str, str]:
     return "", name
 
 
-def _check_css(text: str, element: str, path: str) -> None:
+def _check_css(text: str, element: str, path: str, hint: str = _HINT) -> None:
     if _CSS_FORBIDDEN.search(text) or _EXTERNAL_URL.search(text) or _JAVASCRIPT.search(text):
         raise _refuse(f"{element} may only reference this document (url(#id)), without CSS escapes",
-                      element, path)
+                      element, path, hint)
 
 
-def _parse(svg: str, path: str) -> tuple[Element, set[str]]:
-    """The checked tree and its ids, or InvalidInput naming what broke the contract."""
+def _parse(svg: str, path: str, view_box: str | None = VIEW_BOX, noun: str = "character") -> tuple[Element, set[str]]:
+    """The checked tree and its ids, or InvalidInput naming what broke the contract. `view_box` None takes any
+    positive viewBox (a drawing rather than a character); `noun` is what the refusals call the SVG."""
+    hint = _HINT if noun == "character" else _DRAWING_HINT
     if len(svg.encode("utf-8")) > MAX_BYTES:
         raise _refuse(f"the SVG is over {MAX_BYTES:,} bytes", "svg", path,
                       hint="simplify paths or drop embedded images")
     if match := _MARKUP_DECL.search(svg):
         kind = "processing instructions" if match.group(0).endswith("?") else \
             "comments, CDATA sections and DOCTYPE/ENTITY declarations"
-        raise _refuse(f"{kind} are not allowed in a character", "<" + match.group(0)[-1], path,
-                      hint="drop editor comments and the <?xml ...?> line; " + _HINT)
+        raise _refuse(f"{kind} are not allowed in a {noun}", "<" + match.group(0)[-1], path,
+                      hint="drop editor comments and the <?xml ...?> line; " + hint)
     try:
         root = ElementTree.fromstring(svg)
     except ElementTree.ParseError as exc:
-        raise _refuse(f"the SVG is not well-formed XML: {exc}", "svg", path) from exc
+        raise _refuse(f"the SVG is not well-formed XML: {exc}", "svg", path, hint) from exc
     if _local(root.tag)[1] != "svg":
-        raise _refuse("the root element must be <svg>", _local(root.tag)[1], path)
-    if " ".join(re.split(r"[\s,]+", (root.get("viewBox") or "").strip())) != VIEW_BOX:
-        raise _refuse(f'the root <svg> needs viewBox="{VIEW_BOX}"', "svg", path)
+        raise _refuse("the root element must be <svg>", _local(root.tag)[1], path, hint)
+    box = re.split(r"[\s,]+", (root.get("viewBox") or "").strip())
+    if view_box is None:
+        if not _positive_box(box):
+            raise _refuse('the root <svg> needs a viewBox="min-x min-y width height" with a positive size',
+                          "svg", path, hint="drawings scale to their slot by their viewBox")
+    elif " ".join(box) != view_box:
+        raise _refuse(f'the root <svg> needs viewBox="{view_box}"', "svg", path)
 
     ids: set[str] = set()
     for node in root.iter():
         ns, tag = _local(node.tag)
         if tag.lower() in _FORBIDDEN:
-            raise _refuse(f"<{tag}> is not allowed in a character", tag, path)
+            raise _refuse(f"<{tag}> is not allowed in a {noun}", tag, path, hint)
         if ns not in ("", _SVG_NS) or tag not in _ALLOWED:
-            raise _refuse(f"<{tag}> is not an allowed SVG element", tag, path)
+            raise _refuse(f"<{tag}> is not an allowed SVG element", tag, path, hint)
         if tag in _TEXT_ONLY and len(node):
-            raise _refuse(f"<{tag}> may only hold text", tag, path)
+            raise _refuse(f"<{tag}> may only hold text", tag, path, hint)
         seen: set[str] = set()
         for raw, value in node.attrib.items():
             attr_ns, attr = _local(raw)
@@ -123,18 +132,31 @@ def _parse(svg: str, path: str) -> tuple[Element, set[str]]:
                               hint="give each attribute once, in one spelling")
             seen.add(name)
             if name.startswith("on"):
-                raise _refuse(f"event handler {attr} on <{tag}> is not allowed", attr, path)
+                raise _refuse(f"event handler {attr} on <{tag}> is not allowed", attr, path, hint)
             if name == "href" and not value.startswith("#"):
                 if tag == "image" and _DATA_IMAGE.match(value):
                     continue
                 element = "image" if tag == "image" else shown
-                raise _refuse(f"<{tag}> {shown} must point inside the SVG (#id)", element, path)
-            _check_css(value, shown, path)
+                raise _refuse(f"<{tag}> {shown} must point inside the SVG (#id)", element, path, hint)
+            _check_css(value, shown, path, hint)
             if name == "id" and not attr_ns:
                 if value in ids:
                     raise _refuse(f'id "{value}" is used twice', tag, path, hint="give every id one element")
                 ids.add(value)
     return root, ids
+
+
+def _positive_box(box: list[str]) -> bool:
+    try:
+        numbers = [float(n) for n in box]
+    except ValueError:
+        return False
+    return len(numbers) == 4 and all(math.isfinite(n) for n in numbers) and numbers[2] > 0 and numbers[3] > 0
+
+
+def check_drawing(svg: str, *, path: str) -> None:
+    """Check an agent drawing against the safety rules alone: any viewBox, no character groups needed."""
+    _parse(svg, path, None, "drawing")
 
 
 def check_svg(svg: str, *, path: str) -> list[str]:
@@ -179,10 +201,11 @@ def part_id(char_id: str, name: str) -> str:
 _URL_REF = re.compile(r"""(url\(\s*["']?\s*)#""", re.IGNORECASE)
 
 
-def inline_svg(svg: str, char_id: str, *, path: str = "svg") -> str:
-    """The character as the page receives it: re-checked, every id and in-document reference
-    scoped with `part_id`, and serialized from the tree."""
-    root, _ = _parse(svg, path)
+def inline_svg(svg: str, char_id: str, *, path: str = "svg", view_box: str | None = VIEW_BOX,
+               noun: str = "character") -> str:
+    """The character (or, `view_box` None, any drawing) as the page receives it: re-checked, every id and
+    in-document reference scoped with `part_id`, and serialized from the tree."""
+    root, _ = _parse(svg, path, view_box, noun)
     prefix = part_id(char_id, "")
     for node in root.iter():
         for raw, value in list(node.attrib.items()):

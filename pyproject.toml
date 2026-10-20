@@ -28,6 +28,7 @@ wordreel = "reelmachine.recipes.wordreel.recipe:WordReelRecipe"
 explainer3d = "reelmachine.recipes.explainer3d.recipe:Explainer3DRecipe"
 mapreel = "reelmachine.recipes.mapreel.recipe:MapReelRecipe"
 dialoguereel = "reelmachine.recipes.dialoguereel.recipe:DialogueReelRecipe"
+techreel = "reelmachine.recipes.techreel.recipe:TechReelRecipe"
 
 [project.entry-points."reelmachine.clips"]
 library = "reelmachine.recipes.wordreel.library:LibraryClipSource"
@@ -141,6 +142,9 @@ reelmachine = [
     "recipes/dialoguereel/runtime/*.mjs",
     "recipes/dialoguereel/runtime/*.css",
     "recipes/mapreel/runtime/*.mjs",
+    "recipes/techreel/examples/*.json",
+    "recipes/techreel/runtime/*.mjs",
+    "recipes/techreel/runtime/*.css",
     "vendor/srt-whiteboard-animation/LICENSE",
     "vendor/srt-whiteboard-animation/UPSTREAM.md",
     "vendor/srt-whiteboard-animation/assets/*",

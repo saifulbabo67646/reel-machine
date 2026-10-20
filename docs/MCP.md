@@ -307,6 +307,14 @@ checked when the job is submitted) and need `REEL_OPENAI_API_KEY` on the server.
 at its `cast.png`, then write the lines, `probe`, `start_job` in `storyboard` mode and again in
 `full` mode. See [DIALOGUEREEL.md](DIALOGUEREEL.md).
 
+**techreel workflow.** `describe_recipe("techreel")` for the guide (the formula, humour,
+the `say`/`text` rules per language, every component and hero), then research the link or
+topic yourself (the engine fetches nothing), write the beats with every source URL in
+`sources`, `probe` (lint, drawings, image sources, voice, renderer and an estimated length,
+spending nothing), `start_job` in `storyboard` mode to look at `storyboard.jpg`, and again
+in `full` mode for `reel.mp4`; paste `post.md` as the caption. Bind a real voice with
+`REEL_TTS=supertonic` and a `supertonic:F1`…`M5` voice. See [TECHREEL.md](TECHREEL.md).
+
 ### `find_assets`
 
 CC0 models, skies (360° photos of real places — kitchens, living rooms, workshops, streets

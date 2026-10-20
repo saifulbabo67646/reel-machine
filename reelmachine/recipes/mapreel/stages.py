@@ -142,8 +142,13 @@ def _faded(place: dict[str, Any], wrap: int) -> dict[str, Any]:
     return out
 
 
-def check_music(inputs: MapReelInputs) -> None:
-    """`music` is "auto" (a synthesised bed) or an existing local audio file."""
+def check_music(inputs: Any, *, allow_local: bool = True) -> None:
+    """`music` is "auto" (a synthesised bed) or an existing local audio file (only where local files are allowed;
+    techreel passes its config's `local_files`)."""
+    if inputs.music and inputs.music != "auto" and not allow_local:
+        raise InvalidInput(f"a local music file is not allowed here: {inputs.music}",
+                           hint='use "auto" for a synthesised bed, or leave music out',
+                           details={"path": "music"})
     if inputs.music and inputs.music != "auto" and not Path(inputs.music).expanduser().is_file():
         raise InvalidInput(f"music file not found: {inputs.music}",
                            hint='give a local audio file, "auto" for a synthesised bed, or leave music out',
@@ -291,8 +296,8 @@ def _have_pillow() -> bool:
     return True
 
 
-def _normalise(data: bytes) -> bytes:
-    """Any raster image as an RGBA PNG whose longest side is at most IMAGE_MAX_SIDE, alpha kept."""
+def _normalise(data: bytes, max_side: int = IMAGE_MAX_SIDE) -> bytes:
+    """Any raster image as an RGBA PNG whose longest side is at most `max_side`, alpha kept."""
     if _is_svg(data):
         raise ValueError(SVG_REFUSED)
     try:
@@ -305,14 +310,14 @@ def _normalise(data: bytes) -> bytes:
             if img.width * img.height > IMAGE_MAX_PIXELS:
                 raise _TooManyPixels(f"{img.width}x{img.height} is over {IMAGE_MAX_PIXELS // 1_000_000} M pixels")
             if img.format == "JPEG":
-                img.draft("RGB", (IMAGE_MAX_SIDE, IMAGE_MAX_SIDE))  # decode at a reduced scale where it can
+                img.draft("RGB", (max_side, max_side))  # decode at a reduced scale where it can
             img.load()
             img = ImageOps.exif_transpose(img).convert("RGBA")
     except _TooManyPixels:
         raise
     except (OSError, SyntaxError, ValueError, Image.DecompressionBombError) as exc:
         raise ValueError(f"not a readable image ({exc})") from exc
-    img.thumbnail((IMAGE_MAX_SIDE, IMAGE_MAX_SIDE), Image.LANCZOS)
+    img.thumbnail((max_side, max_side), Image.LANCZOS)
     out = io.BytesIO()
     img.save(out, format="PNG")
     return out.getvalue()

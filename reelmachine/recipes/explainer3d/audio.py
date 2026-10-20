@@ -26,6 +26,7 @@ _SFX = {
     "crunch": "anoisesrc=d=0.45:c=white:a=0.6:s=23,bandpass=f=2500:width_type=h:w=3000,afade=t=out:st=0.02:d=0.42",
     "gulp": "sine=f=220:d=0.4,vibrato=f=12:d=0.6,afade=t=in:d=0.02,afade=t=out:st=0.1:d=0.3",
     "bubbles": "anoisesrc=d=1.4:c=pink:a=0.3:s=29,bandpass=f=900,tremolo=f=14:d=0.9,afade=t=out:st=0.6:d=0.8",
+    "tick": "sine=f=2400:d=0.025,afade=t=out:st=0:d=0.025,volume=0.6",
 }
 SFX_NAMES = tuple(_SFX)
 _RATE = ["-ar", "48000", "-ac", "2"]

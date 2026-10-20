@@ -1,0 +1,2809 @@
+{
+ "mode": "reel",
+ "width": 1080,
+ "height": 1920,
+ "duration": 55.75,
+ "language": "hi",
+ "look": {
+  "bg": "#06100f",
+  "glow1": "#0f6f66",
+  "glow2": "#0a3d4a",
+  "glow3": "#0b2447",
+  "text": "#e9fbf6",
+  "muted": "#7fa7a0",
+  "accent": "#2ee6b8",
+  "accentInk": "#000000",
+  "card": "rgba(255,255,255,0.05)",
+  "cardEdge": "rgba(46,230,184,0.22)",
+  "red": "#ff5d73",
+  "green": "#4ade80"
+ },
+ "hero": {
+  "kind": "orb",
+  "text": null
+ },
+ "creator": {
+  "name": "Your Name",
+  "handle": "@yourhandle",
+  "avatar": null
+ },
+ "heroStates": [
+  {
+   "atMs": 0,
+   "state": "center",
+   "text": null,
+   "count": 3,
+   "labels": []
+  },
+  {
+   "atMs": 3970,
+   "state": "small-top",
+   "text": null,
+   "count": 3,
+   "labels": []
+  },
+  {
+   "atMs": 6750,
+   "state": "shake",
+   "text": null,
+   "count": 3,
+   "labels": []
+  },
+  {
+   "atMs": 7490,
+   "state": "corner",
+   "text": null,
+   "count": 3,
+   "labels": []
+  },
+  {
+   "atMs": 10510,
+   "state": "hidden",
+   "text": null,
+   "count": 3,
+   "labels": []
+  },
+  {
+   "atMs": 13980,
+   "state": "pulse",
+   "text": null,
+   "count": 3,
+   "labels": []
+  },
+  {
+   "atMs": 15100,
+   "state": "rings",
+   "text": null,
+   "count": 3,
+   "labels": []
+  },
+  {
+   "atMs": 16750,
+   "state": "screen",
+   "text": "LOCAL ✓",
+   "count": 3,
+   "labels": []
+  },
+  {
+   "atMs": 19699,
+   "state": "sleep",
+   "text": null,
+   "count": 3,
+   "labels": []
+  },
+  {
+   "atMs": 20420,
+   "state": "hidden",
+   "text": null,
+   "count": 3,
+   "labels": []
+  }
+ ],
+ "beats": [
+  {
+   "id": "hook",
+   "kind": "hook",
+   "startMs": 0,
+   "endMs": 3720,
+   "transition": "cut",
+   "heading": [
+    {
+     "t": "bhai",
+     "a": false
+    },
+    {
+     "t": "176B",
+     "a": true
+    },
+    {
+     "t": "AI?",
+     "a": false
+    }
+   ],
+   "kicker": "OPENAI · 29.09",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "counter",
+     "from": 0,
+     "to": 176.0,
+     "decimals": 0,
+     "prefix": "",
+     "suffix": "B",
+     "label": "BILLION PARAMETERS",
+     "id": "b0v1",
+     "enterMs": 1086,
+     "exitMs": 3970,
+     "class": "block"
+    },
+    {
+     "place": "auto",
+     "kind": "emoji",
+     "emoji": "💀",
+     "id": "b0v2",
+     "enterMs": 3320,
+     "exitMs": 3970,
+     "class": "overlay"
+    }
+   ]
+  },
+  {
+   "id": "pain",
+   "kind": "pain",
+   "startMs": 3970,
+   "endMs": 7290,
+   "transition": "slide",
+   "heading": [
+    {
+     "t": "monthly",
+     "a": false
+    },
+    {
+     "t": "kharcha",
+     "a": true
+    }
+   ],
+   "kicker": "PROBLEM?",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "chips",
+     "items": [
+      "ChatGPT Plus",
+      "Claude Pro",
+      "Gemini Adv"
+     ],
+     "style": "filled",
+     "id": "b1v1",
+     "enterMs": 4320,
+     "exitMs": 7490,
+     "class": "block"
+    },
+    {
+     "place": "stack",
+     "kind": "stamp",
+     "text": "EMI",
+     "tone": "red",
+     "rotate": -10.0,
+     "id": "b1v2",
+     "enterMs": 6390,
+     "exitMs": 7490,
+     "class": "overlay"
+    }
+   ]
+  },
+  {
+   "id": "reveal",
+   "kind": "reveal",
+   "startMs": 7490,
+   "endMs": 10210,
+   "transition": "flash",
+   "heading": [
+    {
+     "t": "milo",
+     "a": false
+    },
+    {
+     "t": "pocket",
+     "a": true
+    }
+   ],
+   "kicker": "TOH MERE DOSTON",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "repo",
+     "name": "pocket-llm/pocket-llm",
+     "description": "Run a 176B mixture-of-experts model on any laptop. One-click install.",
+     "stars": 19900,
+     "license": "MIT",
+     "language": "Python",
+     "id": "b2v1",
+     "enterMs": 8321,
+     "exitMs": 10510,
+     "class": "block"
+    },
+    {
+     "place": "stack",
+     "kind": "stamp",
+     "text": "FREE ✓",
+     "tone": "green",
+     "rotate": 8.0,
+     "id": "b2v2",
+     "enterMs": 10029,
+     "exitMs": 10510,
+     "class": "overlay"
+    }
+   ]
+  },
+  {
+   "id": "explain",
+   "kind": "explain",
+   "startMs": 10510,
+   "endMs": 13830,
+   "transition": "zoom",
+   "heading": [
+    {
+     "t": "apna",
+     "a": true
+    },
+    {
+     "t": "computer",
+     "a": false
+    }
+   ],
+   "kicker": "FEATURE 01/04",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "window",
+     "title": "dot-01 · computer",
+     "tabs": [
+      "Browser",
+      "Files",
+      "Terminal"
+     ],
+     "active": 0,
+     "live": true,
+     "button": "TAKE CONTROL",
+     "rows": [],
+     "cursor": [
+      {
+       "to": [
+        0.7,
+        0.45
+       ],
+       "atMs": 11372
+      },
+      {
+       "to": [
+        0.5,
+        0.86
+       ],
+       "atMs": 13107
+      }
+     ],
+     "id": "b3v1",
+     "enterMs": 10510,
+     "exitMs": 13980,
+     "class": "block"
+    },
+    {
+     "place": "right",
+     "kind": "emoji",
+     "emoji": "🍿",
+     "id": "b3v2",
+     "enterMs": 13030,
+     "exitMs": 13980,
+     "class": "overlay"
+    }
+   ]
+  },
+  {
+   "id": "api",
+   "kind": "feature",
+   "startMs": 13980,
+   "endMs": 16500,
+   "transition": "cut",
+   "heading": [
+    {
+     "t": "OpenAI",
+     "a": false
+    },
+    {
+     "t": "jaisa",
+     "a": false
+    },
+    {
+     "t": "API",
+     "a": true
+    }
+   ],
+   "kicker": "FEATURE 02/04 · LOCALHOST",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "terminal",
+     "lines": [
+      {
+       "cmd": "POST localhost:8080/v1/chat",
+       "tone": "dim"
+      },
+      {
+       "out": "→ 200 OK",
+       "tone": "ok"
+      },
+      {
+       "cmd": "GET /v1/models",
+       "tone": "dim"
+      },
+      {
+       "out": "error: gpu not found",
+       "tone": "err"
+      },
+      {
+       "out": "falling back to cpu…",
+       "tone": "dim"
+      }
+     ],
+     "id": "b4v1",
+     "enterMs": 14403,
+     "exitMs": 16750,
+     "class": "block"
+    },
+    {
+     "place": "stack",
+     "kind": "title",
+     "text": "desi *jugaad* 😎",
+     "size": "m",
+     "id": "b4v3",
+     "enterMs": 16132,
+     "exitMs": 16750,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "honest",
+   "kind": "honest",
+   "startMs": 16750,
+   "endMs": 20270,
+   "transition": "slide",
+   "heading": [
+    {
+     "t": "reality",
+     "a": true
+    },
+    {
+     "t": "check",
+     "a": false
+    }
+   ],
+   "kicker": "HONEST MOMENT",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "left",
+     "kind": "counter",
+     "from": 0,
+     "to": 6.0,
+     "decimals": 0,
+     "prefix": "",
+     "suffix": "B",
+     "label": "ACTIVE",
+     "id": "b5v1",
+     "enterMs": 18499,
+     "exitMs": 20420,
+     "class": "block"
+    },
+    {
+     "place": "right",
+     "kind": "counter",
+     "from": 0,
+     "to": 125.0,
+     "decimals": 0,
+     "prefix": "",
+     "suffix": "B",
+     "label": "TOTAL",
+     "id": "b5v2",
+     "enterMs": 18613,
+     "exitMs": 20420,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "math",
+   "kind": "explain",
+   "startMs": 20420,
+   "endMs": 22940,
+   "transition": "cut",
+   "heading": [
+    {
+     "t": "total",
+     "a": true
+    },
+    {
+     "t": "kitna?",
+     "a": false
+    }
+   ],
+   "kicker": "AB SUNO",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "equation",
+     "rows": [
+      "125B",
+      "+ embeddings"
+     ],
+     "result": "176B",
+     "id": "b6v1",
+     "enterMs": 20420,
+     "exitMs": 23190,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "slack",
+   "kind": "feature",
+   "startMs": 23190,
+   "endMs": 25910,
+   "transition": "slide",
+   "heading": [
+    {
+     "t": "slack",
+     "a": false
+    },
+    {
+     "t": "mein",
+     "a": false
+    },
+    {
+     "t": "tag",
+     "a": true
+    },
+    {
+     "t": "karo",
+     "a": false
+    }
+   ],
+   "kicker": "FEATURE 03/04",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "chat",
+     "channel": "launch-team",
+     "messages": [
+      {
+       "from": "Riya",
+       "text": "@Dot iska summary bana do 🙏",
+       "bot": false
+      },
+      {
+       "from": "Dot",
+       "text": "Done! Three key points + next steps 👇",
+       "bot": true
+      },
+      {
+       "from": "Meera",
+       "text": "bhai ye intern kab so ta hai?",
+       "bot": false
+      }
+     ],
+     "id": "b7v0",
+     "enterMs": 23190,
+     "exitMs": 26060,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "ask",
+   "kind": "feature",
+   "startMs": 26060,
+   "endMs": 28180,
+   "transition": "cut",
+   "heading": [
+    {
+     "t": "pehle",
+     "a": false
+    },
+    {
+     "t": "poochega",
+     "a": true
+    }
+   ],
+   "kicker": "PERMISSION",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "dialog",
+     "title": "Send an email to the client 📧",
+     "body": "Dot wants to use your Gmail to send one draft.",
+     "approve": "Approve",
+     "decline": "Decline",
+     "click": "approve",
+     "clickAtMs": 27380,
+     "id": "b8v0",
+     "enterMs": 26060,
+     "exitMs": 28480,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "bills",
+   "kind": "pain",
+   "startMs": 28480,
+   "endMs": 30600,
+   "transition": "zoom",
+   "heading": [
+    {
+     "t": "monthly",
+     "a": false
+    },
+    {
+     "t": "kharcha",
+     "a": true
+    }
+   ],
+   "kicker": "PROBLEM?",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "receipts",
+     "items": [
+      {
+       "title": "ChatGPT Plus",
+       "sub": "monthly · due again"
+      },
+      {
+       "title": "Claude Pro",
+       "sub": "monthly · due again"
+      },
+      {
+       "title": "Gemini Advanced",
+       "sub": "monthly · due again"
+      }
+     ],
+     "id": "b9v0",
+     "enterMs": 28480,
+     "exitMs": 30750,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "todo",
+   "kind": "feature",
+   "startMs": 30750,
+   "endMs": 33270,
+   "transition": "cut",
+   "heading": [
+    {
+     "t": "baat",
+     "a": false
+    },
+    {
+     "t": "bhi",
+     "a": false
+    },
+    {
+     "t": "kaam",
+     "a": true
+    },
+    {
+     "t": "bhi",
+     "a": false
+    }
+   ],
+   "kicker": "WHILE YOU TALK",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "checklist",
+     "items": [
+      "Searching the web",
+      "Reading twelve sources",
+      "Writing the draft"
+     ],
+     "state": "progress",
+     "id": "b10v0",
+     "enterMs": 30750,
+     "exitMs": 33420,
+     "class": "block"
+    },
+    {
+     "place": "stack",
+     "kind": "error",
+     "title": "Me.exe",
+     "body": "multitasking.exe has stopped working",
+     "button": "OK",
+     "id": "b10v1",
+     "enterMs": 32611,
+     "exitMs": 33420,
+     "class": "overlay"
+    }
+   ]
+  },
+  {
+   "id": "setup",
+   "kind": "honest",
+   "startMs": 33420,
+   "endMs": 35340,
+   "transition": "cut",
+   "heading": [
+    {
+     "t": "setup",
+     "a": false
+    },
+    {
+     "t": "done",
+     "a": true
+    }
+   ],
+   "kicker": "INSTALL",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "checklist",
+     "items": [
+      "Clone the repo",
+      "Add your API key",
+      "Run the app"
+     ],
+     "state": "done",
+     "id": "b11v0",
+     "enterMs": 33420,
+     "exitMs": 35540,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "fight",
+   "kind": "other",
+   "startMs": 35540,
+   "endMs": 37460,
+   "transition": "flash",
+   "heading": [
+    {
+     "t": "permission",
+     "a": true
+    },
+    {
+     "t": "kaun",
+     "a": false
+    },
+    {
+     "t": "maange",
+     "a": false
+    }
+   ],
+   "kicker": "SCORECARD",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "versus",
+     "left": {
+      "label": "Roommate",
+      "value": "0",
+      "emoji": "😒"
+     },
+     "right": {
+      "label": "Dot",
+      "value": "1",
+      "emoji": "🫧"
+     },
+     "id": "b12v0",
+     "enterMs": 35540,
+     "exitMs": 37710,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "bench",
+   "kind": "honest",
+   "startMs": 37710,
+   "endMs": 40430,
+   "transition": "slide",
+   "heading": [
+    {
+     "t": "GPU",
+     "a": false
+    },
+    {
+     "t": "chahiye",
+     "a": true
+    }
+   ],
+   "kicker": "REALITY CHECK",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "bars",
+     "items": [
+      {
+       "label": "RTX 4090",
+       "value": 142.0
+      },
+      {
+       "label": "M3 Max",
+       "value": 61.5
+      },
+      {
+       "label": "My laptop",
+       "value": 3.0
+      }
+     ],
+     "unit": "tok/s",
+     "highlight": 0,
+     "id": "b13v0",
+     "enterMs": 37710,
+     "exitMs": 40580,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "office",
+   "kind": "explain",
+   "startMs": 40580,
+   "endMs": 44100,
+   "transition": "cut",
+   "heading": [
+    {
+     "t": "mixture",
+     "a": false
+    },
+    {
+     "t": "of",
+     "a": false
+    },
+    {
+     "t": "experts",
+     "a": true
+    }
+   ],
+   "kicker": "TWIST 🤓",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "people",
+     "total": 125,
+     "lit": 6,
+     "label": "OFFICE MEIN 125 LOG",
+     "badge": "MEETING 💤",
+     "id": "b14v0",
+     "enterMs": 40580,
+     "exitMs": 44350,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "team",
+   "kind": "explain",
+   "startMs": 44350,
+   "endMs": 46470,
+   "transition": "slide",
+   "heading": [
+    {
+     "t": "teen",
+     "a": false
+    },
+    {
+     "t": "dots,",
+     "a": true
+    },
+    {
+     "t": "ek",
+     "a": false
+    },
+    {
+     "t": "team",
+     "a": false
+    }
+   ],
+   "kicker": "HOW IT WORKS",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "nodes",
+     "items": [
+      {
+       "label": "Researcher",
+       "icon": "🔎"
+      },
+      {
+       "label": "Writer",
+       "icon": "✍️"
+      },
+      {
+       "label": "Reviewer",
+       "icon": "🧐"
+      }
+     ],
+     "layout": "triangle",
+     "id": "b15v0",
+     "enterMs": 44350,
+     "exitMs": 46620,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "pipe",
+   "kind": "explain",
+   "startMs": 46620,
+   "endMs": 48540,
+   "transition": "cut",
+   "heading": [
+    {
+     "t": "RAG",
+     "a": true
+    },
+    {
+     "t": "kaise",
+     "a": false
+    },
+    {
+     "t": "chalta",
+     "a": false
+    },
+    {
+     "t": "hai",
+     "a": false
+    }
+   ],
+   "kicker": "PIPELINE",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "nodes",
+     "items": [
+      {
+       "label": "Question",
+       "icon": "❓"
+      },
+      {
+       "label": "Search",
+       "icon": "📚"
+      },
+      {
+       "label": "Model",
+       "icon": ""
+      },
+      {
+       "label": "Answer",
+       "icon": "💬"
+      }
+     ],
+     "layout": "flow",
+     "id": "b16v0",
+     "enterMs": 46620,
+     "exitMs": 48840,
+     "class": "block"
+    },
+    {
+     "place": "stack",
+     "kind": "nodes",
+     "items": [
+      {
+       "label": "Plan",
+       "icon": ""
+      },
+      {
+       "label": "Act",
+       "icon": "⚡"
+      },
+      {
+       "label": "Check",
+       "icon": ""
+      },
+      {
+       "label": "Learn",
+       "icon": "🧠"
+      },
+      {
+       "label": "Repeat",
+       "icon": ""
+      }
+     ],
+     "layout": "ring",
+     "id": "b16v1",
+     "enterMs": 47540,
+     "exitMs": 48840,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "alive",
+   "kind": "honest",
+   "startMs": 48840,
+   "endMs": 50760,
+   "transition": "zoom",
+   "heading": [
+    {
+     "t": "laptop",
+     "a": false
+    },
+    {
+     "t": "zinda",
+     "a": true
+    },
+    {
+     "t": "hai",
+     "a": false
+    }
+   ],
+   "kicker": "STATUS",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "heartbeat",
+     "label": "LAPTOP STATUS: ZINDA",
+     "id": "b17v0",
+     "enterMs": 49080,
+     "exitMs": 50960,
+     "class": "block"
+    }
+   ]
+  },
+  {
+   "id": "free",
+   "kind": "reveal",
+   "startMs": 50960,
+   "endMs": 51880,
+   "transition": "flash",
+   "heading": [
+    {
+     "t": "MIT",
+     "a": false
+    },
+    {
+     "t": "license",
+     "a": true
+    }
+   ],
+   "kicker": "FEATURE 04/04",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "flash",
+     "text": "yaani *free*",
+     "id": "b18v0",
+     "enterMs": 51480,
+     "exitMs": 52030,
+     "class": "overlay"
+    }
+   ]
+  },
+  {
+   "id": "cta",
+   "kind": "cta",
+   "startMs": 52030,
+   "endMs": 54550,
+   "transition": "cut",
+   "heading": [
+    {
+     "t": "ai",
+     "a": false
+    },
+    {
+     "t": "ki",
+     "a": false
+    },
+    {
+     "t": "emi",
+     "a": false
+    },
+    {
+     "t": "se",
+     "a": false
+    },
+    {
+     "t": "pareshaan?",
+     "a": true
+    }
+   ],
+   "kicker": "",
+   "keyword": "",
+   "dm": "",
+   "next": "",
+   "visuals": [
+    {
+     "place": "stack",
+     "kind": "comment",
+     "keyword": "POCKET",
+     "reply": "link DM kar dunga",
+     "id": "b19v0",
+     "enterMs": 52150,
+     "exitMs": 55750,
+     "class": "block"
+    },
+    {
+     "place": "stack",
+     "kind": "follow",
+     "id": "b19v1",
+     "enterMs": 53943,
+     "exitMs": 55750,
+     "class": "block"
+    }
+   ]
+  }
+ ],
+ "captions": [
+  {
+   "startMs": 0,
+   "endMs": 1657,
+   "words": [
+    {
+     "t": "bhai",
+     "a": false,
+     "startMs": 0,
+     "endMs": 229
+    },
+    {
+     "t": "maine",
+     "a": false,
+     "startMs": 229,
+     "endMs": 514
+    },
+    {
+     "t": "laptop",
+     "a": false,
+     "startMs": 514,
+     "endMs": 857
+    },
+    {
+     "t": "mein",
+     "a": false,
+     "startMs": 857,
+     "endMs": 1086
+    },
+    {
+     "t": "176",
+     "a": true,
+     "startMs": 1086,
+     "endMs": 1257
+    },
+    {
+     "t": "billion",
+     "a": true,
+     "startMs": 1257,
+     "endMs": 1657
+    }
+   ]
+  },
+  {
+   "startMs": 1657,
+   "endMs": 2400,
+   "words": [
+    {
+     "t": "ka",
+     "a": false,
+     "startMs": 1657,
+     "endMs": 1771
+    },
+    {
+     "t": "AI",
+     "a": false,
+     "startMs": 1771,
+     "endMs": 1886
+    },
+    {
+     "t": "ghusa",
+     "a": false,
+     "startMs": 1886,
+     "endMs": 2171
+    },
+    {
+     "t": "diya",
+     "a": false,
+     "startMs": 2171,
+     "endMs": 2400
+    }
+   ]
+  },
+  {
+   "startMs": 2520,
+   "endMs": 3720,
+   "words": [
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 2520,
+     "endMs": 2670
+    },
+    {
+     "t": "laptop",
+     "a": false,
+     "startMs": 2670,
+     "endMs": 2970
+    },
+    {
+     "t": "abhi",
+     "a": false,
+     "startMs": 2970,
+     "endMs": 3170
+    },
+    {
+     "t": "tak",
+     "a": false,
+     "startMs": 3170,
+     "endMs": 3320
+    },
+    {
+     "t": "zinda",
+     "a": true,
+     "startMs": 3320,
+     "endMs": 3570
+    },
+    {
+     "t": "hai",
+     "a": false,
+     "startMs": 3570,
+     "endMs": 3720
+    }
+   ]
+  },
+  {
+   "startMs": 3970,
+   "endMs": 4631,
+   "words": [
+    {
+     "t": "har",
+     "a": false,
+     "startMs": 3970,
+     "endMs": 4087
+    },
+    {
+     "t": "mahine",
+     "a": false,
+     "startMs": 4087,
+     "endMs": 4320
+    },
+    {
+     "t": "ChatGPT,",
+     "a": true,
+     "startMs": 4320,
+     "endMs": 4631
+    }
+   ]
+  },
+  {
+   "startMs": 4631,
+   "endMs": 5370,
+   "words": [
+    {
+     "t": "Claude,",
+     "a": false,
+     "startMs": 4631,
+     "endMs": 4903
+    },
+    {
+     "t": "Gemini",
+     "a": false,
+     "startMs": 4903,
+     "endMs": 5137
+    },
+    {
+     "t": "ka",
+     "a": false,
+     "startMs": 5137,
+     "endMs": 5214
+    },
+    {
+     "t": "bill",
+     "a": false,
+     "startMs": 5214,
+     "endMs": 5370
+    }
+   ]
+  },
+  {
+   "startMs": 5490,
+   "endMs": 6559,
+   "words": [
+    {
+     "t": "use",
+     "a": false,
+     "startMs": 5490,
+     "endMs": 5659
+    },
+    {
+     "t": "kar",
+     "a": false,
+     "startMs": 5659,
+     "endMs": 5828
+    },
+    {
+     "t": "raha",
+     "a": false,
+     "startMs": 5828,
+     "endMs": 6052
+    },
+    {
+     "t": "hoon",
+     "a": false,
+     "startMs": 6052,
+     "endMs": 6278
+    },
+    {
+     "t": "ya",
+     "a": false,
+     "startMs": 6278,
+     "endMs": 6390
+    },
+    {
+     "t": "EMI",
+     "a": true,
+     "startMs": 6390,
+     "endMs": 6559
+    }
+   ]
+  },
+  {
+   "startMs": 6559,
+   "endMs": 7290,
+   "words": [
+    {
+     "t": "bhar",
+     "a": false,
+     "startMs": 6559,
+     "endMs": 6784
+    },
+    {
+     "t": "raha",
+     "a": false,
+     "startMs": 6784,
+     "endMs": 7009
+    },
+    {
+     "t": "hoon?",
+     "a": false,
+     "startMs": 7009,
+     "endMs": 7290
+    }
+   ]
+  },
+  {
+   "startMs": 7490,
+   "endMs": 8136,
+   "words": [
+    {
+     "t": "toh",
+     "a": false,
+     "startMs": 7490,
+     "endMs": 7628
+    },
+    {
+     "t": "mere",
+     "a": false,
+     "startMs": 7628,
+     "endMs": 7813
+    },
+    {
+     "t": "doston,",
+     "a": false,
+     "startMs": 7813,
+     "endMs": 8136
+    }
+   ]
+  },
+  {
+   "startMs": 8136,
+   "endMs": 8690,
+   "words": [
+    {
+     "t": "milo",
+     "a": false,
+     "startMs": 8136,
+     "endMs": 8321
+    },
+    {
+     "t": "Pocket",
+     "a": true,
+     "startMs": 8321,
+     "endMs": 8598
+    },
+    {
+     "t": "se",
+     "a": false,
+     "startMs": 8598,
+     "endMs": 8690
+    }
+   ]
+  },
+  {
+   "startMs": 8810,
+   "endMs": 9442,
+   "words": [
+    {
+     "t": "20",
+     "a": true,
+     "startMs": 8810,
+     "endMs": 8900
+    },
+    {
+     "t": "hazaar",
+     "a": true,
+     "startMs": 8900,
+     "endMs": 9171
+    },
+    {
+     "t": "stars,",
+     "a": false,
+     "startMs": 9171,
+     "endMs": 9442
+    }
+   ]
+  },
+  {
+   "startMs": 9442,
+   "endMs": 10210,
+   "words": [
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 9442,
+     "endMs": 9578
+    },
+    {
+     "t": "license",
+     "a": false,
+     "startMs": 9578,
+     "endMs": 9894
+    },
+    {
+     "t": "bhi",
+     "a": false,
+     "startMs": 9894,
+     "endMs": 10029
+    },
+    {
+     "t": "free",
+     "a": true,
+     "startMs": 10029,
+     "endMs": 10210
+    }
+   ]
+  },
+  {
+   "startMs": 10510,
+   "endMs": 11372,
+   "words": [
+    {
+     "t": "har",
+     "a": false,
+     "startMs": 10510,
+     "endMs": 10633
+    },
+    {
+     "t": "dot",
+     "a": false,
+     "startMs": 10633,
+     "endMs": 10756
+    },
+    {
+     "t": "ka",
+     "a": false,
+     "startMs": 10756,
+     "endMs": 10838
+    },
+    {
+     "t": "apna",
+     "a": false,
+     "startMs": 10838,
+     "endMs": 11002
+    },
+    {
+     "t": "computer,",
+     "a": true,
+     "startMs": 11002,
+     "endMs": 11372
+    }
+   ]
+  },
+  {
+   "startMs": 11372,
+   "endMs": 12110,
+   "words": [
+    {
+     "t": "files,",
+     "a": false,
+     "startMs": 11372,
+     "endMs": 11618
+    },
+    {
+     "t": "terminal,",
+     "a": false,
+     "startMs": 11618,
+     "endMs": 11987
+    },
+    {
+     "t": "sab",
+     "a": false,
+     "startMs": 11987,
+     "endMs": 12110
+    }
+   ]
+  },
+  {
+   "startMs": 12230,
+   "endMs": 13830,
+   "words": [
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 12230,
+     "endMs": 12385
+    },
+    {
+     "t": "zarurat",
+     "a": false,
+     "startMs": 12385,
+     "endMs": 12746
+    },
+    {
+     "t": "pade",
+     "a": false,
+     "startMs": 12746,
+     "endMs": 12953
+    },
+    {
+     "t": "toh",
+     "a": false,
+     "startMs": 12953,
+     "endMs": 13107
+    },
+    {
+     "t": "control",
+     "a": true,
+     "startMs": 13107,
+     "endMs": 13469
+    },
+    {
+     "t": "tum",
+     "a": false,
+     "startMs": 13469,
+     "endMs": 13624
+    },
+    {
+     "t": "le",
+     "a": false,
+     "startMs": 13624,
+     "endMs": 13727
+    },
+    {
+     "t": "lo",
+     "a": false,
+     "startMs": 13727,
+     "endMs": 13830
+    }
+   ]
+  },
+  {
+   "startMs": 13980,
+   "endMs": 14557,
+   "words": [
+    {
+     "t": "OpenAI",
+     "a": false,
+     "startMs": 13980,
+     "endMs": 14211
+    },
+    {
+     "t": "jaisa",
+     "a": false,
+     "startMs": 14211,
+     "endMs": 14403
+    },
+    {
+     "t": "API,",
+     "a": true,
+     "startMs": 14403,
+     "endMs": 14557
+    }
+   ]
+  },
+  {
+   "startMs": 14557,
+   "endMs": 14980,
+   "words": [
+    {
+     "t": "localhost",
+     "a": false,
+     "startMs": 14557,
+     "endMs": 14903
+    },
+    {
+     "t": "pe",
+     "a": false,
+     "startMs": 14903,
+     "endMs": 14980
+    }
+   ]
+  },
+  {
+   "startMs": 15100,
+   "endMs": 16500,
+   "words": [
+    {
+     "t": "matlab",
+     "a": false,
+     "startMs": 15100,
+     "endMs": 15321
+    },
+    {
+     "t": "tumhare",
+     "a": false,
+     "startMs": 15321,
+     "endMs": 15579
+    },
+    {
+     "t": "apps",
+     "a": false,
+     "startMs": 15579,
+     "endMs": 15726
+    },
+    {
+     "t": "samjhenge",
+     "a": false,
+     "startMs": 15726,
+     "endMs": 16058
+    },
+    {
+     "t": "ki",
+     "a": false,
+     "startMs": 16058,
+     "endMs": 16132
+    },
+    {
+     "t": "ChatGPT",
+     "a": true,
+     "startMs": 16132,
+     "endMs": 16389
+    },
+    {
+     "t": "hai",
+     "a": false,
+     "startMs": 16389,
+     "endMs": 16500
+    }
+   ]
+  },
+  {
+   "startMs": 16750,
+   "endMs": 18150,
+   "words": [
+    {
+     "t": "सच",
+     "a": false,
+     "startMs": 16750,
+     "endMs": 16850
+    },
+    {
+     "t": "बोलूँ",
+     "a": false,
+     "startMs": 16850,
+     "endMs": 17100
+    },
+    {
+     "t": "तो",
+     "a": false,
+     "startMs": 17100,
+     "endMs": 17200
+    },
+    {
+     "t": "सेटअप",
+     "a": true,
+     "startMs": 17200,
+     "endMs": 17450
+    },
+    {
+     "t": "थोड़ा",
+     "a": false,
+     "startMs": 17450,
+     "endMs": 17700
+    },
+    {
+     "t": "मुश्किल",
+     "a": false,
+     "startMs": 17700,
+     "endMs": 18050
+    },
+    {
+     "t": "है",
+     "a": false,
+     "startMs": 18050,
+     "endMs": 18150
+    }
+   ]
+  },
+  {
+   "startMs": 18270,
+   "endMs": 19413,
+   "words": [
+    {
+     "t": "sirf",
+     "a": false,
+     "startMs": 18270,
+     "endMs": 18499
+    },
+    {
+     "t": "6B",
+     "a": true,
+     "startMs": 18499,
+     "endMs": 18613
+    },
+    {
+     "t": "kaam",
+     "a": false,
+     "startMs": 18613,
+     "endMs": 18841
+    },
+    {
+     "t": "karte",
+     "a": false,
+     "startMs": 18841,
+     "endMs": 19127
+    },
+    {
+     "t": "hain,",
+     "a": false,
+     "startMs": 19127,
+     "endMs": 19413
+    }
+   ]
+  },
+  {
+   "startMs": 19413,
+   "endMs": 20270,
+   "words": [
+    {
+     "t": "baaki",
+     "a": false,
+     "startMs": 19413,
+     "endMs": 19699
+    },
+    {
+     "t": "so",
+     "a": true,
+     "startMs": 19699,
+     "endMs": 19813
+    },
+    {
+     "t": "rahe",
+     "a": false,
+     "startMs": 19813,
+     "endMs": 20041
+    },
+    {
+     "t": "hain",
+     "a": false,
+     "startMs": 20041,
+     "endMs": 20270
+    }
+   ]
+  },
+  {
+   "startMs": 20420,
+   "endMs": 21620,
+   "words": [
+    {
+     "t": "125B",
+     "a": true,
+     "startMs": 20420,
+     "endMs": 20687
+    },
+    {
+     "t": "plus",
+     "a": false,
+     "startMs": 20687,
+     "endMs": 20953
+    },
+    {
+     "t": "embeddings",
+     "a": false,
+     "startMs": 20953,
+     "endMs": 21620
+    }
+   ]
+  },
+  {
+   "startMs": 21740,
+   "endMs": 22940,
+   "words": [
+    {
+     "t": "matlab",
+     "a": false,
+     "startMs": 21740,
+     "endMs": 22220
+    },
+    {
+     "t": "total",
+     "a": false,
+     "startMs": 22220,
+     "endMs": 22620
+    },
+    {
+     "t": "176B",
+     "a": true,
+     "startMs": 22620,
+     "endMs": 22940
+    }
+   ]
+  },
+  {
+   "startMs": 23190,
+   "endMs": 24390,
+   "words": [
+    {
+     "t": "Slack",
+     "a": false,
+     "startMs": 23190,
+     "endMs": 23476
+    },
+    {
+     "t": "mein",
+     "a": false,
+     "startMs": 23476,
+     "endMs": 23704
+    },
+    {
+     "t": "Dot",
+     "a": true,
+     "startMs": 23704,
+     "endMs": 23876
+    },
+    {
+     "t": "ko",
+     "a": false,
+     "startMs": 23876,
+     "endMs": 23990
+    },
+    {
+     "t": "tag",
+     "a": false,
+     "startMs": 23990,
+     "endMs": 24161
+    },
+    {
+     "t": "karo",
+     "a": false,
+     "startMs": 24161,
+     "endMs": 24390
+    }
+   ]
+  },
+  {
+   "startMs": 24510,
+   "endMs": 25254,
+   "words": [
+    {
+     "t": "wahin",
+     "a": false,
+     "startMs": 24510,
+     "endMs": 24729
+    },
+    {
+     "t": "reply",
+     "a": true,
+     "startMs": 24729,
+     "endMs": 24948
+    },
+    {
+     "t": "karega,",
+     "a": false,
+     "startMs": 24948,
+     "endMs": 25254
+    }
+   ]
+  },
+  {
+   "startMs": 25254,
+   "endMs": 25910,
+   "words": [
+    {
+     "t": "bina",
+     "a": false,
+     "startMs": 25254,
+     "endMs": 25429
+    },
+    {
+     "t": "chai",
+     "a": false,
+     "startMs": 25429,
+     "endMs": 25604
+    },
+    {
+     "t": "break",
+     "a": false,
+     "startMs": 25604,
+     "endMs": 25822
+    },
+    {
+     "t": "ke",
+     "a": false,
+     "startMs": 25822,
+     "endMs": 25910
+    }
+   ]
+  },
+  {
+   "startMs": 26060,
+   "endMs": 27260,
+   "words": [
+    {
+     "t": "koi",
+     "a": false,
+     "startMs": 26060,
+     "endMs": 26224
+    },
+    {
+     "t": "bhi",
+     "a": false,
+     "startMs": 26224,
+     "endMs": 26387
+    },
+    {
+     "t": "kaam",
+     "a": false,
+     "startMs": 26387,
+     "endMs": 26605
+    },
+    {
+     "t": "karne",
+     "a": false,
+     "startMs": 26605,
+     "endMs": 26878
+    },
+    {
+     "t": "se",
+     "a": false,
+     "startMs": 26878,
+     "endMs": 26987
+    },
+    {
+     "t": "pehle",
+     "a": false,
+     "startMs": 26987,
+     "endMs": 27260
+    }
+   ]
+  },
+  {
+   "startMs": 27380,
+   "endMs": 28180,
+   "words": [
+    {
+     "t": "approve",
+     "a": true,
+     "startMs": 27380,
+     "endMs": 27660
+    },
+    {
+     "t": "button",
+     "a": false,
+     "startMs": 27660,
+     "endMs": 27900
+    },
+    {
+     "t": "aata",
+     "a": false,
+     "startMs": 27900,
+     "endMs": 28060
+    },
+    {
+     "t": "hai",
+     "a": false,
+     "startMs": 28060,
+     "endMs": 28180
+    }
+   ]
+  },
+  {
+   "startMs": 28480,
+   "endMs": 28880,
+   "words": [
+    {
+     "t": "ChatGPT",
+     "a": false,
+     "startMs": 28480,
+     "endMs": 28713
+    },
+    {
+     "t": "Plus,",
+     "a": false,
+     "startMs": 28713,
+     "endMs": 28880
+    }
+   ]
+  },
+  {
+   "startMs": 28880,
+   "endMs": 29680,
+   "words": [
+    {
+     "t": "Claude",
+     "a": false,
+     "startMs": 28880,
+     "endMs": 29080
+    },
+    {
+     "t": "Pro,",
+     "a": false,
+     "startMs": 29080,
+     "endMs": 29213
+    },
+    {
+     "t": "Gemini",
+     "a": false,
+     "startMs": 29213,
+     "endMs": 29413
+    },
+    {
+     "t": "Advanced",
+     "a": false,
+     "startMs": 29413,
+     "endMs": 29680
+    }
+   ]
+  },
+  {
+   "startMs": 29800,
+   "endMs": 30600,
+   "words": [
+    {
+     "t": "subscription",
+     "a": false,
+     "startMs": 29800,
+     "endMs": 30257
+    },
+    {
+     "t": "hai",
+     "a": false,
+     "startMs": 30257,
+     "endMs": 30371
+    },
+    {
+     "t": "ya",
+     "a": false,
+     "startMs": 30371,
+     "endMs": 30448
+    },
+    {
+     "t": "EMI?",
+     "a": true,
+     "startMs": 30448,
+     "endMs": 30600
+    }
+   ]
+  },
+  {
+   "startMs": 30750,
+   "endMs": 31750,
+   "words": [
+    {
+     "t": "wo",
+     "a": false,
+     "startMs": 30750,
+     "endMs": 30850
+    },
+    {
+     "t": "baat",
+     "a": false,
+     "startMs": 30850,
+     "endMs": 31050
+    },
+    {
+     "t": "bhi",
+     "a": false,
+     "startMs": 31050,
+     "endMs": 31200
+    },
+    {
+     "t": "karta",
+     "a": false,
+     "startMs": 31200,
+     "endMs": 31450
+    },
+    {
+     "t": "rahega",
+     "a": false,
+     "startMs": 31450,
+     "endMs": 31750
+    }
+   ]
+  },
+  {
+   "startMs": 31870,
+   "endMs": 32323,
+   "words": [
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 31870,
+     "endMs": 31994
+    },
+    {
+     "t": "kaam",
+     "a": true,
+     "startMs": 31994,
+     "endMs": 32158
+    },
+    {
+     "t": "bhi,",
+     "a": false,
+     "startMs": 32158,
+     "endMs": 32323
+    }
+   ]
+  },
+  {
+   "startMs": 32323,
+   "endMs": 33270,
+   "words": [
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 32323,
+     "endMs": 32446
+    },
+    {
+     "t": "main",
+     "a": false,
+     "startMs": 32446,
+     "endMs": 32611
+    },
+    {
+     "t": "multitasking",
+     "a": false,
+     "startMs": 32611,
+     "endMs": 33105
+    },
+    {
+     "t": "mein",
+     "a": false,
+     "startMs": 33105,
+     "endMs": 33270
+    }
+   ]
+  },
+  {
+   "startMs": 33420,
+   "endMs": 33900,
+   "words": [
+    {
+     "t": "install",
+     "a": false,
+     "startMs": 33420,
+     "endMs": 33700
+    },
+    {
+     "t": "kiya,",
+     "a": false,
+     "startMs": 33700,
+     "endMs": 33900
+    }
+   ]
+  },
+  {
+   "startMs": 33900,
+   "endMs": 34420,
+   "words": [
+    {
+     "t": "model",
+     "a": false,
+     "startMs": 33900,
+     "endMs": 34100
+    },
+    {
+     "t": "laga",
+     "a": false,
+     "startMs": 34100,
+     "endMs": 34260
+    },
+    {
+     "t": "diya",
+     "a": false,
+     "startMs": 34260,
+     "endMs": 34420
+    }
+   ]
+  },
+  {
+   "startMs": 34540,
+   "endMs": 35340,
+   "words": [
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 34540,
+     "endMs": 34711
+    },
+    {
+     "t": "chal",
+     "a": true,
+     "startMs": 34711,
+     "endMs": 34940
+    },
+    {
+     "t": "bhi",
+     "a": false,
+     "startMs": 34940,
+     "endMs": 35111
+    },
+    {
+     "t": "gaya",
+     "a": false,
+     "startMs": 35111,
+     "endMs": 35340
+    }
+   ]
+  },
+  {
+   "startMs": 35540,
+   "endMs": 36540,
+   "words": [
+    {
+     "t": "mere",
+     "a": false,
+     "startMs": 35540,
+     "endMs": 35678
+    },
+    {
+     "t": "roommate",
+     "a": false,
+     "startMs": 35678,
+     "endMs": 35954
+    },
+    {
+     "t": "se",
+     "a": false,
+     "startMs": 35954,
+     "endMs": 36023
+    },
+    {
+     "t": "zyada",
+     "a": false,
+     "startMs": 36023,
+     "endMs": 36195
+    },
+    {
+     "t": "permission",
+     "a": true,
+     "startMs": 36195,
+     "endMs": 36540
+    }
+   ]
+  },
+  {
+   "startMs": 36660,
+   "endMs": 37460,
+   "words": [
+    {
+     "t": "ye",
+     "a": false,
+     "startMs": 36660,
+     "endMs": 36767
+    },
+    {
+     "t": "Dot",
+     "a": true,
+     "startMs": 36767,
+     "endMs": 36927
+    },
+    {
+     "t": "maangta",
+     "a": false,
+     "startMs": 36927,
+     "endMs": 37300
+    },
+    {
+     "t": "hai",
+     "a": false,
+     "startMs": 37300,
+     "endMs": 37460
+    }
+   ]
+  },
+  {
+   "startMs": 37710,
+   "endMs": 39110,
+   "words": [
+    {
+     "t": "achhi",
+     "a": false,
+     "startMs": 37710,
+     "endMs": 37929
+    },
+    {
+     "t": "speed",
+     "a": false,
+     "startMs": 37929,
+     "endMs": 38148
+    },
+    {
+     "t": "ke",
+     "a": false,
+     "startMs": 38148,
+     "endMs": 38235
+    },
+    {
+     "t": "liye",
+     "a": false,
+     "startMs": 38235,
+     "endMs": 38410
+    },
+    {
+     "t": "NVIDIA",
+     "a": true,
+     "startMs": 38410,
+     "endMs": 38672
+    },
+    {
+     "t": "GPU",
+     "a": false,
+     "startMs": 38672,
+     "endMs": 38804
+    },
+    {
+     "t": "chahiye",
+     "a": false,
+     "startMs": 38804,
+     "endMs": 39110
+    }
+   ]
+  },
+  {
+   "startMs": 39230,
+   "endMs": 40430,
+   "words": [
+    {
+     "t": "mera",
+     "a": false,
+     "startMs": 39230,
+     "endMs": 39415
+    },
+    {
+     "t": "laptop",
+     "a": false,
+     "startMs": 39415,
+     "endMs": 39692
+    },
+    {
+     "t": "toh",
+     "a": false,
+     "startMs": 39692,
+     "endMs": 39830
+    },
+    {
+     "t": "museum",
+     "a": true,
+     "startMs": 39830,
+     "endMs": 40107
+    },
+    {
+     "t": "mein",
+     "a": false,
+     "startMs": 40107,
+     "endMs": 40292
+    },
+    {
+     "t": "hai",
+     "a": false,
+     "startMs": 40292,
+     "endMs": 40430
+    }
+   ]
+  },
+  {
+   "startMs": 40580,
+   "endMs": 41506,
+   "words": [
+    {
+     "t": "matlab",
+     "a": false,
+     "startMs": 40580,
+     "endMs": 40889
+    },
+    {
+     "t": "office",
+     "a": true,
+     "startMs": 40889,
+     "endMs": 41197
+    },
+    {
+     "t": "jaisa,",
+     "a": false,
+     "startMs": 41197,
+     "endMs": 41506
+    }
+   ]
+  },
+  {
+   "startMs": 41506,
+   "endMs": 42380,
+   "words": [
+    {
+     "t": "company",
+     "a": false,
+     "startMs": 41506,
+     "endMs": 41866
+    },
+    {
+     "t": "mein",
+     "a": false,
+     "startMs": 41866,
+     "endMs": 42071
+    },
+    {
+     "t": "125",
+     "a": false,
+     "startMs": 42071,
+     "endMs": 42226
+    },
+    {
+     "t": "log",
+     "a": false,
+     "startMs": 42226,
+     "endMs": 42380
+    }
+   ]
+  },
+  {
+   "startMs": 42500,
+   "endMs": 43369,
+   "words": [
+    {
+     "t": "kaam",
+     "a": false,
+     "startMs": 42500,
+     "endMs": 42683
+    },
+    {
+     "t": "sirf",
+     "a": false,
+     "startMs": 42683,
+     "endMs": 42866
+    },
+    {
+     "t": "6",
+     "a": true,
+     "startMs": 42866,
+     "endMs": 42911
+    },
+    {
+     "t": "karte",
+     "a": false,
+     "startMs": 42911,
+     "endMs": 43140
+    },
+    {
+     "t": "hain,",
+     "a": false,
+     "startMs": 43140,
+     "endMs": 43369
+    }
+   ]
+  },
+  {
+   "startMs": 43369,
+   "endMs": 44100,
+   "words": [
+    {
+     "t": "baaki",
+     "a": false,
+     "startMs": 43369,
+     "endMs": 43597
+    },
+    {
+     "t": "meeting",
+     "a": true,
+     "startMs": 43597,
+     "endMs": 43917
+    },
+    {
+     "t": "mein",
+     "a": false,
+     "startMs": 43917,
+     "endMs": 44100
+    }
+   ]
+  },
+  {
+   "startMs": 44350,
+   "endMs": 45150,
+   "words": [
+    {
+     "t": "researcher,",
+     "a": false,
+     "startMs": 44350,
+     "endMs": 44664
+    },
+    {
+     "t": "writer",
+     "a": false,
+     "startMs": 44664,
+     "endMs": 44836
+    },
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 44836,
+     "endMs": 44921
+    },
+    {
+     "t": "reviewer",
+     "a": true,
+     "startMs": 44921,
+     "endMs": 45150
+    }
+   ]
+  },
+  {
+   "startMs": 45270,
+   "endMs": 46470,
+   "words": [
+    {
+     "t": "teeno",
+     "a": false,
+     "startMs": 45270,
+     "endMs": 45492
+    },
+    {
+     "t": "aapas",
+     "a": false,
+     "startMs": 45492,
+     "endMs": 45714
+    },
+    {
+     "t": "mein",
+     "a": false,
+     "startMs": 45714,
+     "endMs": 45892
+    },
+    {
+     "t": "baat",
+     "a": true,
+     "startMs": 45892,
+     "endMs": 46070
+    },
+    {
+     "t": "karte",
+     "a": false,
+     "startMs": 46070,
+     "endMs": 46292
+    },
+    {
+     "t": "hain",
+     "a": false,
+     "startMs": 46292,
+     "endMs": 46470
+    }
+   ]
+  },
+  {
+   "startMs": 46620,
+   "endMs": 47420,
+   "words": [
+    {
+     "t": "sawaal",
+     "a": false,
+     "startMs": 46620,
+     "endMs": 46791
+    },
+    {
+     "t": "aaya,",
+     "a": false,
+     "startMs": 46791,
+     "endMs": 46934
+    },
+    {
+     "t": "documents",
+     "a": true,
+     "startMs": 46934,
+     "endMs": 47191
+    },
+    {
+     "t": "dhoondhe",
+     "a": false,
+     "startMs": 47191,
+     "endMs": 47420
+    }
+   ]
+  },
+  {
+   "startMs": 47540,
+   "endMs": 48540,
+   "words": [
+    {
+     "t": "phir",
+     "a": false,
+     "startMs": 47540,
+     "endMs": 47730
+    },
+    {
+     "t": "model",
+     "a": false,
+     "startMs": 47730,
+     "endMs": 47969
+    },
+    {
+     "t": "ne",
+     "a": false,
+     "startMs": 47969,
+     "endMs": 48064
+    },
+    {
+     "t": "jawab",
+     "a": true,
+     "startMs": 48064,
+     "endMs": 48302
+    },
+    {
+     "t": "likha",
+     "a": false,
+     "startMs": 48302,
+     "endMs": 48540
+    }
+   ]
+  },
+  {
+   "startMs": 48840,
+   "endMs": 49640,
+   "words": [
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 48840,
+     "endMs": 48990
+    },
+    {
+     "t": "sabse",
+     "a": false,
+     "startMs": 48990,
+     "endMs": 49240
+    },
+    {
+     "t": "badi",
+     "a": false,
+     "startMs": 49240,
+     "endMs": 49440
+    },
+    {
+     "t": "baat",
+     "a": false,
+     "startMs": 49440,
+     "endMs": 49640
+    }
+   ]
+  },
+  {
+   "startMs": 49760,
+   "endMs": 50760,
+   "words": [
+    {
+     "t": "laptop",
+     "a": false,
+     "startMs": 49760,
+     "endMs": 50046
+    },
+    {
+     "t": "abhi",
+     "a": false,
+     "startMs": 50046,
+     "endMs": 50236
+    },
+    {
+     "t": "tak",
+     "a": false,
+     "startMs": 50236,
+     "endMs": 50379
+    },
+    {
+     "t": "zinda",
+     "a": true,
+     "startMs": 50379,
+     "endMs": 50617
+    },
+    {
+     "t": "hai",
+     "a": false,
+     "startMs": 50617,
+     "endMs": 50760
+    }
+   ]
+  },
+  {
+   "startMs": 50960,
+   "endMs": 51360,
+   "words": [
+    {
+     "t": "MIT",
+     "a": false,
+     "startMs": 50960,
+     "endMs": 51069
+    },
+    {
+     "t": "license,",
+     "a": false,
+     "startMs": 51069,
+     "endMs": 51360
+    }
+   ]
+  },
+  {
+   "startMs": 51480,
+   "endMs": 51880,
+   "words": [
+    {
+     "t": "yaani",
+     "a": false,
+     "startMs": 51480,
+     "endMs": 51702
+    },
+    {
+     "t": "free",
+     "a": true,
+     "startMs": 51702,
+     "endMs": 51880
+    }
+   ]
+  },
+  {
+   "startMs": 52030,
+   "endMs": 52830,
+   "words": [
+    {
+     "t": "toh",
+     "a": false,
+     "startMs": 52030,
+     "endMs": 52150
+    },
+    {
+     "t": "comment",
+     "a": false,
+     "startMs": 52150,
+     "endMs": 52430
+    },
+    {
+     "t": "karo",
+     "a": false,
+     "startMs": 52430,
+     "endMs": 52590
+    },
+    {
+     "t": "POCKET",
+     "a": true,
+     "startMs": 52590,
+     "endMs": 52830
+    }
+   ]
+  },
+  {
+   "startMs": 52950,
+   "endMs": 53778,
+   "words": [
+    {
+     "t": "link",
+     "a": false,
+     "startMs": 52950,
+     "endMs": 53171
+    },
+    {
+     "t": "DM",
+     "a": false,
+     "startMs": 53171,
+     "endMs": 53281
+    },
+    {
+     "t": "kar",
+     "a": false,
+     "startMs": 53281,
+     "endMs": 53447
+    },
+    {
+     "t": "dunga,",
+     "a": false,
+     "startMs": 53447,
+     "endMs": 53778
+    }
+   ]
+  },
+  {
+   "startMs": 53778,
+   "endMs": 54550,
+   "words": [
+    {
+     "t": "aur",
+     "a": false,
+     "startMs": 53778,
+     "endMs": 53943
+    },
+    {
+     "t": "follow",
+     "a": true,
+     "startMs": 53943,
+     "endMs": 54274
+    },
+    {
+     "t": "kar",
+     "a": false,
+     "startMs": 54274,
+     "endMs": 54440
+    },
+    {
+     "t": "lo",
+     "a": false,
+     "startMs": 54440,
+     "endMs": 54550
+    }
+   ]
+  }
+ ],
+ "sfx": true
+}

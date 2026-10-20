@@ -21,7 +21,8 @@ HOSTILE = '<svg viewBox="0 0 400 400"><script>alert(1)</script></svg>'
 
 
 def _settings(tmp_path):
-    return dataclasses.replace(get_settings(), workdir=tmp_path / "w", shared_cache=tmp_path / "shared")
+    return dataclasses.replace(get_settings(), workdir=tmp_path / "w", shared_cache=tmp_path / "shared",
+                               tts="fake")
 
 
 def probe(raw, tmp_path=None, *, root=None):
