@@ -106,7 +106,7 @@ A **beat** is `{id?, kind, heading?, kicker?, lines, visuals, transition}`:
 - `kind` is `hook`, `pain`, `reveal`, `explain`, `feature`, `honest`, `cta` or `other`.
 - `heading` is the big kinetic text at the top; `*word*` paints a word in the accent
   colour. `kicker` is the small label above it ("FEATURE 01/03").
-- `lines` are 1 to 4 short lines (up to 8 parse), each `{say, text?}`.
+- `lines` are 1 to 4 short lines (up to 8 parse), each `{say, text?, expression?, expression_at?}`.
 - `transition` into the beat: `cut`, `slide`, `flash` or `zoom`.
 - A `cta` beat also takes `keyword` (the word to comment), `dm` (the reply chip) and
   `next` (a tease for the next reel).
@@ -117,6 +117,8 @@ A **line** is what the voice says and what the caption shows:
   with digits written as words, and no `*` markup.
 - `text` is the caption: any script, digits kept, `*accent*` words marked. It defaults to
   `say`.
+- `expression` is `"laugh"` or absent: the voice laughs after the line (`expression_at`
+  `"end"`, the default) or before it (`"start"`). See [Delivery](#delivery).
 
 ```json
 {"say": "सिर्फ़ चार जीबी रैम में, बिना इंटरनेट के।", "text": "Sirf *4 GB* RAM mein, bina internet ke."}
@@ -215,11 +217,31 @@ Measured on a Supertonic 3 server; the lint and the guide encode each one.
   `say` makes the voice stop for 1.0 to 1.4 s, enough to fail verify's `silence` check
   ("Your chatbot? Still confident." paused 1.1 s twice). Use a comma or a colon in `say`
   and keep the question mark in `text`, or end the line there and start a new one. A line
-  break costs only the 120 ms line gap. Lint `say-pause` warns about it.
+  break costs only a 320 ms breath (120 ms when the line runs on). Lint `say-pause` warns
+  about it.
 - **Acronyms said as words**: "RAG" in capitals came out "Reg" or "Rage"; "Rag" is said
   as "rag". Write how it is said in `say` and the capitals in `text`.
 - **Japanese kanji the voice stumbles on**: 量子化 and 圧縮袋 were misread; write them
   in kana in `say` ("りょうしか", "あっしゅくぶくろ") and keep the kanji in `text`.
+
+### Delivery
+
+Each line is spoken on its own and the lines are joined, so the pauses come from how the
+script is split:
+
+- A line that ends its sentence (`.`, `!`, `?`, `।`, `。`) is followed by a 320 ms breath;
+  a line that runs on (a comma or nothing at its end) by 120 ms. Write one sentence per
+  line and split where a speaker would breathe: "मिलो पॉकेट एल एल एम से।" then "ये ओपन
+  सोर्स है, लैपटॉप पर मुफ़्त चलता है।" sounds spoken; "मिलो पॉकेट एल एल एम से, ओपन
+  सोर्स।" sounds read out.
+- Open lines the way people talk ("ये", "और", "बस"; "so", "now"; "で", "しかも").
+- `expression: "laugh"` on a punchline makes the voice laugh. Supertonic gets its
+  `<laugh>` tag, which arrives wrapped in a second or more of silence; that silence is cut
+  to 250 ms so the laugh lands without dead air. Cartesia gets `[laughter]`, ElevenLabs v3
+  (`REEL_ELEVENLABS_MODEL=eleven_v3...`) `[laughs]`; other voices say the line plainly.
+  Keep it to two or three per reel.
+- Supertonic's other tags were tried by ear and are not offered: `<sigh>` was inaudible,
+  `<breath>` was read out as a word by a female Hindi voice, `<throatclear>` was read out.
 
 ## Fonts
 
@@ -294,7 +316,7 @@ re-mixes the audio.
 | `stamp-long` | a stamp over 16 characters | warning |
 | `active-tab` | a window's `active` is not one of its tabs | warning |
 | `hook-slow` | the hook has no visual, or its first line runs over 3.5 s | warning |
-| `beat-long` | a beat with over 4 lines or over 9 s | warning |
+| `beat-long` | a beat with over 4 lines or over 9.5 s | warning |
 | `static` | over 3.5 s inside a beat with nothing new on screen | warning |
 | `crowded` | more than 4 visuals on screen at once (the hero does not count) | warning |
 | `length` | the reel runs under 30 s or over 150 s | warning |

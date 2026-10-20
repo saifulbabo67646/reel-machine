@@ -47,6 +47,7 @@ from .models import (
 )
 from .post import post_markdown
 from .schedule import BeatSlot, LineSlot, Plan, schedule
+from .voice import drop_tags, spoken
 from .words import unit_times
 
 COUNTER_MS = 900          # runtime/pure.mjs COUNTER_MS: a counter lands this long after it enters
@@ -61,6 +62,7 @@ MAX_STILLS = 24
 STILL_AFTER_MS = 400      # a visual's enter animation has played by then (a counter's count by COUNTER_MS)
 TRIM_DB = -45             # quieter than this at a clip's ends is padding, not speech
 TRIM_MIN_S = 0.05         # silencedetect's shortest silence: a lead shorter than this stays
+GAP_KEEP_MS = 250         # a line with an expression keeps at most this much of any silence inside it
 
 
 def trim_clip(src: Path, dest: Path, *, settings: Settings, keep_ms: int = 60,
@@ -84,6 +86,43 @@ def trim_clip(src: Path, dest: Path, *, settings: Settings, keep_ms: int = 60,
                 f"atrim=start={start / 1000:.3f}:end={end / 1000:.3f},asetpts=PTS-STARTPTS", str(dest)],
                cancel=cancel)
     return dest, start, end - start
+
+
+def squeeze_gaps(src: Path, dest: Path, *, settings: Settings, keep_ms: int = GAP_KEEP_MS,
+                 cancel: Any = None) -> tuple[Path, list[tuple[int, int]], int]:
+    """`src` with every silence inside it longer than `keep_ms` cut down to `keep_ms`: (the clip, the cut
+    (start, end) ranges in `src`'s time, its new length). A voice's expression tags arrive wrapped in a second or
+    more of dead air; the laugh stays, the wait for it goes. A clip with no such silence is copied as it is."""
+    src, dest = Path(src), Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    total = round(ffmpeg.probe(src).duration_s * 1000)
+    proc = ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-i", str(src), "-af",
+                       f"silencedetect=n={TRIM_DB}dB:d={keep_ms / 1000:.3f}", "-f", "null", "-"], cancel=cancel)
+    half = keep_ms // 2
+    cuts = [(s + half, e - (keep_ms - half)) for s, e in parse_silences(proc.stderr or "", total)
+            if s > 10 and e < total - 10 and e - s > keep_ms]
+    if not cuts:
+        shutil.copy2(src, dest)
+        return dest, [], total
+    keep, at = [], 0
+    for s, e in cuts:
+        keep.append((at, s))
+        at = e
+    keep.append((at, total))
+    parts = "".join(f"[0:a]atrim=start={a / 1000:.3f}:end={b / 1000:.3f},asetpts=PTS-STARTPTS[k{i}];"
+                    for i, (a, b) in enumerate(keep))
+    joins = "".join(f"[k{i}]" for i in range(len(keep)))
+    ffmpeg.run([settings.ffmpeg, "-hide_banner", "-nostdin", "-y", "-i", str(src), "-filter_complex",
+                f"{parts}{joins}concat=n={len(keep)}:v=0:a=1[out]", "-map", "[out]", str(dest)], cancel=cancel)
+    return dest, cuts, total - sum(e - s for s, e in cuts)
+
+
+def squeeze_words(words: list[WordSpan], cuts: list[tuple[int, int]]) -> list[WordSpan]:
+    """Word spans moved earlier by the silence cut before them; a time inside a cut lands where the cut was."""
+    def move(ms: int) -> int:
+        return ms - sum(min(e, max(ms, s)) - s for s, e in cuts)
+
+    return [w.model_copy(update={"start_ms": move(w.start_ms), "end_ms": move(w.end_ms)}) for w in words]
 
 
 def shift_words(words: list[WordSpan], lead_ms: int, total_ms: int) -> list[WordSpan]:
@@ -282,11 +321,16 @@ class NarrationStage:
             times.append([])
             for n, line in enumerate(beat.lines):
                 ctx.cancel.raise_if_cancelled()
-                path, _, words, line_licence = speak_line(ctx, provider, line.say, inputs.voice, inputs.language)
+                path, _, words, line_licence = speak_line(ctx, provider, spoken(line, name), inputs.voice,
+                                                          inputs.language)
                 # the cached clip stays as spoken; the reel gets it without the voice's padding
                 local, lead, ms = trim_clip(path, work / f"{b:02d}-{n:02d}.wav", settings=settings,
                                             cancel=ctx.cancel)
-                words = shift_words(list(words), lead, ms)
+                words = shift_words(drop_tags(list(words)), lead, ms)
+                if line.expression:
+                    local, cuts, ms = squeeze_gaps(local, work / f"{b:02d}-{n:02d}.tight.wav", settings=settings,
+                                                   cancel=ctx.cancel)
+                    words = squeeze_words(words, cuts)
                 clips[-1].append(local)
                 speech[-1].append(ms)
                 times[-1].append(unit_times(list(words), units(line.caption, inputs.language), ms))

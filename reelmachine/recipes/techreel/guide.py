@@ -207,7 +207,7 @@ GUIDE: dict[str, Any] = {
         "follow (the lint warns when there is no honest beat)."),
         ("cta (5–8 s, kind `cta`, last): comment keyword → link by DM → follow → the next reel's tease. A callback "
         "to an earlier joke lands well here."),
-        ("A beat is 1–4 lines and at most about 9 s (lint `beat-long`); something new must enter at least every "
+        ("A beat is 1–4 lines and at most about 9.5 s (lint `beat-long`); something new must enter at least every "
         "3.5 s (lint `static`)."),
     ],
     "humour": {
@@ -293,6 +293,26 @@ GUIDE: dict[str, Any] = {
             "A `?` or `.` inside a `say` makes the voice pause over a second (verify flags it): use a comma or a colon "
             "in `say` and keep the `?` in `text`, or start a new line (lint `say-pause`). An acronym said as a word goes in `say` as the "
             "word (\"Rag\"; \"RAG\" came out \"Reg\"), the capitals in `text`."
+        ),
+        "delivery": [
+            ("Write for the ear, the way a friend talks: short sentences, one per line, each ending on its full stop "
+            "(। in Hindi, 。 in Japanese). A line that ends its sentence gets a breath before the next (320 ms); a "
+            "line that runs on (ends on a comma or nothing) gets 120 ms, so split a thought where a speaker would "
+            "breathe."),
+            ("Land the name, then explain it: \"मिलो पॉकेट एल एल एम से।\" / \"ये ओपन सोर्स है, लैपटॉप पर मुफ़्त "
+            "चलता है।\" sounds human; \"मिलो पॉकेट एल एल एम से, ओपन सोर्स।\" crams a fact onto the name and sounds "
+            "read out."),
+            ("Open lines the way people talk: \"ये\", \"और\", \"अब\", \"बस\", \"भाई\"; \"so\", \"and\", \"now\", "
+            "\"okay so\"; \"で\", \"しかも\", \"つまり\". Avoid telegraphic lists (\"Windows, Mac, Linux, free\") "
+            "with no verb."),
+        ],
+        "expression": (
+            "A line may carry `expression: \"laugh\"` (with `expression_at`: `end`, the default, or `start`): the "
+            "voice laughs after (or before) the line. Use it on a punchline or a self-roast, at most two or three "
+            "per reel; a laugh on an ordinary line sounds odd. Supertonic reads it as its `<laugh>` tag (a short "
+            "laugh; the dead air it brings is cut), Cartesia as `[laughter]`, ElevenLabs v3 as `[laughs]`; other "
+            "voices say the line plainly. Supertonic's other tags were tried and are not offered: `<sigh>` is "
+            "inaudible, `<breath>` is read out as a word by some voices, `<throatclear>` is read out."
         ),
         "english": "`text` is usually omitted (it defaults to `say`); give it only when the caption should show "
                    "digits or accents: say \"fourteen gigabytes\", text \"*14 GB*\".",

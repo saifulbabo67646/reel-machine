@@ -199,6 +199,13 @@ def test_static():
     assert "static" not in _rules(check(ok))
 
 
+def test_static_counts_the_tease_a_bare_cta_ends_on():
+    lines = [{"say": _words(3)}, {"say": _words(6)}, {"say": _words(4)}]
+    bare = {"kind": "cta", "lines": lines, "visuals": [{"kind": "hero", "state": "corner"}]}
+    assert "static" in _rules(check(_inputs([bare])))
+    assert "static" not in _rules(check(_inputs([{**bare, "next": "part two"}])))
+
+
 def test_structure():
     f = check(_inputs([_beat(kind="pain")]))
     assert _at(f, "structure") == [("warning", "beats[0].kind"), ("warning", "beats[0].kind"),

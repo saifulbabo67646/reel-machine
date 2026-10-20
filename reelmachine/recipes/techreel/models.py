@@ -43,6 +43,8 @@ class Cue(_Model):
 class Line(_Model):
     say: str = Field(min_length=1, max_length=400)
     text: str | None = Field(None, max_length=400)       # the caption; defaults to what is said
+    expression: Literal["laugh"] | None = None           # a sound the voice makes with the line, where it can
+    expression_at: Literal["start", "end"] = "end"
 
     @property
     def caption(self) -> str:

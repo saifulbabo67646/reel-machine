@@ -26,6 +26,8 @@ from reelmachine.recipes.techreel.stages import (
     shift_words,
     storyboard_times,
     terminal_starts,
+    squeeze_gaps,
+    squeeze_words,
     trim_clip,
 )
 
@@ -210,6 +212,32 @@ def test_trim_clip_keeps_a_silent_clip_whole(tmp_path, ms):
 def test_word_spans_follow_the_trim():
     words = [WordSpan(text="a", start_ms=400, end_ms=700), WordSpan(text="b", start_ms=900, end_ms=1500)]
     assert [(w.start_ms, w.end_ms) for w in shift_words(words, 440, 920)] == [(0, 260), (460, 920)]
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which(get_settings().ffmpeg) is None, reason="ffmpeg not available")
+def test_squeeze_gaps_cuts_a_long_inner_silence_down(tmp_path):
+    src = _clip(tmp_path / "in.wav", ("tone", 600), ("quiet", 1400), ("tone", 300))
+    out, cuts, ms = squeeze_gaps(src, tmp_path / "out.wav", settings=get_settings())
+    assert len(cuts) == 1 and abs(cuts[0][0] - 725) <= 30 and abs(cuts[0][1] - 1875) <= 30
+    assert abs(ms - 1150) <= 40
+    assert abs(ffmpeg.probe(out).duration_s * 1000 - ms) <= 30
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which(get_settings().ffmpeg) is None, reason="ffmpeg not available")
+def test_squeeze_gaps_keeps_short_pauses_and_the_edges(tmp_path):
+    src = _clip(tmp_path / "in.wav", ("quiet", 500), ("tone", 400), ("quiet", 200), ("tone", 400), ("quiet", 500))
+    out, cuts, ms = squeeze_gaps(src, tmp_path / "out.wav", settings=get_settings())
+    assert cuts == [] and abs(ms - 2000) <= 25 and out.is_file()
+
+
+def test_word_spans_follow_the_squeeze():
+    words = [WordSpan(text="a", start_ms=100, end_ms=600), WordSpan(text="b", start_ms=1900, end_ms=2100)]
+    moved = squeeze_words(words, [(700, 1800)])
+    assert [(w.start_ms, w.end_ms) for w in moved] == [(100, 600), (800, 1000)]
+    inside = squeeze_words([WordSpan(text="c", start_ms=1000, end_ms=1900)], [(700, 1800)])
+    assert [(w.start_ms, w.end_ms) for w in inside] == [(700, 800)]
 
 
 def test_a_missing_music_file_is_refused_at_the_script_stage(tmp_path):

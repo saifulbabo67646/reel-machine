@@ -31,11 +31,11 @@
         {"say": "और प्राइवेसी, वो गई तेल लेने।",
          "text": "Aur privacy? Woh gayi *tel lene*."},
         {"say": "मेरा क्रेडिट कार्ड अब मुझसे बात नहीं करता।",
-         "text": "Mera credit card ab mujhse baat nahi karta."}
+         "text": "Mera credit card ab mujhse baat nahi karta.", "expression": "laugh"}
       ],
       "visuals": [
         {"kind": "hero", "state": "shake", "at": {"line": 2, "word": "card"}},
-        {"kind": "receipts", "items": [
+        {"kind": "receipts", "at": {"line": 0, "word": "bill"}, "items": [
           {"title": "Chatbot Plus", "sub": "monthly"},
           {"title": "Image AI Pro", "sub": "monthly"},
           {"title": "Chatbot Plus", "sub": "monthly · phir se"}
@@ -48,18 +48,18 @@
       "id": "reveal", "kind": "reveal", "kicker": "OPEN SOURCE", "heading": "Milo *Pocket LLM* se",
       "transition": "flash",
       "lines": [
-        {"say": "मिलो पॉकेट एल एल एम से, ओपन सोर्स।",
-         "text": "Milo *Pocket LLM* se, open source."},
-        {"say": "पूरा मॉडल तुम्हारे लैपटॉप पर, मुफ़्त।",
-         "text": "Poora model tumhare laptop par, *muft*."},
-        {"say": "विंडोज़, मैक और लिनक्स, तीनों पर।", "text": "Windows, Mac aur Linux, *teeno* par."}
+        {"say": "मिलो पॉकेट एल एल एम से।", "text": "Milo *Pocket LLM* se."},
+        {"say": "ये ओपन सोर्स है, लैपटॉप पर मुफ़्त चलता है।",
+         "text": "Ye open source hai, laptop par *muft* chalta hai."},
+        {"say": "कोई भी ओ एस, विंडोज़, मैक, लिनक्स।", "text": "Koi bhi OS: Windows, Mac, *Linux*."}
       ],
       "visuals": [
         {"kind": "repo", "name": "pocket-llm/pocket-llm",
          "description": "Run small language models offline on any laptop", "stars": 12400,
          "license": "MIT", "language": "Rust", "exit": {"line": 2}},
-        {"kind": "chips", "items": ["Offline", "Free", "MIT"], "style": "filled", "at": {"line": 1},
-         "exit": {"line": 2}},
+        {"kind": "chips", "items": ["Offline", "Free", "MIT"], "style": "filled",
+         "at": {"line": 1, "word": "open"}, "exit": {"line": 2}},
+        {"kind": "stamp", "text": "MUFT", "at": {"line": 1, "word": "muft"}, "exit": {"line": 2}},
         {"kind": "hero", "state": "split", "count": 3, "labels": ["Windows", "Mac", "Linux"], "at": {"line": 2}}
       ]
     },
@@ -88,7 +88,7 @@
         {"say": "फिर चैट शुरू, सीधे अपने लैपटॉप पर।",
          "text": "Phir chat shuru, seedha apne laptop par."},
         {"say": "और हाँ, लैपटॉप का पंखा गाना ज़रूर गाएगा।",
-         "text": "Aur haan, laptop ka pankha *gaana* zaroor gaayega."}
+         "text": "Aur haan, laptop ka pankha *gaana* zaroor gaayega.", "expression": "laugh"}
       ],
       "visuals": [
         {"kind": "hero", "state": "hidden"},

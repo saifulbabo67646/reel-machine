@@ -184,7 +184,7 @@ def _hero(inputs: TechReelInputs, images: Mapping[str, str]) -> dict[str, Any] |
     return out
 
 
-_FOLLOW_FRAC, _TITLE_FRAC = 0.6, 0.8    # a line shared with an earlier generated visual: how far into it
+FOLLOW_FRAC, TITLE_FRAC = 0.6, 0.8    # a line shared with an earlier generated visual: how far into it
 
 
 def _cta_visuals(beat: Beat, inputs: TechReelInputs) -> list[Visual]:
@@ -200,11 +200,11 @@ def _cta_visuals(beat: Beat, inputs: TechReelInputs) -> list[Visual]:
     out: list[Visual] = [CommentVisual(kind="comment", keyword=keyword, reply=beat.dm or "", at=Cue(line=0))]
     last, used = len(beat.lines) - 1, {0}
     if inputs.creator is not None:
-        at = Cue(line=1) if last >= 1 else Cue(line=0, frac=_FOLLOW_FRAC)
+        at = Cue(line=1) if last >= 1 else Cue(line=0, frac=FOLLOW_FRAC)
         out.append(FollowVisual(kind="follow", at=at))
         used.add(at.line)
     if beat.next:
-        at = Cue(line=last, frac=_TITLE_FRAC) if last in used else Cue(line=last)
+        at = Cue(line=last, frac=TITLE_FRAC) if last in used else Cue(line=last)
         out.append(TitleVisual(kind="title", text=beat.next, at=at))
     return out
 

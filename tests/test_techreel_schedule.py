@@ -3,11 +3,14 @@ import pytest
 from reelmachine.recipes.techreel.markup import units
 from reelmachine.recipes.techreel.models import Beat, Cue, Line, TechReelInputs
 from reelmachine.recipes.techreel.schedule import (
+    LINE_GAP_MS,
+    SENTENCE_GAP_MS,
     BeatSlot,
     LineSlot,
     cue_ms,
     estimate,
     exit_ms,
+    gap_after,
     schedule,
 )
 
@@ -25,6 +28,13 @@ def test_schedule():
     assert p.beats[0].lines == (LineSlot(0, 1000, 1000), LineSlot(1120, 800, 1920))
     assert (p.beats[1].start_ms, p.beats[1].end_ms) == (2170, 2670)
     assert p.duration_ms == 3870
+
+
+def test_a_line_that_ends_its_sentence_gets_a_longer_pause():
+    beats = [Beat(lines=[Line(say="मिलो पॉकेट एल एल एम से।"), Line(say="ये ओपन सोर्स है,"), Line(say="मुफ़्त")])]
+    p = schedule(beats, [[1000, 800, 500]])
+    assert [ln.start_ms for ln in p.beats[0].lines] == [0, 1000 + SENTENCE_GAP_MS, 1800 + SENTENCE_GAP_MS + LINE_GAP_MS]
+    assert gap_after("Want it? ") == SENTENCE_GAP_MS and gap_after("and then") == LINE_GAP_MS
 
 
 SLOT = BeatSlot(1000, 3000, (LineSlot(1000, 1000, 2000), LineSlot(2120, 800, 2920)))

@@ -11,6 +11,7 @@ from reelmachine.recipes.doodle.narration import provider_for
 
 from ...core.errors import InvalidInput
 from . import assets
+from .compose import TITLE_FRAC
 from .markup import plain, units
 from .models import Cue, TechReelInputs
 from .schedule import cue_ms, estimate, exit_ms, word_index
@@ -47,7 +48,7 @@ def _cues(visual) -> list[tuple[str, Cue]]:
 
 HOOK_MAX_MS = 3500          # the first line must land before a thumb moves
 STATIC_MAX_MS = 3500        # a stretch of one beat with nothing new on screen
-BEAT_MAX_MS = 9000
+BEAT_MAX_MS = 9500
 BEAT_MAX_LINES = 4
 LIVE_MAX = 4                # non-hero visuals on screen at once
 STAMP_MAX = 16              # characters: a longer stamp shrinks to fit the stage and stops reading as a stamp
@@ -113,10 +114,14 @@ def _pacing(inputs: TechReelInputs, found: list[Finding]) -> None:
         if len(beat.lines) > BEAT_MAX_LINES or slot.end_ms - slot.start_ms > BEAT_MAX_MS:
             found.append(Finding("beat-long", "warning",
                                  f"beat {b} has {len(beat.lines)} lines, about {(slot.end_ms - slot.start_ms) / 1000:.1f} s",
-                                 f"split it: at most {BEAT_MAX_LINES} lines and {BEAT_MAX_MS // 1000} s", f"beats[{b}]"))
+                                 f"split it: at most {BEAT_MAX_LINES} lines and {BEAT_MAX_MS / 1000:g} s", f"beats[{b}]"))
         marks = {slot.start_ms, slot.end_ms, *(min(e, slot.end_ms) for e, _ in spans)}
-        if _bare_cta(beat):   # compose adds the comment box at line 0 and the follow card at line 1
+        if _bare_cta(beat):   # compose adds the comment box at line 0, the follow card at line 1, the tease last
             marks |= {ln.start_ms for ln in slot.lines[:2]}
+            if beat.next:
+                last = slot.lines[-1]
+                shared = len(slot.lines) == 1 or (len(slot.lines) == 2 and inputs.creator is not None)
+                marks.add(last.start_ms + (round(TITLE_FRAC * last.speech_ms) if shared else 0))
         marks = sorted(marks)
         if any(y - x > STATIC_MAX_MS for x, y in pairwise(marks)):
             found.append(Finding("static", "warning",

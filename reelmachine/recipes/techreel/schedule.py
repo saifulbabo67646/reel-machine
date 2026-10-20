@@ -12,6 +12,8 @@ from .markup import Unit, norm
 from .models import Beat, Cue, TechReelInputs
 
 LINE_GAP_MS = 120
+SENTENCE_GAP_MS = 320     # after a line that ends its sentence: the breath a speaker takes before the next
+_SENTENCE_END = tuple(".!?।…。！？")
 TRANSITION_MS = {"cut": 150, "slide": 250, "flash": 200, "zoom": 300}
 OUTRO_MS = 1200
 _MIN_SPEECH_MS = 400
@@ -40,16 +42,23 @@ class Plan:
 def schedule(beats: Sequence[Beat], speech_ms: Sequence[Sequence[int]]) -> Plan:
     slots: list[BeatSlot] = []
     for i, (beat, speeches) in enumerate(zip(beats, speech_ms, strict=True)):
+        if len(speeches) != len(beat.lines):
+            raise ValueError(f"beat {i} has {len(beat.lines)} lines but {len(speeches)} speech lengths")
         start = 0 if i == 0 else slots[-1].end_ms + TRANSITION_MS[beat.transition]
         t = start
         lines: list[LineSlot] = []
         for j, ms in enumerate(speeches):
             if j:
-                t += LINE_GAP_MS
+                t += gap_after(beat.lines[j - 1].say)
             lines.append(LineSlot(t, ms, t + ms))
             t += ms
         slots.append(BeatSlot(start, t, tuple(lines)))
     return Plan(tuple(slots), (slots[-1].end_ms if slots else 0) + OUTRO_MS)
+
+
+def gap_after(say: str) -> int:
+    """The pause before the next line of a beat: longer once a sentence has ended than inside one."""
+    return SENTENCE_GAP_MS if say.rstrip().endswith(_SENTENCE_END) else LINE_GAP_MS
 
 
 def estimate(inputs: TechReelInputs) -> Plan:
